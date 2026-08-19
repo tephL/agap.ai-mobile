@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { useRouter } from "expo-router";
 import colors from "../../constants/colors";
 import Logo from "../../components/ui/Logo";
 import {
@@ -19,12 +21,82 @@ import {
   LockIcon,
   EyeIcon,
 } from "../../components/ui/icons";
+import {
+  register as registerAccount,
+  normalizePhoneNumber,
+} from "../../services/authService";
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleRegister = async () => {
+    if (loading) return;
+
+    const trimmedUsername = username.trim();
+    const phoneNumber = normalizePhoneNumber(phone);
+
+    if (!trimmedUsername) {
+      setError("Username is required");
+      return;
+    }
+    if (!phoneNumber) {
+      setError("Phone number is required");
+      return;
+    }
+    if (!password) {
+      setError("Password is required");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+    try {
+      await registerAccount({
+        username: trimmedUsername,
+        phone_number: phoneNumber,
+        password,
+      });
+      router.replace("/login");
+    } catch (err) {
+      setError(getRegisterErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRegisterErrorMessage = (err) => {
+    if (err.response) {
+      const { status, data } = err.response;
+      if (status === 400) {
+        if (Array.isArray(data)) {
+          const messages = data
+            .map((validationError) => validationError.msg)
+            .filter(Boolean);
+          if (messages.length > 0) {
+            return messages.join("\n");
+          }
+        }
+        if (data && typeof data.message === "string") {
+          return data.message;
+        }
+        return "Please check your input and try again.";
+      }
+      if (status >= 500) {
+        return "Something went wrong on the server. Please try again later.";
+      }
+    }
+    return "Unable to reach the server. Check your connection and try again.";
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -126,8 +198,19 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.button} activeOpacity={0.9}>
-              <Text style={styles.buttonText}>Create Account</Text>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <TouchableOpacity
+              style={styles.button}
+              activeOpacity={0.9}
+              onPress={handleRegister}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.buttonText}>Create Account</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -238,6 +321,12 @@ const styles = StyleSheet.create({
   eyeButton: {
     position: "absolute",
     right: 12,
+  },
+  errorText: {
+    fontSize: 13,
+    color: colors.primary,
+    textAlign: "center",
+    marginTop: 12,
   },
   button: {
     marginTop: 16,
