@@ -5,7 +5,7 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <Text style={styles.text}>Welcome to Homepage</Text>
-      <Link href="/123" style={styles.button}>Go to Non-existing page</Link>
+      <Link href="/(auth)/register" style={styles.button}>Go to Non-existing page</Link>
     </View>
   );
 }
