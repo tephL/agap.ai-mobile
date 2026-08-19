@@ -23,6 +23,8 @@ import {
 } from "../../services/authService";
 import { API_BASE_URL } from "../../services/api";
 
+import { login } from "../../services/authService";
+
 export default function LoginScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
