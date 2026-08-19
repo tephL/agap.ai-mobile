@@ -1,14 +1,43 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from "react-native";
+import * as SecureStore from "expo-secure-store";
+import axios from "axios";
 
-import Logo from "../assets/images/logo.png";
-import PhoneIcon from "../assets/icons/phone.png";
-import LockIcon from "../assets/icons/lock.png";    
+import Logo from "../../assets/images/logo.png";
+import PhoneIcon from "../../assets/icons/phone.png";
+import LockIcon from "../../assets/icons/lock.png";
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.post("http://localhost:3000/api/auth/login", {
+        phone_number: phone,
+        password,
+      });
+
+      const data = response.data;
+
+      await SecureStore.setItemAsync("token", data.token);
+      console.log("Login successful:", data.token);
+      setError("");
+      // TODO: Navigate to your next screen here
+    } catch (err) {
+      if (err.response) {
+        setError(err.response.data.error || "Login failed");
+      } else {
+        setError("Network error");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -25,7 +54,7 @@ export default function LoginScreen() {
         <Image source={PhoneIcon} style={styles.icon} />
         <TextInput
           style={styles.input}
-          placeholder="Enter Phone Number 09xx xxx xxxx"
+          placeholder="Enter Phone Number"
           keyboardType="phone-pad"
           value={phone}
           onChangeText={setPhone}
@@ -48,14 +77,17 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Error Message */}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
       {/* Forgot Password */}
       <TouchableOpacity>
         <Text style={styles.forgot}>Forgot Password?</Text>
       </TouchableOpacity>
 
       {/* Login Button */}
-      <TouchableOpacity style={styles.loginButton} onPress={() => {TabActions.push}}>
-        <Text style={styles.loginText}>Log In</Text>
+      <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
+        <Text style={styles.loginText}>{loading ? "Logging in..." : "Log In"}</Text>
       </TouchableOpacity>
 
       {/* Sign Up Link */}
@@ -111,4 +143,5 @@ const styles = StyleSheet.create({
   loginText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   signupContainer: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   signup: { color: "blue", fontWeight: "bold" },
+  error: { color: "red", marginBottom: 10, textAlign: "center" },
 });
