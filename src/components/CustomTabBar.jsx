@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     backgroundColor: '#ffffff',
-    minHeight: 104,
+    height: 74,
     borderTopWidth: 1,
     borderTopColor: '#eeeeee',
     elevation: 8,
