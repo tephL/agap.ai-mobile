@@ -21,7 +21,7 @@ export default function RootLayout() {
         options={{ title: "Invite Member" }} 
       />
       <Stack.Screen 
-        name="invitations" 
+        name="family/invitations" 
         options={{ title: "Pending Invitations" }} 
       />
     </Stack>

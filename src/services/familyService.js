@@ -1,12 +1,12 @@
 import { api } from "./api";
 
 export const RELATIONS = [
-  "Son",
-  "Daughter",
-  "Father",
-  "Mother",
-  "Grandfather",
-  "Grandmother",
+  "son",
+  "daughter",
+  "father",
+  "mother",
+  "grandfather",
+  "grandmother",
 ];
 
 export async function createFamily({ name, relation }) {

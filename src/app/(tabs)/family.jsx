@@ -125,7 +125,7 @@ export default function FamilyScreen() {
 
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => router.push("/invitations")}
+          onPress={() => router.push("/family/invitations")}
         >
           <Text style={styles.secondaryBtnText}>
             View Invitations {pendingCount > 0 ? `(${pendingCount})` : ""}
