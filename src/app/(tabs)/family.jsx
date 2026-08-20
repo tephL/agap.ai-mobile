@@ -13,9 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as SecureStore from "expo-secure-store";
 import {
-  getFamilyMembers,
+  getMyFamily,
   removeMember,
   getMyInvitations,
 } from "@/services/familyService";
@@ -31,22 +30,12 @@ export default function FamilyScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [invites, familyId, creatorFlag] = await Promise.all([
-        getMyInvitations().catch(() => []),
-        SecureStore.getItemAsync("family_id"),
-        SecureStore.getItemAsync("is_family_creator"),
-      ]);
+      const invites = await getMyInvitations().catch(() => []);
+      const data = await getMyFamily(); // binds to the logged-in JWT user
 
       setPendingCount(Array.isArray(invites) ? invites.length : 0);
-      setIsCreator(creatorFlag === "true");
-
-      if (!familyId) {
-        setFamily(null);
-        return;
-      }
-
-      const data = await getFamilyMembers(familyId);
-      setFamily(data);
+      setIsCreator(Boolean(data?.is_creator)); // server-derived, not stored
+      setFamily(data); // 404 throws if this account has no family
     } catch (err) {
       console.error(
         "Family load error:",
@@ -54,7 +43,6 @@ export default function FamilyScreen() {
       );
 
       if (err?.response?.status === 404) {
-        await SecureStore.deleteItemAsync("family_id");
         setFamily(null);
         return;
       }

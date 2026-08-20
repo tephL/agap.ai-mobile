@@ -10,7 +10,6 @@ import {
   RefreshControl,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import { Ionicons } from "@expo/vector-icons";
 import {
   getMyInvitations,
@@ -53,11 +52,7 @@ export default function InvitationsScreen() {
     if (actingId) return;
     setActingId(id);
     try {
-      const result = await acceptInvitation(id);
-      if (result?.family_id) {
-        await SecureStore.setItemAsync("family_id", String(result.family_id));
-      }
-      await SecureStore.setItemAsync("is_family_creator", "false");
+      await acceptInvitation(id);
 
       Alert.alert("Joined family", "You are now part of this family.", [
         {

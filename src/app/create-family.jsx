@@ -28,13 +28,11 @@ export default function CreateFamilyScreen() {
 
     setLoading(true);
     try {
-      const family = await createFamily({
+      await createFamily({
         name: name.trim(),
         relation,
       });
 
-      await SecureStore.setItemAsync("family_id", String(family.family_id));
-      await SecureStore.setItemAsync("is_family_creator", "true");
 
       Alert.alert("Success", "Family created!", [
         {

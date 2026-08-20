@@ -19,6 +19,11 @@ export async function getFamilyMembers(familyId) {
   return data; // { family_id, name, members: [...] }
 }
 
+export async function getMyFamily() {
+  const { data } = await api.get("/api/families/mine");
+  return data; // { family_id, name, is_creator, members: [...] }
+}
+
 export async function inviteMember(familyId, { phone_number, relation }) {
   const { data } = await api.post(`/api/families/${familyId}/invite`, {
     phone_number,
