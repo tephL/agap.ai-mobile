@@ -33,7 +33,9 @@ export async function removeMember(familyId, memberId) {
 
 export async function getMyInvitations() {
   const { data } = await api.get("/api/invitations");
-  return data;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.invitations)) return data.invitations;
+  return [];
 }
 
 export async function acceptInvitation(id) {
