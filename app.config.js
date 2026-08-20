@@ -1,4 +1,4 @@
-{
+export default {
   "expo": {
     "name": "todo_mobile2",
     "slug": "todo_mobile2",
@@ -38,7 +38,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to attach a photo to your report.",
+          "cameraPermission": "Allow agap.ai to access your camera to attach a photo to your report.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

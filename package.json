@@ -5,6 +5,8 @@
   "dependencies": {
     "@expo/ui": "~57.0.11",
     "@expo/vector-icons": "^15.0.2",
+    "@maplibre/maplibre-react-native": "^11.3.6",
+    "@react-navigation/native": "^7.3.17",
     "@react-native-picker/picker": "2.11.4",
     "@react-navigation/native": "^7.3.17",
     "axios": "^1.19.0",
