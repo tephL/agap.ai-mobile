@@ -4,7 +4,7 @@ import { Link } from 'expo-router';
 export default function Index() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Welcome to Homepage</Text>
+      <Text style={styles.text}>Welcome to the map</Text>
       <Link href="/(auth)/login" style={styles.button}>Go to Non-existing page</Link>
     </View>
   );

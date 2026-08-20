@@ -10,8 +10,9 @@ export default function RootLayout() {
         }}
         tabBar={(props) => <CustomTabBar {...props} />}
       > 
-        <Tabs.Screen name="index" options={{ title: 'Home' }} />
+        <Tabs.Screen name="index" options={{ title: 'Map' }} />
         <Tabs.Screen name="assistant" options={{ title: 'Assistant' }} />
+        <Tabs.Screen name="report" options={{ title: 'Report' }} />
         <Tabs.Screen name="family" options={{ title: 'Family' }} />
         <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       </Tabs>
