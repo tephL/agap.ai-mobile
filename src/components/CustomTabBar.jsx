@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 
 const ICONS = {
   index: 'map',
@@ -17,18 +18,11 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
 
   const centerIndex = state.routes.findIndex((r) => r.name === 'report');
   const centerRoute = centerIndex !== -1 ? state.routes[centerIndex] : null;
-  const isCenterFocused = state.index === centerIndex;
 
+  // The center button opens the camera modal directly rather than
+  // navigating to the "report" tab itself.
   const onCenterPress = () => {
-    if (!centerRoute) return;
-    const event = navigation.emit({
-      type: 'tabPress',
-      target: centerRoute.key,
-      canPreventDefault: true,
-    });
-    if (!isCenterFocused && !event.defaultPrevented) {
-      navigation.navigate(centerRoute.name);
-    }
+    router.push('/camera');
   };
 
   return (
