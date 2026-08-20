@@ -28,6 +28,12 @@ export default {
       "expo-router",
       "@maplibre/maplibre-react-native", 
       [
+        "expo-location",
+        {
+          locationAlwaysAndWhenInUsePermission: "Allow agap.ai to use your location."
+        }
+      ], 
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
@@ -52,7 +58,7 @@ export default {
     },
     "extra": {
       "eas": {
-        "projectId": "50c514e4-c10c-4c74-801b-5f7b2f27b83d"
+        "projectId": "23fbd442-43d6-44ea-8749-3a7ffcc06c90"
       }
     }
   }
