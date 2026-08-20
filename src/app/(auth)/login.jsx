@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -14,9 +13,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
+import { MaterialIcons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import Logo from "../../components/ui/Logo";
-import { PhoneIcon, LockIcon, EyeIcon } from "../../components/ui/icons";
+import FormInput from "../../components/ui/FormInput";
 import {
   login as loginAccount,
   normalizePhoneForLogin,
@@ -27,33 +27,53 @@ export default function LoginScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const passwordRef = useRef(null);
+
+  const validate = () => {
+    const nextErrors = {};
+    if (!normalizePhoneForLogin(phone)) {
+      nextErrors.phone = "Phone number is required";
+    }
+    if (!password) {
+      nextErrors.password = "Password is required";
+    } else if (password.length < 8) {
+      nextErrors.password = "Password must be at least 8 characters";
+    }
+    return nextErrors;
+  };
+
+  const updateField = (key, value) => {
+    if (key === "phone") setPhone(value);
+    if (key === "password") setPassword(value);
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
   const handleLogin = async () => {
     if (loading) return;
 
-    const phoneNumber = normalizePhoneForLogin(phone);
-
-    if (!phoneNumber) {
-      setError("Phone number is required");
-      return;
-    }
-    if (!password) {
-      setError("Password is required");
-      return;
-    }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+    const nextErrors = validate();
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      setError("");
       return;
     }
 
+    setFieldErrors({});
     setError("");
     setLoading(true);
     try {
       const response = await loginAccount({
-        phone_number: phoneNumber,
+        phone_number: normalizePhoneForLogin(phone),
         password,
       });
       const data = response.data;
@@ -123,58 +143,63 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Phone Number</Text>
-              <View style={styles.inputWrap}>
-                <View style={styles.phonePrefix}>
-                  <View style={styles.prefixIcon}>
-                    <PhoneIcon color={colors.placeholder} size={20} />
-                  </View>
-                  <Text style={styles.phoneCode}>+63</Text>
-                </View>
-                <TextInput
-                  style={[styles.input, styles.phoneInput]}
-                  placeholder="917 123 4567"
-                  placeholderTextColor={colors.placeholder}
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                  selectionColor={colors.primary}
-                />
-              </View>
-            </View>
+            <FormInput
+              label="Phone Number"
+              prefix={{
+                icon: (
+                  <MaterialIcons
+                    name="phone"
+                    color={colors.placeholder}
+                    size={20}
+                  />
+                ),
+                text: "+63",
+              }}
+              placeholder="917 123 4567"
+              keyboardType="phone-pad"
+              value={phone}
+              onChangeText={(text) => updateField("phone", text)}
+              autoComplete="tel"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              error={fieldErrors.phone}
+            />
 
-            <View style={[styles.field, styles.passwordField]}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputWrap}>
-                <View style={styles.inputIcon}>
-                  <LockIcon color={colors.placeholder} size={20} />
-                </View>
-                <TextInput
-                  style={[styles.input, styles.inputWithIcon]}
-                  placeholder="Enter your password"
-                  placeholderTextColor={colors.placeholder}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  selectionColor={colors.primary}
+            <FormInput
+              label="Password"
+              icon={
+                <MaterialIcons
+                  name="lock"
+                  color={colors.placeholder}
+                  size={20}
                 />
+              }
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={(text) => updateField("password", text)}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="current-password"
+              returnKeyType="done"
+              onSubmitEditing={handleLogin}
+              accessory={
                 <TouchableOpacity
-                  style={styles.eyeButton}
                   onPress={() => setShowPassword((prev) => !prev)}
                   hitSlop={8}
                   activeOpacity={0.7}
                 >
-                  <EyeIcon
+                  <MaterialIcons
+                    name={showPassword ? "visibility-off" : "visibility"}
                     color={colors.placeholder}
                     size={20}
-                    off={!showPassword}
                   />
                 </TouchableOpacity>
-              </View>
-            </View>
+              }
+              error={fieldErrors.password}
+              inputRef={passwordRef}
+              style={styles.passwordField}
+            />
 
             <TouchableOpacity style={styles.forgotButton} activeOpacity={0.7}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
@@ -248,63 +273,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: colors.muted,
   },
-  field: {
-    gap: 6,
-  },
   passwordField: {
     marginTop: 4,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 44,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  input: {
-    flex: 1,
-    height: "100%",
-    fontSize: 14,
-    color: colors.text,
-  },
-  inputWithIcon: {
-    paddingLeft: 40,
-    paddingRight: 16,
-  },
-  inputIcon: {
-    position: "absolute",
-    left: 12,
-  },
-  phonePrefix: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: "100%",
-    paddingLeft: 12,
-    paddingRight: 8,
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
-  },
-  prefixIcon: {
-    marginRight: 6,
-  },
-  phoneCode: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-  },
-  phoneInput: {
-    paddingLeft: 12,
-    paddingRight: 16,
-  },
-  eyeButton: {
-    position: "absolute",
-    right: 12,
   },
   forgotButton: {
     alignSelf: "flex-end",
