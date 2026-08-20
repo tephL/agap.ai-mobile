@@ -15,11 +15,7 @@ api.interceptors.request.use(async (config) => {
   try {
     const token = await SecureStore.getItemAsync("token");
     if (token) {
-<<<<<<< HEAD
       config.headers.Authorization = `Bearer ${token}`;
-=======
-      config.headers.Cookie = `token=${token}`;
->>>>>>> b19bab5 (added personal info with backend)
     }
   } catch {
   }

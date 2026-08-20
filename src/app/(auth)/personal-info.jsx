@@ -10,20 +10,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-<<<<<<< HEAD
 import colors from "../../constants/colors";
 import Logo from "../../components/ui/Logo";
 import FormInput from "../../components/ui/FormInput";
 import { MaterialIcons } from "@expo/vector-icons";
-=======
-import { useRouter } from "expo-router";
-import colors from "../../constants/colors";
-import Logo from "../../components/ui/Logo";
-import FormInput from "../../components/ui/FormInput";
-import ConfirmModal from "../../components/ui/ConfirmModal";
-import { MaterialIcons } from "@expo/vector-icons";
-import { createPerson } from "../../services/personService";
->>>>>>> b19bab5 (added personal info with backend)
 
 const GENDER_OPTIONS = [
   { label: "Male", value: "male" },
@@ -64,13 +54,6 @@ export default function PersonalInfoScreen() {
     disability_other: "",
   });
   const [errors, setErrors] = useState({});
-<<<<<<< HEAD
-=======
-  const [confirmVisible, setConfirmVisible] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
-  const router = useRouter();
->>>>>>> b19bab5 (added personal info with backend)
 
   const updateField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -119,10 +102,7 @@ export default function PersonalInfoScreen() {
       ["age", "Age"],
       ["city", "City"],
       ["barangay", "Barangay"],
-<<<<<<< HEAD
       ["street", "Street"],
-=======
->>>>>>> b19bab5 (added personal info with backend)
       ["address", "Address"],
       ["house_floors", "House Floors"],
     ];
@@ -149,113 +129,8 @@ export default function PersonalInfoScreen() {
     }
 
     setErrors(nextErrors);
-<<<<<<< HEAD
   };
 
-=======
-
-    if (Object.keys(nextErrors).length === 0) {
-      setSubmitError("");
-      setConfirmVisible(true);
-    }
-  };
-
-  const buildPayload = () => {
-    const disabilities = form.disabilities.filter((d) => d !== "none");
-    return {
-      first_name: form.first_name.trim(),
-      ...(form.middle_name.trim()
-        ? { middle_name: form.middle_name.trim() }
-        : {}),
-      last_name: form.last_name.trim(),
-      gender: form.gender,
-      ...(disabilities.length ? { disabilities } : {}),
-      age: Number(form.age),
-      city: form.city.trim(),
-      barangay: form.barangay.trim(),
-      ...(form.street.trim() ? { street: form.street.trim() } : {}),
-      address: form.address.trim(),
-    };
-  };
-
-  const handleConfirm = async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    setSubmitError("");
-    try {
-      await createPerson(buildPayload());
-      router.replace("/");
-    } catch (err) {
-      setSubmitError(getSubmitErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const getSubmitErrorMessage = (err) => {
-    if (err.response) {
-      const { status, data } = err.response;
-      if (status === 400) {
-        if (Array.isArray(data)) {
-          const messages = data
-            .map((validationError) => validationError.msg)
-            .filter(Boolean);
-          if (messages.length > 0) {
-            return messages.join("\n");
-          }
-        }
-        if (data && typeof data.message === "string") {
-          return data.message;
-        }
-        return "Please check your input and try again.";
-      }
-      if (status === 401) {
-        return "Session expired. Please log in again.";
-      }
-      if (status >= 500) {
-        return "Something went wrong on the server. Please try again later.";
-      }
-    }
-    return "Unable to reach the server. Check your connection and try again.";
-  };
-
-  const disabilitiesLabel = () => {
-    const selected = form.disabilities.filter((d) => d !== "none");
-    if (selected.length === 0) return "None";
-    return selected
-      .map(
-        (d) => DISABILITY_OPTIONS.find((option) => option.value === d)?.label
-      )
-      .filter(Boolean)
-      .join(", ");
-  };
-
-  const summaryRows = () => [
-    { label: "First Name", value: form.first_name.trim() },
-    { label: "Middle Name", value: form.middle_name.trim() },
-    { label: "Last Name", value: form.last_name.trim() },
-    {
-      label: "Gender",
-      value: GENDER_OPTIONS.find((option) => option.value === form.gender)
-        ?.label,
-    },
-    { label: "Age", value: form.age },
-    { label: "Disabilities", value: disabilitiesLabel() },
-    { label: "City", value: form.city.trim() },
-    { label: "Barangay", value: form.barangay.trim() },
-    { label: "Street", value: form.street.trim() },
-    { label: "Address", value: form.address.trim() },
-    { label: "House Floors", value: form.house_floors },
-    {
-      label: "Pets",
-      value:
-        form.pets === "yes"
-          ? `${form.pet_count} ${form.pet_count === "1" ? "pet" : "pets"}`
-          : "No",
-    },
-  ];
-
->>>>>>> b19bab5 (added personal info with backend)
   const renderChip = (label, selected, onPress, style, error) => (
     <TouchableOpacity
       style={[
@@ -441,20 +316,13 @@ export default function PersonalInfoScreen() {
 
             <FormInput
               label="Street"
-<<<<<<< HEAD
-=======
-              optional
->>>>>>> b19bab5 (added personal info with backend)
               icon={<MaterialIcons name="signpost" color={colors.placeholder} size={20} />}
               placeholder="Enter your street"
               value={form.street}
               onChangeText={(text) => updateField("street", text)}
               autoCapitalize="words"
               autoCorrect={false}
-<<<<<<< HEAD
               error={errors.street}
-=======
->>>>>>> b19bab5 (added personal info with backend)
             />
 
             <FormInput
@@ -538,21 +406,6 @@ export default function PersonalInfoScreen() {
               <Text style={styles.buttonText}>Continue</Text>
             </TouchableOpacity>
           </View>
-<<<<<<< HEAD
-=======
-
-          <ConfirmModal
-            visible={confirmVisible}
-            title="Confirm your information"
-            subtitle="Make sure everything is correct before saving."
-            rows={summaryRows()}
-            confirmLabel="Confirm & Save"
-            submitting={submitting}
-            error={submitError}
-            onCancel={() => setConfirmVisible(false)}
-            onConfirm={handleConfirm}
-          />
->>>>>>> b19bab5 (added personal info with backend)
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
