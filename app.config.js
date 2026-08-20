@@ -1,11 +1,11 @@
 export default {
   "expo": {
-    "name": "todo_mobile2",
-    "slug": "todo_mobile2",
+    "name": "agap_ai",
+    "slug": "agap_ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "todomobile2",
+    "scheme": "agap_ai",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -18,7 +18,7 @@ export default {
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.todo_mobile2"
+      "package": "com.tephl.agap_ai"
     },
     "web": {
       "output": "static",
@@ -26,6 +26,7 @@ export default {
     },
     "plugins": [
       "expo-router",
+      "@maplibre/maplibre-react-native", 
       [
         "expo-splash-screen",
         {
@@ -48,6 +49,11 @@ export default {
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "50c514e4-c10c-4c74-801b-5f7b2f27b83d"
+      }
     }
   }
 }
