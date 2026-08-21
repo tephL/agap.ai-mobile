@@ -1,7 +1,22 @@
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import CustomTabBar from '../../components/CustomTabBar';
+import * as SecureStore from 'expo-secure-store';
+import { useEffect } from "react";
 
 export default function RootLayout() {
+  const router = useRouter()
+
+  useEffect(() => {
+    async function checkIfTokenExists(){
+      const token = await SecureStore.getItemAsync("token");
+      
+      console.log('from root');
+      console.log(token);
+      if(String(token) == '') router.replace('/login');
+    }
+    checkIfTokenExists();
+  }, []);
+
   return (
       <Tabs 
         screenOptions={{
