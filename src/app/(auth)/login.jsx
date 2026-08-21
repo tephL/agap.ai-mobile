@@ -27,8 +27,6 @@ import {
 } from "../../services/personService";
 import { API_BASE_URL } from "../../services/api";
 
-import { login } from "../../services/authService";
-
 export default function LoginScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -42,9 +40,6 @@ export default function LoginScreen() {
 
   const validate = () => {
     const nextErrors = {};
-    if (!normalizePhoneForLogin(phone)) {
-      nextErrors.phone = "Phone number is required";
-    }
     if (!password) {
       nextErrors.password = "Password is required";
     } else if (password.length < 8) {
@@ -89,11 +84,16 @@ export default function LoginScreen() {
       try {
         const profile = await getMyProfile();
         if (hasPersonalInfo(profile.data)) {
-          router.replace("/");  
+          router.replace("/");
         } else {
           router.replace("/personal-info");
         }
-      } catch {
+      } catch (err) {
+        if (err?.response?.status === 401) {
+          await SecureStore.deleteItemAsync("token");
+          setError("Session expired. Please log in again.");
+          return;
+        }
         router.replace("/");
       }
     } catch (err) {

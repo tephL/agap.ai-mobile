@@ -9,10 +9,7 @@ export default function RootLayout() {
   useEffect(() => {
     async function checkIfTokenExists(){
       const token = await SecureStore.getItemAsync("token");
-      
-      console.log('from root');
-      console.log(token);
-      if(String(token) == '') router.replace('/login');
+      if (!token) router.replace('/login');
     }
     checkIfTokenExists();
   }, []);
