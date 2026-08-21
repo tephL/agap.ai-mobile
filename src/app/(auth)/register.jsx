@@ -236,7 +236,7 @@ export default function RegisterScreen() {
             <Text style={styles.loginPromptText}>Already have an account? </Text>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => router.push("/login")}
+              onPress={() => router.replace("/login")}
             >
               <Text style={styles.loginLink}>Log In</Text>
             </TouchableOpacity>
