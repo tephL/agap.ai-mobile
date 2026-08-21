@@ -32,23 +32,29 @@ export default function Index() {
 
   useFocusEffect(
     useCallback(() => {
-      (async () => {
+      const sendLocation = async () => {
         const locationData = await Location.getCurrentPositionAsync();
         const { coords: { latitude, longitude } } = locationData;
+
         setUserLocation({
           latitude: latitude, 
           longitude: longitude
         });
+
         try{
-          const logLocation = await uploadUserLocation({ longitude: userLocation.longitude, latitude: userLocation.latitude });
+          const logLocation = await uploadUserLocation({ latitude, longitude });
           console.log('sent location');
           console.log(logLocation);
         } catch(e){
-          console.log(e.response?.data);
-          console.log(e.response?.status);
-          console.log(e.config?.data);
+          console.error(e.response?.data);
+          console.error(e.response?.status);
+          console.error(e.config?.data);
         }
-      })();
+      };
+
+      sendLocation();
+      const sendInterval = setInterval(sendLocation, 1000 * 30);
+      return () => clearInterval(sendInterval);
     }, [])
   );
 
