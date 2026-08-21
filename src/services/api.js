@@ -1,9 +1,10 @@
 import { create as createAxios } from "axios";
 import * as SecureStore from "expo-secure-store";
 
+
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_LOCAL_URL ??
-  "http://localhost:3000";
+  process.env.EXPO_PUBLIC_LOCAL_IP;
 
 export const api = createAxios({
   baseURL: API_BASE_URL,
