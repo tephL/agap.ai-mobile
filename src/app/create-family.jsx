@@ -1,39 +1,61 @@
 import { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
   ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
-import { Picker } from "@react-native-picker/picker";
-import { createFamily, RELATIONS } from "@/services/familyService";
+import { MaterialIcons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
+import Logo from "@/components/ui/Logo";
+import FormInput from "@/components/ui/FormInput";
+import { createFamily, RELATIONS, relationLabel } from "@/services/familyService";
 
 export default function CreateFamilyScreen() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [relation, setRelation] = useState("father");
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
+  const updateField = (key, value) => {
+    if (key === "name") setName(value);
+    if (key === "relation") setRelation(value);
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
   const handleCreate = async () => {
+    if (loading) return;
+
+    const nextErrors = {};
     if (!name.trim()) {
-      Alert.alert("Error", "Family name is required");
+      nextErrors.name = "Family name is required";
+    }
+    if (!relation) {
+      nextErrors.relation = "Select your relation";
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       return;
     }
 
+    setErrors({});
     setLoading(true);
     try {
-      await createFamily({
-        name: name.trim(),
-        relation,
-      });
-
-
+      await createFamily({ name: name.trim(), relation });
       Alert.alert("Success", "Family created!", [
         {
           text: "OK",
@@ -51,86 +73,197 @@ export default function CreateFamilyScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>Family Name</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g. The Santos Family"
-        value={name}
-        onChangeText={setName}
-      />
-
-      <Text style={styles.label}>Your Relation</Text>
-      <View style={styles.pickerWrapper}>
-        <Picker
-          selectedValue={relation}
-          onValueChange={setRelation}
-          style={styles.picker}
-        >
-          {RELATIONS.map((r) => (
-            <Picker.Item key={r} label={r} value={r} />
-          ))}
-        </Picker>
-      </View>
-
-      <TouchableOpacity
-        style={[styles.btn, loading && { opacity: 0.6 }]}
-        onPress={handleCreate}
-        disabled={loading}
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.btnText}>Create Family</Text>
-        )}
-      </TouchableOpacity>
-    </View>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.brandHeader}>
+            <Logo size={48} />
+          </View>
+
+          <View style={styles.form}>
+            <View style={styles.headerBlock}>
+              <Text style={styles.title}>Create your family</Text>
+              <Text style={styles.subtitle}>
+                Start a family circle so everyone stays connected and
+                reachable during emergencies.
+              </Text>
+            </View>
+
+            <FormInput
+              label="Family Name"
+              icon={
+                <MaterialIcons
+                  name="people"
+                  color={colors.placeholder}
+                  size={20}
+                />
+              }
+              placeholder="e.g. The Santos Family"
+              value={name}
+              onChangeText={(text) => updateField("name", text)}
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="done"
+              error={errors.name}
+            />
+
+            <View style={styles.selectorField}>
+              <Text style={styles.selectorLabel}>Your Relation</Text>
+              <View style={styles.chipRow}>
+                {RELATIONS.map((r) => {
+                  const selected = relation === r;
+                  return (
+                    <TouchableOpacity
+                      key={r}
+                      style={[styles.chip, selected && styles.chipSelected]}
+                      activeOpacity={0.7}
+                      onPress={() => updateField("relation", r)}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          selected && styles.chipTextSelected,
+                        ]}
+                      >
+                        {relationLabel(r)}
+                      </Text>
+                      {selected ? (
+                        <MaterialIcons
+                          name="check"
+                          color={colors.primary}
+                          size={14}
+                        />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {errors.relation ? (
+                <Text style={styles.selectorError}>{errors.relation}</Text>
+              ) : null}
+            </View>
+
+            <TouchableOpacity
+              style={styles.button}
+              activeOpacity={0.9}
+              onPress={handleCreate}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.buttonText}>Create Family</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  content: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingBottom: 32,
   },
-  label: {
+  brandHeader: {
+    alignItems: "center",
+    marginTop: 32,
+    marginBottom: 40,
+  },
+  form: {
+    gap: 20,
+  },
+  headerBlock: {
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: colors.text,
+    lineHeight: 30,
+    marginBottom: 8,
+  },
+  subtitle: {
     fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 6,
+    lineHeight: 20,
+    color: colors.muted,
+  },
+  selectorField: {
+    gap: 6,
+  },
+  selectorLabel: {
+    fontSize: 13,
+    fontWeight: "700",
     color: colors.text,
   },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 18,
-    color: colors.text,
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
   },
-  pickerWrapper: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    marginBottom: 24,
-  },
-  picker: {
-    height: 50,
-  },
-  btn: {
-    backgroundColor: colors.primary,
-    height: 46,
-    borderRadius: 10,
+  chip: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  btnText: {
-    color: colors.white,
+  chipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: "rgba(227, 47, 49, 0.06)",
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  chipTextSelected: {
     fontWeight: "700",
+    color: colors.primary,
+  },
+  selectorError: {
+    fontSize: 12,
+    color: colors.primary,
+    marginTop: 2,
+  },
+  button: {
+    marginTop: 16,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.primary,
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonText: {
     fontSize: 14,
+    fontWeight: "700",
+    color: colors.white,
   },
 });

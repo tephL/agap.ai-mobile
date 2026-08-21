@@ -17,6 +17,7 @@ import {
   getMyFamily,
   removeMember,
   getMyInvitations,
+  relationLabel,
 } from "@/services/familyService";
 import colors from "@/constants/colors";
 
@@ -27,6 +28,7 @@ export default function FamilyScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [isOffline, setIsOffline] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -36,6 +38,9 @@ export default function FamilyScreen() {
       setPendingCount(Array.isArray(invites) ? invites.length : 0);
       setIsCreator(Boolean(data?.is_creator)); // server-derived, not stored
       setFamily(data); // 404 throws if this account has no family
+      // `last_synced_at` is only present on a SQLite fallback read — it tells
+      // us this snapshot is cached/offline, not fresh from the server.
+      setIsOffline(Boolean(data?.last_synced_at));
     } catch (err) {
       console.error(
         "Family load error:",
@@ -76,10 +81,20 @@ export default function FamilyScreen() {
     router.push("/invitations");
   };
 
+  // Show "First Last" when personal info exists, falling back to username,
+  // then phone number for members who haven't filled it in yet.
+  const memberDisplayName = (member) => {
+    if (member.first_name || member.last_name) {
+      return [member.first_name, member.last_name].filter(Boolean).join(" ");
+    }
+    if (member.username) return member.username;
+    return member.phone_number;
+  };
+
   const handleRemove = (member) => {
     Alert.alert(
       "Remove Member",
-      `Remove ${member.username || member.phone_number}?`,
+      `Remove ${memberDisplayName(member)}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -163,6 +178,16 @@ export default function FamilyScreen() {
       <View style={styles.container}>
         <Text style={styles.pageLabel}>Family</Text>
 
+        {isOffline && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText}>Offline</Text>
+            <Text style={styles.offlineBannerCopy}>
+              Showing last saved family data. Pull to refresh when you’re back
+              online.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.familyCard}>
           <View style={styles.familyIcon}>
             <Ionicons name="people" size={26} color={colors.primary} />
@@ -239,9 +264,11 @@ export default function FamilyScreen() {
               </View>
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName}>
-                  {item.username || item.phone_number}
+                  {memberDisplayName(item)}
                 </Text>
-                <Text style={styles.memberRelation}>{item.relation}</Text>
+                <Text style={styles.memberRelation}>
+                  {relationLabel(item.relation)}
+                </Text>
               </View>
 
               {isCreator && (
@@ -285,6 +312,28 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.muted,
     marginBottom: 12,
+  },
+  offlineBanner: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  offlineBannerText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  offlineBannerCopy: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.text,
+    marginTop: 4,
   },
   familyCard: {
     flexDirection: "row",

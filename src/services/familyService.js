@@ -1,4 +1,10 @@
 import { api } from "./api";
+import { getCurrentUserId } from "./currentUser";
+import {
+  saveFamilySnapshot,
+  getMyFamily as getMyFamilyFromCache,
+  clearForUser,
+} from "./familyRepo";
 
 export const RELATIONS = [
   "son",
@@ -8,6 +14,15 @@ export const RELATIONS = [
   "grandfather",
   "grandmother",
 ];
+
+// Display labels keep the stored value lowercase but show Capital First casing.
+export const RELATION_OPTIONS = RELATIONS.map((r) => ({
+  value: r,
+  label: r.charAt(0).toUpperCase() + r.slice(1),
+}));
+
+export const relationLabel = (relation) =>
+  relation ? relation.charAt(0).toUpperCase() + relation.slice(1) : "";
 
 export async function createFamily({ name, relation }) {
   const { data } = await api.post("/api/families", { name, relation });
@@ -20,8 +35,23 @@ export async function getFamilyMembers(familyId) {
 }
 
 export async function getMyFamily() {
-  const { data } = await api.get("/api/families/mine");
-  return data; // { family_id, name, is_creator, members: [...] }
+  const userId = await getCurrentUserId();
+  try {
+    const { data } = await api.get("/api/families/mine");
+    if (userId && data?.members) {
+      // Going online → refresh the local mirror so it's ready for offline.
+      saveFamilySnapshot(userId, data).catch(() => {});
+    }
+    return data; // { family_id, name, is_creator, members: [...] }
+  } catch (err) {
+    // Offline or fetch failed → fall back to the SQLite snapshot so the tab
+    // still renders. `last_synced_at` tells the UI this is stale data.
+    if (userId && (err?.response?.status === 404 || !err?.response)) {
+      const cached = await getMyFamilyFromCache(userId);
+      if (cached) return cached;
+    }
+    throw err;
+  }
 }
 
 export async function inviteMember(familyId, { phone_number, relation }) {
