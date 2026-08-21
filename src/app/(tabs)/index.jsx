@@ -2,8 +2,10 @@ import { View, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import * as Location from 'expo-location';
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Map, Camera, UserLocation } from '@maplibre/maplibre-react-native';
+import { uploadUserLocation } from '../../services/usersService.js';
+import { useFocusEffect } from "expo-router";
 
 const MAPTILER_API_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
@@ -20,28 +22,35 @@ export default function Index() {
     longitude: null
   });
 
-  async function getUserLocation(){
-    return await Location.getCurrentPositionAsync();
-  }
-
-  setInterval(() => {
-    
-  }, 1000 * 10);
-
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationGranted(status === "granted");
       if (status !== "granted") console.log('permission denied');
     })();
-
-    (async () => {
-      const locationData = await getUserLocation();
-      const { coords: { latitude, longitude } } = locationData;
-      setUserLocation({latitude: latitude, longitude: longitude});
-    })();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const locationData = await Location.getCurrentPositionAsync();
+        const { coords: { latitude, longitude } } = locationData;
+        setUserLocation({
+          latitude: latitude, 
+          longitude: longitude
+        });
+        try{
+          const logLocation = await uploadUserLocation({ longitude: userLocation.longitude, latitude: userLocation.latitude });
+          console.log('sent location');
+          console.log(logLocation);
+        } catch(e){
+          console.log(e.response?.data);
+          console.log(e.response?.status);
+          console.log(e.config?.data);
+        }
+      })();
+    }, [])
+  );
 
   return (
     <View style={styles.container}>
