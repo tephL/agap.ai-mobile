@@ -2,8 +2,7 @@ import { create as createAxios } from "axios";
 import * as SecureStore from "expo-secure-store";
 
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  process.env.EXPO_PUBLIC_LOCAL_IP ??
+  process.env.EXPO_PUBLIC_LOCAL_URL ??
   "http://localhost:3000";
 
 export const api = createAxios({
@@ -18,6 +17,7 @@ api.interceptors.request.use(async (config) => {
       config.headers.Authorization = `Bearer ${token}`;
     }
   } catch {
+    // Ignore SecureStore errors
   }
   return config;
 });
