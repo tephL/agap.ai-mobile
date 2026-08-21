@@ -21,7 +21,13 @@ import {
   login as loginAccount,
   normalizePhoneForLogin,
 } from "../../services/authService";
+import {
+  getMyProfile,
+  hasPersonalInfo,
+} from "../../services/personService";
 import { API_BASE_URL } from "../../services/api";
+
+import { login } from "../../services/authService";
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState("");
@@ -80,7 +86,16 @@ export default function LoginScreen() {
       if (data && data.token) {
         await SecureStore.setItemAsync("token", data.token);
       }
-      router.replace("/");
+      try {
+        const profile = await getMyProfile();
+        if (hasPersonalInfo(profile.data)) {
+          router.replace("/");  
+        } else {
+          router.replace("/personal-info");
+        }
+      } catch {
+        router.replace("/");
+      }
     } catch (err) {
       setError(getLoginErrorMessage(err));
     } finally {
