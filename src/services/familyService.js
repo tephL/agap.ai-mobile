@@ -29,27 +29,39 @@ export async function createFamily({ name, relation }) {
   return data; // { family_id, name }
 }
 
-export async function getFamilyMembers(familyId) {
-  const { data } = await api.get(`/api/families/${familyId}/members`);
-  return data; // { family_id, name, members: [...] }
-}
-
 export async function getMyFamily() {
   const userId = await getCurrentUserId();
+
   try {
     const { data } = await api.get("/api/families/mine");
+
     if (userId && data?.members) {
-      // Going online → refresh the local mirror so it's ready for offline.
-      saveFamilySnapshot(userId, data).catch(() => {});
+      await saveFamilySnapshot(userId, data);
     }
-    return data; // { family_id, name, is_creator, members: [...] }
+
+    return data;
   } catch (err) {
-    // Offline or fetch failed → fall back to the SQLite snapshot so the tab
-    // still renders. `last_synced_at` tells the UI this is stale data.
-    if (userId && (err?.response?.status === 404 || !err?.response)) {
-      const cached = await getMyFamilyFromCache(userId);
-      if (cached) return cached;
+    console.log("=== FAMILY ERROR DEBUG ===");
+    console.log("message:", err?.message);
+    console.log("status:", err?.response?.status);
+    console.log("response data:", err?.response?.data);
+    console.log("has response:", !!err?.response);
+    console.log("==========================");
+
+    // 404 = account has no family.
+    if (Number(err?.response?.status) === 404) {
+      return null;
     }
+
+    // Network/offline = try SQLite.
+    if (userId && !err?.response) {
+      const cached = await getMyFamilyFromCache(userId);
+
+      if (cached) {
+        return cached;
+      }
+    }
+
     throw err;
   }
 }

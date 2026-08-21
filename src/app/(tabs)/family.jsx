@@ -21,6 +21,24 @@ import {
 } from "@/services/familyService";
 import colors from "@/constants/colors";
 
+// last_synced_at is stored as a unix second timestamp; render it as
+// "just now" / "4 minutes ago" / "3 hours ago" / "2 days ago" for the banner.
+function timeAgo(unixSeconds) {
+  if (!unixSeconds) return null;
+  const diffSec = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
+
+  if (diffSec < 60) return "just now";
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
+
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
+}
+
 export default function FamilyScreen() {
   const router = useRouter();
   const [family, setFamily] = useState(null);
@@ -29,41 +47,50 @@ export default function FamilyScreen() {
   const [isCreator, setIsCreator] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [isOffline, setIsOffline] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
 
   const loadData = useCallback(async () => {
-    try {
-      const invites = await getMyInvitations().catch(() => []);
-      const data = await getMyFamily(); // binds to the logged-in JWT user
+  try {
+    const invites = await getMyInvitations().catch(() => []);
+    const data = await getMyFamily();
 
-      setPendingCount(Array.isArray(invites) ? invites.length : 0);
-      setIsCreator(Boolean(data?.is_creator)); // server-derived, not stored
-      setFamily(data); // 404 throws if this account has no family
-      // `last_synced_at` is only present on a SQLite fallback read — it tells
-      // us this snapshot is cached/offline, not fresh from the server.
-      setIsOffline(Boolean(data?.last_synced_at));
-    } catch (err) {
-      console.error(
-        "Family load error:",
-        err?.response?.data || err.message || err
-      );
+    setPendingCount(Array.isArray(invites) ? invites.length : 0);
 
-      if (err?.response?.status === 404) {
-        setFamily(null);
-        return;
-      }
-
-      if (err?.response?.status !== 401) {
-        Alert.alert(
-          "Error",
-          err?.response?.data?.error || "Failed to load family data"
-        );
-      }
+    // No family is a valid state, not an error.
+    if (!data) {
       setFamily(null);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setIsCreator(false);
+      setIsOffline(false);
+      setLastSyncedAt(null);
+      return;
     }
-  }, []);
+
+    setIsCreator(Boolean(data.is_creator));
+    setFamily(data);
+
+    // SQLite fallback includes last_synced_at.
+    setIsOffline(Boolean(data.last_synced_at));
+    setLastSyncedAt(data.last_synced_at ?? null);
+  } catch (err) {
+  const status = Number(err?.response?.status);
+
+  console.error(
+    "Family load error:",
+    err?.response?.data || err.message || err
+  );
+
+  // No family or any family-loading error:
+  // keep the normal "No family yet" UI.
+  setFamily(null);
+  setIsCreator(false);
+  setIsOffline(false);
+  setLastSyncedAt(null);
+  return;
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -182,8 +209,9 @@ export default function FamilyScreen() {
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineBannerText}>Offline</Text>
             <Text style={styles.offlineBannerCopy}>
-              Showing last saved family data. Pull to refresh when you’re back
-              online.
+              Showing last saved family data
+              {timeAgo(lastSyncedAt) ? ` · saved ${timeAgo(lastSyncedAt)}` : ""}.
+              Pull to refresh when you’re back online.
             </Text>
           </View>
         )}
@@ -486,8 +514,8 @@ const styles = StyleSheet.create({
   memberInfo: {
     flex: 1,
   },
+  fontSize: 16,
   memberName: {
-    fontSize: 16,
     fontWeight: "600",
     color: colors.text,
   },

@@ -68,16 +68,6 @@ export async function saveFamilySnapshot(userId, snapshot) {
   });
 }
 
-export async function getFamily(userId, familyId) {
-  const db = await getDb();
-  const family = await db.getFirstAsync(
-    `SELECT family_id, name, is_creator FROM family WHERE family_id = ?`,
-    [familyId]
-  );
-  if (!family) return null;
-  return hydrateFamily(db, family, userId);
-}
-
 export async function getMyFamily(userId) {
   const db = await getDb();
   const family = await db.getFirstAsync(
