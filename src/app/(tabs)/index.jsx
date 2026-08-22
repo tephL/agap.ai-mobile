@@ -1,16 +1,101 @@
-import { Text, View, StyleSheet } from "react-native";
-import { Link } from 'expo-router';
+import { View, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
+import * as Location from 'expo-location';
+import { useCallback, useEffect, useState } from "react";
+import { Map, Camera, UserLocation } from '@maplibre/maplibre-react-native';
+import { uploadUserLocation } from '../../services/usersService.js';
+import { useFocusEffect } from "expo-router";
+
+const MAPTILER_API_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
+const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
+const PH_CENTER = [121.7740, 12.8797]; 
+
+// "positron" and "dataviz" are the cleanest, most "app-like" MapTiler styles.
+// streets-v2 works too but reads more like Google Maps default.
+const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_API_KEY}`;
 
 export default function Index() {
+  const [locationGranted, setLocationGranted] = useState(false);
+  const [userLocation, setUserLocation] = useState({
+    latitude: null,
+    longitude: null
+  });
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationGranted(status === "granted");
+      if (status !== "granted") console.log('permission denied');
+    })();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sendLocation = async () => {
+        const locationData = await Location.getCurrentPositionAsync();
+        const { coords: { latitude, longitude } } = locationData;
+
+        setUserLocation({
+          latitude: latitude, 
+          longitude: longitude
+        });
+
+        try{
+          const logLocation = await uploadUserLocation({ latitude, longitude });
+          console.log('sent location');
+          console.log(logLocation);
+        } catch(e){
+          console.error(e.response?.data);
+          console.error(e.response?.status);
+          console.error(e.config?.data);
+        }
+      };
+
+      sendLocation();
+      const sendInterval = setInterval(sendLocation, 1000 * 30);
+      return () => clearInterval(sendInterval);
+    }, [])
+  );
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.dropdownWrap} pointerEvents="box-none">
         <LiveNotificationDropdown />
       </SafeAreaView>
-      <Text style={styles.text}>Welcome to the map</Text>
-      <Link href="/(auth)/login" style={styles.button}>Go to Non-existing page</Link>
+
+      <Map
+        style={styles.map}
+        mapStyle={MAP_STYLE_URL}
+        logoEnabled={false}
+        attributionEnabled={false}
+        compassEnabled={true}
+        compassViewPosition={3}   
+        rotateEnabled={true}
+        pitchEnabled={true}
+      >
+        <Camera
+          defaultSettings={{
+            centerCoordinate: PH_CENTER,
+            zoomLevel: 6,
+          }}
+          bounds={PH_BOUNDS}
+          maxBounds={PH_BOUNDS}
+          minZoom={6}
+          maxZoom={20}
+          animationMode="flyTo"
+          animationDuration={1200}
+          trackUserLocation={locationGranted ? "default" : undefined}
+        />
+        {locationGranted && (
+          <UserLocation
+            visible={true}
+            animated={true}
+            showsUserHeadingIndicator={true}
+            renderMode="native"
+          />
+        )}
+      </Map>
     </View>
   );
 }
@@ -18,9 +103,6 @@ export default function Index() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#c0b5b5ff", 
-        alignItems: "center",
-        justifyContent: "center",
     },
     dropdownWrap: {
         position: "absolute",
@@ -37,5 +119,6 @@ const styles = StyleSheet.create({
         textDecorationLine: 'underline',
         fontSize: 20,
         color: 'blue'
-    }
+    }, 
+    map: { flex: 1 },
 });

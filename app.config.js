@@ -1,11 +1,11 @@
-{
+export default {
   "expo": {
-    "name": "todo_mobile2",
-    "slug": "todo_mobile2",
+    "name": "agap_ai",
+    "slug": "agap_ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "todomobile2",
+    "scheme": "agap_ai",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.todo_mobile2"
+      "package": "com.tephl.agap_ai"
     },
     "web": {
       "output": "static",
@@ -26,6 +26,13 @@
     },
     "plugins": [
       "expo-router",
+      "@maplibre/maplibre-react-native", 
+      [
+        "expo-location",
+        {
+          locationAlwaysAndWhenInUsePermission: "Allow agap.ai to use your location."
+        }
+      ], 
       [
         "expo-splash-screen",
         {
@@ -38,7 +45,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to attach a photo to your report.",
+          "cameraPermission": "Allow agap.ai to access your camera to attach a photo to your report.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }
@@ -48,6 +55,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "23fbd442-43d6-44ea-8749-3a7ffcc06c90"
+      }
     }
   }
 }
