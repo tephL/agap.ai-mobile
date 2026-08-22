@@ -50,15 +50,11 @@ export default function ProfileScreen() {
         await clearForUser(userId);
       } catch {}
     }
+
     await SecureStore.deleteItemAsync("token");
     console.log(token);
     router.replace("/login");
   }
-
-  const handleLogout = async () => {
-    await SecureStore.deleteItemAsync("token");
-    router.replace("/login");
-  };
 
   if (loading) {
     return (
