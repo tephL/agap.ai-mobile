@@ -1,4 +1,10 @@
 import { api } from "./api";
+import { getCurrentUserId } from "./currentUser";
+import {
+  saveFamilySnapshot,
+  getMyFamily as getMyFamilyFromCache,
+  clearForUser,
+} from "./familyRepo";
 
 export const RELATIONS = [
   "son",
@@ -9,19 +15,55 @@ export const RELATIONS = [
   "grandmother",
 ];
 
+// Display labels keep the stored value lowercase but show Capital First casing.
+export const RELATION_OPTIONS = RELATIONS.map((r) => ({
+  value: r,
+  label: r.charAt(0).toUpperCase() + r.slice(1),
+}));
+
+export const relationLabel = (relation) =>
+  relation ? relation.charAt(0).toUpperCase() + relation.slice(1) : "";
+
 export async function createFamily({ name, relation }) {
   const { data } = await api.post("/api/families", { name, relation });
   return data; // { family_id, name }
 }
 
-export async function getFamilyMembers(familyId) {
-  const { data } = await api.get(`/api/families/${familyId}/members`);
-  return data; // { family_id, name, members: [...] }
-}
-
 export async function getMyFamily() {
-  const { data } = await api.get("/api/families/mine");
-  return data; // { family_id, name, is_creator, members: [...] }
+  const userId = await getCurrentUserId();
+
+  try {
+    const { data } = await api.get("/api/families/mine");
+
+    if (userId && data?.members) {
+      await saveFamilySnapshot(userId, data);
+    }
+
+    return data;
+  } catch (err) {
+    console.log("=== FAMILY ERROR DEBUG ===");
+    console.log("message:", err?.message);
+    console.log("status:", err?.response?.status);
+    console.log("response data:", err?.response?.data);
+    console.log("has response:", !!err?.response);
+    console.log("==========================");
+
+    // 404 = account has no family.
+    if (Number(err?.response?.status) === 404) {
+      return null;
+    }
+
+    // Network/offline = try SQLite.
+    if (userId && !err?.response) {
+      const cached = await getMyFamilyFromCache(userId);
+
+      if (cached) {
+        return cached;
+      }
+    }
+
+    throw err;
+  }
 }
 
 export async function inviteMember(familyId, { phone_number, relation }) {

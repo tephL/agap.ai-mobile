@@ -17,8 +17,27 @@ import {
   getMyFamily,
   removeMember,
   getMyInvitations,
+  relationLabel,
 } from "@/services/familyService";
 import colors from "@/constants/colors";
+
+// last_synced_at is stored as a unix second timestamp; render it as
+// "just now" / "4 minutes ago" / "3 hours ago" / "2 days ago" for the banner.
+function timeAgo(unixSeconds) {
+  if (!unixSeconds) return null;
+  const diffSec = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
+
+  if (diffSec < 60) return "just now";
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
+
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
+}
 
 export default function FamilyScreen() {
   const router = useRouter();
@@ -27,38 +46,51 @@ export default function FamilyScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [isOffline, setIsOffline] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
 
   const loadData = useCallback(async () => {
-    try {
-      const invites = await getMyInvitations().catch(() => []);
-      const data = await getMyFamily(); // binds to the logged-in JWT user
+  try {
+    const invites = await getMyInvitations().catch(() => []);
+    const data = await getMyFamily();
 
-      setPendingCount(Array.isArray(invites) ? invites.length : 0);
-      setIsCreator(Boolean(data?.is_creator)); // server-derived, not stored
-      setFamily(data); // 404 throws if this account has no family
-    } catch (err) {
-      console.error(
-        "Family load error:",
-        err?.response?.data || err.message || err
-      );
+    setPendingCount(Array.isArray(invites) ? invites.length : 0);
 
-      if (err?.response?.status === 404) {
-        setFamily(null);
-        return;
-      }
-
-      if (err?.response?.status !== 401) {
-        Alert.alert(
-          "Error",
-          err?.response?.data?.error || "Failed to load family data"
-        );
-      }
+    // No family is a valid state, not an error.
+    if (!data) {
       setFamily(null);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setIsCreator(false);
+      setIsOffline(false);
+      setLastSyncedAt(null);
+      return;
     }
-  }, []);
+
+    setIsCreator(Boolean(data.is_creator));
+    setFamily(data);
+
+    // SQLite fallback includes last_synced_at.
+    setIsOffline(Boolean(data.last_synced_at));
+    setLastSyncedAt(data.last_synced_at ?? null);
+  } catch (err) {
+  const status = Number(err?.response?.status);
+
+  console.error(
+    "Family load error:",
+    err?.response?.data || err.message || err
+  );
+
+  // No family or any family-loading error:
+  // keep the normal "No family yet" UI.
+  setFamily(null);
+  setIsCreator(false);
+  setIsOffline(false);
+  setLastSyncedAt(null);
+  return;
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -76,10 +108,20 @@ export default function FamilyScreen() {
     router.push("/invitations");
   };
 
+  // Show "First Last" when personal info exists, falling back to username,
+  // then phone number for members who haven't filled it in yet.
+  const memberDisplayName = (member) => {
+    if (member.first_name || member.last_name) {
+      return [member.first_name, member.last_name].filter(Boolean).join(" ");
+    }
+    if (member.username) return member.username;
+    return member.phone_number;
+  };
+
   const handleRemove = (member) => {
     Alert.alert(
       "Remove Member",
-      `Remove ${member.username || member.phone_number}?`,
+      `Remove ${memberDisplayName(member)}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -163,6 +205,17 @@ export default function FamilyScreen() {
       <View style={styles.container}>
         <Text style={styles.pageLabel}>Family</Text>
 
+        {isOffline && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText}>Offline</Text>
+            <Text style={styles.offlineBannerCopy}>
+              Showing last saved family data
+              {timeAgo(lastSyncedAt) ? ` · saved ${timeAgo(lastSyncedAt)}` : ""}.
+              Pull to refresh when you’re back online.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.familyCard}>
           <View style={styles.familyIcon}>
             <Ionicons name="people" size={26} color={colors.primary} />
@@ -239,9 +292,11 @@ export default function FamilyScreen() {
               </View>
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName}>
-                  {item.username || item.phone_number}
+                  {memberDisplayName(item)}
                 </Text>
-                <Text style={styles.memberRelation}>{item.relation}</Text>
+                <Text style={styles.memberRelation}>
+                  {relationLabel(item.relation)}
+                </Text>
               </View>
 
               {isCreator && (
@@ -285,6 +340,28 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.muted,
     marginBottom: 12,
+  },
+  offlineBanner: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  offlineBannerText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  offlineBannerCopy: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.text,
+    marginTop: 4,
   },
   familyCard: {
     flexDirection: "row",
@@ -437,8 +514,8 @@ const styles = StyleSheet.create({
   memberInfo: {
     flex: 1,
   },
+  fontSize: 16,
   memberName: {
-    fontSize: 16,
     fontWeight: "600",
     color: colors.text,
   },

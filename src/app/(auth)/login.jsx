@@ -20,6 +20,7 @@ import FormInput from "../../components/ui/FormInput";
 import {
   login as loginAccount,
   normalizePhoneForLogin,
+  limitPhoneInput,
 } from "../../services/authService";
 import {
   getMyProfile,
@@ -40,6 +41,12 @@ export default function LoginScreen() {
 
   const validate = () => {
     const nextErrors = {};
+    const normalizedPhone = normalizePhoneForLogin(phone);
+    if (!normalizedPhone) {
+      nextErrors.phone = "Phone number is required";
+    } else if (normalizedPhone.length !== 10) {
+      nextErrors.phone = "Enter a valid 10-digit mobile number";
+    }
     if (!password) {
       nextErrors.password = "Password is required";
     } else if (password.length < 8) {
@@ -49,7 +56,7 @@ export default function LoginScreen() {
   };
 
   const updateField = (key, value) => {
-    if (key === "phone") setPhone(value);
+    if (key === "phone") setPhone(limitPhoneInput(value));
     if (key === "password") setPassword(value);
     setFieldErrors((prev) => {
       if (!prev[key]) return prev;
