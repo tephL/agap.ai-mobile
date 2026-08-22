@@ -1,6 +1,4 @@
-import { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   StyleSheet,
@@ -13,54 +11,64 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../constants/colors";
 import { cameraStore, useCameraStore } from "../store/cameraStore";
-import { uploadReportPhoto } from "../services/reportService";
 
 export default function CameraPreviewScreen() {
-  const { uri } = useCameraStore();
-  const [uploading, setUploading] = useState(false);
+  const { pending, photos, previewMode, viewingIndex } = useCameraStore();
   const router = useRouter();
+  const isViewing = previewMode === "view";
+  const uri = isViewing ? photos[viewingIndex]?.uri : pending?.uri;
 
-  const handleRetake = () => {
-    cameraStore.clearPhoto();
+  const returnToReport = () => {
+    if (typeof router.canDismiss === "function" && router.canDismiss()) {
+      router.dismissAll();
+    }
+    router.navigate("/report");
+  };
+
+  const handleBack = () => {
+    if (isViewing) {
+      router.back();
+      return;
+    }
+    cameraStore.clearPending();
+    returnToReport();
+  };
+
+  const handleDeleteOrRetake = () => {
+    if (isViewing) {
+      Alert.alert(
+        "Delete photo?",
+        "This photo will be removed from your report.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Confirm",
+            style: "destructive",
+            onPress: () => {
+              cameraStore.removePhoto(viewingIndex);
+              router.back();
+            },
+          },
+        ]
+      );
+      return;
+    }
+    cameraStore.clearPending();
     router.back();
   };
 
-  const handleConfirm = async () => {
-    if (!uri || uploading) return;
-    setUploading(true);
-    try {
-      await uploadReportPhoto(uri);
-      cameraStore.clearPhoto();
-      Alert.alert("Report sent", "Your photo has been uploaded.", [
-        { text: "OK", onPress: () => router.replace("/(tabs)/report") },
-      ]);
-    } catch (err) {
-      // Temporary verbose logging to diagnose upload failures — check the
-      // Metro/device console for this after tapping Confirm.
-      console.log("Report upload failed");
-      console.log("message:", err?.message);
-      console.log("code:", err?.code);
-      console.log("has response:", Boolean(err?.response));
-      console.log("status:", err?.response?.status);
-      console.log("response data:", err?.response?.data);
-
-      const message = err?.response
-        ? err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          `Server responded with status ${err.response.status}.`
-        : `Couldn't reach the server (${err?.message || "network error"}). Check your connection and API URL.`;
-      Alert.alert("Upload failed", message);
-    } finally {
-      setUploading(false);
-    }
+  const handleConfirm = () => {
+    if (isViewing || !uri) return;
+    cameraStore.confirmPending();
+    returnToReport();
   };
 
   if (!uri) {
     return (
       <SafeAreaView style={styles.emptyContainer}>
         <Text style={styles.emptyText}>No photo to preview.</Text>
-        <TouchableOpacity onPress={() => router.replace("/camera")}>
-          <Text style={styles.retryLink}>Open Camera</Text>
+        <TouchableOpacity onPress={returnToReport}>
+          <Text style={styles.retryLink}>Back to Report</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -73,39 +81,38 @@ export default function CameraPreviewScreen() {
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
         <TouchableOpacity
           style={styles.closeButton}
-          onPress={handleRetake}
-          disabled={uploading}
+          onPress={handleBack}
           hitSlop={8}
         >
-          <Ionicons name="close" size={26} color="#fff" />
+          <Ionicons name="chevron-back" size={26} color="#fff" />
         </TouchableOpacity>
 
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.actionButton, styles.retakeButton]}
-            onPress={handleRetake}
-            disabled={uploading}
+            onPress={handleDeleteOrRetake}
             activeOpacity={0.85}
           >
-            <Ionicons name="refresh" size={18} color={colors.text} />
-            <Text style={styles.retakeText}>Retake</Text>
+            <Ionicons
+              name={isViewing ? "trash-outline" : "refresh"}
+              size={18}
+              color={colors.text}
+            />
+            <Text style={styles.retakeText}>
+              {isViewing ? "Delete" : "Retake"}
+            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, styles.confirmButton]}
-            onPress={handleConfirm}
-            disabled={uploading}
-            activeOpacity={0.85}
-          >
-            {uploading ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <>
-                <Ionicons name="checkmark" size={18} color={colors.white} />
-                <Text style={styles.confirmText}>Confirm</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {!isViewing && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.confirmButton]}
+              onPress={handleConfirm}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark" size={18} color={colors.white} />
+              <Text style={styles.confirmText}>Confirm</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
     </View>
