@@ -31,6 +31,8 @@ export async function createFamily({ name, relation }) {
 
 export async function getMyFamily() {
   const userId = await getCurrentUserId();
+  console.log('getting family');
+  console.log('getting family');
 
   try {
     const { data } = await api.get("/api/families/mine");

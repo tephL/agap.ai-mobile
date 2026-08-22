@@ -1,13 +1,14 @@
 import { View, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from 'expo-location';
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Map, Camera, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
 import { useFocusEffect } from "expo-router";
 
 // services
 import { uploadUserLocation } from '../../services/usersService.js';
 import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
+import { getMyFamily } from '../../services/familyService.js';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
@@ -80,6 +81,7 @@ export default function Index() {
     latitude: null,
     longitude: null
   });
+  const hasRunOnce = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -91,7 +93,11 @@ export default function Index() {
 
 
   useFocusEffect(
-    useCallback(() => {
+    useCallback(async () => {
+      if(!hasRunOnce.current){
+        hasRunOnce.current = true;
+        await getMyFamily();
+      }
       let cancelled = false;
 
       const sendLocation = async () => {

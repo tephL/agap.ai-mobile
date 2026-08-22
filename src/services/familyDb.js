@@ -40,6 +40,10 @@ const MIGRATIONS = [
     if (!names.includes('last_seen')) {
       await db.execAsync(`ALTER TABLE member ADD COLUMN last_seen INTEGER;`);
     }
+
+    await db.execAsync(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_member_user_id ON member(user_id);`
+    );
   },
 ];
 

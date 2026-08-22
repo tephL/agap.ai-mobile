@@ -38,7 +38,7 @@ export async function getFamilyPositions(){
   return rows;
 }
 
-export async function setFamilyPositions({ latitude, longitude, millisec, user_id }){   
+export async function setFamilyPositions({ latitude, longitude, millisec, user_id }) {
   const db = await getDb();
   return db.withExclusiveTransactionAsync(async (txn) => {
     await txn.runAsync(
