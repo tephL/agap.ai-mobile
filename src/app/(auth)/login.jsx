@@ -45,7 +45,7 @@ export default function LoginScreen() {
     if (!normalizedPhone) {
       nextErrors.phone = "Phone number is required";
     } else if (normalizedPhone.length !== 10) {
-      nextErrors.phone = "Enter a valid 10-digit mobile number";
+      nextErrors.phone = "Enter a valid mobile number (e.g., 917 123 4567)";
     }
     if (!password) {
       nextErrors.password = "Password is required";
@@ -179,6 +179,7 @@ export default function LoginScreen() {
               }}
               placeholder="917 123 4567"
               keyboardType="phone-pad"
+              maxLength={11}
               value={phone}
               onChangeText={(text) => updateField("phone", text)}
               autoComplete="tel"
