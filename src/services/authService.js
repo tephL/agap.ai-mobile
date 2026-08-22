@@ -13,6 +13,10 @@ export function normalizePhoneForLogin(value) {
   return digits;
 }
 
+export function limitPhoneInput(value, maxDigits = 11) {
+  return normalizePhoneNumber(value).slice(0, maxDigits);
+}
+
 export async function register({ username, phone_number, password }) {
   const response = await api.post("/api/auth/register", {
     username,
