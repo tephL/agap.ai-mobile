@@ -118,6 +118,6 @@ async function hydrateFamily(db, family, userId) {
 
 /** Wipe only this user's cached snapshot (on logout). */
 export async function clearForUser(userId) {
-    console.log('deleting db NOW');
+    console.log('deleting db NOW: ', DATABASE_NAME);
     await SQLIite.deleteDatabaseAsync(DATABASE_NAME);
 }

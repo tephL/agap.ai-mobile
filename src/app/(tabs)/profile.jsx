@@ -50,6 +50,7 @@ export default function ProfileScreen() {
     }
 
     await SecureStore.deleteItemAsync("token");
+    await SecureStore.deleteItemAsync("user_id");
     router.replace("/login");
   }
 

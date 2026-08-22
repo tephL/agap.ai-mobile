@@ -2,7 +2,7 @@ import { View, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useState } from "react";
-import { Map, Camera, UserLocation, GeoJSONSource, Layer, Images } from '@maplibre/maplibre-react-native';
+import { Map, Camera, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
 import { useFocusEffect } from "expo-router";
 
 // services
@@ -18,6 +18,60 @@ const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
 const PH_CENTER = [121.7740, 12.8797]; 
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_API_KEY}`;
 
+// Builds a [west, south, east, north] box around a center point.
+// radiusKm controls how far out from the user's location to cache tiles.
+function boundsAroundPoint(latitude, longitude, radiusKm = 5) {
+  const latDelta = radiusKm / 111; // ~111km per degree latitude
+  const lngDelta = radiusKm / (111 * Math.cos((latitude * Math.PI) / 180));
+  return [
+    longitude - lngDelta, // west
+    latitude - latDelta,  // south
+    longitude + lngDelta, // east
+    latitude + latDelta,  // north
+  ];
+}
+
+async function downloadOfflineMapForCurrentArea(userLocation) {
+  if (userLocation.latitude == null || userLocation.longitude == null) {
+    console.log('User location not available yet');
+    return;
+  }
+
+  const packName = 'current-area-offline';
+
+  // Skip if we already have a pack for this area from a previous session.
+  const existingPacks = await OfflineManager.getPacks();
+  const alreadyDownloaded = existingPacks.some(
+    (p) => p.metadata?.name === packName
+  );
+  if (alreadyDownloaded) {
+    console.log('Offline pack already exists, skipping download');
+    return;
+  }
+
+  const bounds = boundsAroundPoint(userLocation.latitude, userLocation.longitude, 5);
+
+  const progressListener = (pack, status) => {
+    console.log(`${status.percentage}% complete`);
+  };
+  const errorListener = (pack, err) => {
+    console.error('Offline pack error', err);
+  };
+
+  const pack = await OfflineManager.createPack(
+    {
+      mapStyle: MAP_STYLE_URL,
+      minZoom: 10,
+      maxZoom: 16,
+      bounds,
+      metadata: { name: packName },
+    },
+    progressListener,
+    errorListener,
+  );
+
+  return pack;
+}
 
 export default function Index() {
   const [familyMembers, setFamilyMembers] = useState([]);
@@ -39,6 +93,7 @@ export default function Index() {
   useFocusEffect(
     useCallback(() => {
       const sendLocation = async () => {
+        let offlineDownloadStarted = false;
         const locationData = await Location.getCurrentPositionAsync();
         const { coords: { latitude, longitude } } = locationData;
 
@@ -46,6 +101,11 @@ export default function Index() {
           latitude: latitude, 
           longitude: longitude
         });
+
+         if (!offlineDownloadStarted) {
+          offlineDownloadStarted = true;
+          downloadOfflineMapForCurrentArea({ latitude, longitude });
+        }
 
         try{
           const logLocation = await uploadUserLocation({ latitude, longitude });
@@ -59,23 +119,34 @@ export default function Index() {
       };
 
       async function fetchingFamilyLocations(){
-        try{ 
-          const { data } = await fetchFamilyLocation();
-          for(const member of data) {
-            const { last_seen, longitude, latitude, user_id } = member;
-            const timestampMs = new Date(last_seen).getTime();
-            await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
-          }
-        } catch(e){
-          console.log(e);
-        }
-      }
+  try {
+    const { data } = await fetchFamilyLocation();
+    for (const member of data) {
+      const { last_seen, longitude, latitude, user_id } = member;
+      const timestampMs = new Date(last_seen).getTime();
+      await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
+    }
+  } catch (e) {
+    console.log('fetch failed, falling back to local db', e);
+  }
 
-      getFamilyPositions();
+  // Always read from local sqlite, whether the fetch above succeeded or not.
+  try {
+    const locations = await getFamilyPositions();
+    setFamilyMembers(() => locations);
+
+    console.log(locations);
+    console.log(familyMembers);
+  } catch (e) {
+    console.log('failed to read local db', e);
+  }
+}
+      
       sendLocation();
       fetchingFamilyLocations();
       const familyFetchInterval = setInterval(fetchingFamilyLocations, 1000 * 60);
       const sendInterval = setInterval(sendLocation, 1000 * 30);
+console.log(familyMembers);
 
       return () => 
         { 
@@ -84,6 +155,31 @@ export default function Index() {
         }
     }, [])
   );
+
+    const familyGeojson = {
+      type: 'FeatureCollection',
+      features: familyMembers.map((member) => ({
+        type: 'Feature',
+        id: `family-${member.user_id}`,
+        geometry: {
+          type: 'Point',
+          coordinates: [member.longitude, member.latitude], // [lng, lat] order
+        },
+        properties: {
+          user_id: member.user_id,
+          first_name: member.first_name,
+          last_name: member.last_name,
+          relation: member.relation,
+          phone_number: member.phone_number,
+          age: member.age,
+          last_seen: member.last_seen,
+        },
+      })),
+    };
+
+  useEffect(() => {
+  console.log('familyMembers updated:', familyMembers);
+}, [familyMembers]);
 
 
   return (
@@ -117,7 +213,7 @@ export default function Index() {
         />
 
         <Images images={{ pin: require('../../assets/images/mappinny2.png') }} />
-        <GeoJSONSource id="userLocationSource" data={pointGeojson}>
+        <GeoJSONSource id="userLocationSource" data={familyGeojson}>
           <Layer
             type="symbol"
             id="userLocationLayer"
@@ -147,22 +243,6 @@ export default function Index() {
   );
 }
 
-const pointGeojson = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      id: 'user-marker',
-      geometry: {
-        type: 'Point',
-        coordinates: [120.858151, 14.904649,], // [lng, lat] order
-      },
-      properties: {
-        name: 'You', // or member.first_name
-      },
-    },
-  ],
-};
 
 const styles = StyleSheet.create({
     container: {
