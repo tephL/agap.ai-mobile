@@ -42,6 +42,16 @@ export default function RootLayout() {
           headerTitleStyle: { fontWeight: "700" },
         }}
       />
+      <Stack.Screen
+        name="notifications"
+        options={{
+          title: "Notifications",
+          headerShadowVisible: false,
+          headerTintColor: "#182033",
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTitleStyle: { fontWeight: "700" },
+        }}
+      />
       
       {/* Reporting Screens */}
       <Stack.Screen

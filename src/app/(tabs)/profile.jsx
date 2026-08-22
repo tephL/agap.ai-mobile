@@ -11,6 +11,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { getMyProfile } from "@/services/personService";
+import { getCurrentUserId } from "@/services/currentUser";
+import { clearForUser } from "@/services/familyRepo";
 import colors from "@/constants/colors";
 
 export default function ProfileScreen() {
@@ -36,6 +38,22 @@ export default function ProfileScreen() {
       };
     }, [])
   );
+
+  async function handleLogout() {
+    const token = await SecureStore.getItemAsync("token");
+    console.log(token);
+    // Wipe this user's offline snapshot before the token is gone, so a
+    // different account can never see stale cached family data.
+    const userId = await getCurrentUserId();
+    if (userId != null) {
+      try {
+        await clearForUser(userId);
+      } catch {}
+    }
+    await SecureStore.deleteItemAsync("token");
+    console.log(token);
+    router.replace("/login");
+  }
 
   const handleLogout = async () => {
     await SecureStore.deleteItemAsync("token");

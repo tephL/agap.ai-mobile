@@ -1,63 +1,598 @@
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  BackHandler,
+  Easing,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import colors from "../../constants/colors";
+import { uploadReportPhoto } from "../../services/reportService";
+import {
+  cameraStore,
+  MAX_PHOTOS,
+  useCameraStore,
+} from "../../store/cameraStore";
 
-export default function ReportScreen() {
-  const router = useRouter();
+const NOTES_MAX = 500;
+
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function formatSentAt(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function PingingCheckmark() {
+  const ringA = useRef(new Animated.Value(0)).current;
+  const ringB = useRef(new Animated.Value(0)).current;
+  const ringC = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animateRing = (value, delay) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(value, {
+            toValue: 1,
+            duration: 1800,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(value, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+    const animations = [
+      animateRing(ringA, 0),
+      animateRing(ringB, 600),
+      animateRing(ringC, 1200),
+    ];
+    animations.forEach((animation) => animation.start());
+    return () => animations.forEach((animation) => animation.stop());
+  }, [ringA, ringB, ringC]);
 
   return (
-    <View style={styles.container}>
-      <Ionicons name="megaphone-outline" size={48} color={colors.primary} />
-      <Text style={styles.title}>Report an Incident</Text>
-      <Text style={styles.subtitle}>
-        Snap a photo to report an incident or hazard in your area.
-      </Text>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/camera")}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="camera" size={18} color={colors.white} />
-        <Text style={styles.buttonText}>Take Photo</Text>
-      </TouchableOpacity>
+    <View style={styles.successWrap}>
+      {[ringA, ringB, ringC].map((progress, index) => (
+        <Animated.View
+          key={index}
+          style={[
+            styles.pulse,
+            {
+              opacity: progress.interpolate({
+                inputRange: [0, 0.12, 1],
+                outputRange: [0.5, 0.38, 0],
+              }),
+              transform: [
+                {
+                  scale: progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.52, 1.18],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+      ))}
+      <View style={styles.checkCircle}>
+        <Ionicons name="checkmark" size={36} color={colors.white} />
+      </View>
     </View>
   );
 }
 
+export default function ReportScreen() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const { photos, reportExpiresAt, sentAt } = useCameraStore();
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [galleryOffset, setGalleryOffset] = useState(0);
+  const [remainingMs, setRemainingMs] = useState(() =>
+    reportExpiresAt ? Math.max(0, reportExpiresAt - Date.now()) : 0
+  );
+
+  useEffect(() => {
+    setNotes("");
+    setGalleryOffset(0);
+  }, [sentAt]);
+
+  useEffect(() => {
+    if (!reportExpiresAt) {
+      setRemainingMs(0);
+      return;
+    }
+    const tick = () =>
+      setRemainingMs(Math.max(0, reportExpiresAt - Date.now()));
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [reportExpiresAt]);
+
+  const atLimit = photos.length >= MAX_PHOTOS;
+
+  const thumbSize = useMemo(() => {
+    const horizontalPad = 56;
+    const gap = 12;
+    const visible = Math.min(photos.length + 1, MAX_PHOTOS);
+    const available = width - horizontalPad;
+    return Math.min(108, Math.max(76, (available - gap * (visible - 1)) / visible));
+  }, [photos.length, width]);
+
+  const activeDot = Math.min(
+    MAX_PHOTOS - 1,
+    Math.max(0, Math.round(galleryOffset / (thumbSize + 12)))
+  );
+
+  const openCamera = () => {
+    if (atLimit || submitting) return;
+    router.push("/camera");
+  };
+
+  const openPreview = (index) => {
+    if (submitting) return;
+    cameraStore.openPhoto(index);
+    router.push("/camera-preview");
+  };
+
+  const removePhoto = (index) => {
+    if (submitting) return;
+    cameraStore.removePhoto(index);
+  };
+
+  const closeForm = useCallback(() => {
+    cameraStore.discardReport();
+    router.replace("/");
+  }, [router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (submitting) return true;
+        Alert.alert(
+          "Discard report?",
+          "Your current report will be discarded and won't be saved.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Confirm", style: "destructive", onPress: closeForm },
+          ]
+        );
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+      return () => subscription.remove();
+    }, [closeForm, submitting])
+  );
+
+  const handleSkip = () => {
+    if (submitting) return;
+    closeForm();
+    Alert.alert("Successfully submitted report", undefined, [
+      { text: "Confirm" },
+    ]);
+  };
+
+  const handleSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const description = notes.trim();
+      for (let i = 0; i < photos.length; i += 1) {
+        const extra = i === 0 && description ? { description } : {};
+        await uploadReportPhoto(photos[i].uri, extra);
+      }
+      closeForm();
+      Alert.alert("Successfully submitted report", undefined, [
+        { text: "Confirm" },
+      ]);
+    } catch (err) {
+      const message = err?.response
+        ? err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          `Server responded with status ${err.response.status}.`
+        : `Couldn't reach the server (${err?.message || "network error"}). Check your connection and API URL.`;
+      Alert.alert("Upload failed", message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const confirmSubmit = () => {
+    if (submitting) return;
+    Alert.alert(
+      "Submit details?",
+      "Are you sure you want to submit your current details?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Confirm", onPress: handleSubmit },
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.sentAt}>
+            request sent: {formatSentAt(sentAt)}
+          </Text>
+
+          <PingingCheckmark />
+
+          <Text style={styles.title}>SOS SENT</Text>
+          <Text style={styles.subtitle}>
+            help us help you. Add critical details.
+          </Text>
+
+          <TextInput
+            style={styles.notes}
+            value={notes}
+            onChangeText={(value) => setNotes(value.slice(0, NOTES_MAX))}
+            placeholder="describe your situation in detail (e.g. number of people involved, specific injuries and any hazards) this information is crucial for first responders..."
+            placeholderTextColor={colors.placeholder}
+            multiline
+            textAlignVertical="top"
+            maxLength={NOTES_MAX}
+            editable={!submitting}
+          />
+          <Text style={styles.counter}>
+            {notes.length}/{NOTES_MAX}
+          </Text>
+
+          <View style={styles.galleryBox}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.gallery}
+              onScroll={(event) =>
+                setGalleryOffset(event.nativeEvent.contentOffset.x)
+              }
+              scrollEventThrottle={16}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.takePhoto,
+                  { width: thumbSize, height: thumbSize },
+                  atLimit && styles.takePhotoDisabled,
+                ]}
+                onPress={openCamera}
+                disabled={atLimit || submitting}
+                activeOpacity={0.85}
+              >
+                <View style={styles.cameraIconWrap}>
+                  <Ionicons
+                    name="camera-outline"
+                    size={28}
+                    color={atLimit ? colors.muted : colors.text}
+                  />
+                  <View
+                    style={[
+                      styles.plusBadge,
+                      atLimit && styles.plusBadgeDisabled,
+                    ]}
+                  >
+                    <Ionicons name="add" size={11} color={colors.white} />
+                  </View>
+                </View>
+                <Text
+                  style={[
+                    styles.takePhotoLabel,
+                    atLimit && styles.takePhotoLabelDisabled,
+                  ]}
+                >
+                  take photo
+                </Text>
+              </TouchableOpacity>
+
+              {photos.map((photo, index) => (
+                <View
+                  key={photo.id}
+                  style={[styles.thumbWrap, { width: thumbSize, height: thumbSize }]}
+                >
+                  <TouchableOpacity
+                    onPress={() => openPreview(index)}
+                    activeOpacity={0.85}
+                    style={styles.thumbHit}
+                    disabled={submitting}
+                  >
+                    <Image
+                      source={{ uri: photo.uri }}
+                      style={styles.thumb}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.removeBtn}
+                    onPress={() => removePhoto(index)}
+                    hitSlop={8}
+                    disabled={submitting}
+                  >
+                    <Ionicons name="close" size={12} color={colors.white} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View style={styles.dots}>
+              {Array.from({ length: MAX_PHOTOS }).map((_, index) => (
+                <View
+                  key={index}
+                  style={[styles.dot, index === activeDot && styles.dotActive]}
+                />
+              ))}
+            </View>
+          </View>
+
+          <Text style={styles.caption}>attach up to {MAX_PHOTOS} images only</Text>
+
+          <TouchableOpacity
+            style={styles.submit}
+            onPress={confirmSubmit}
+            disabled={submitting}
+            activeOpacity={0.85}
+          >
+            {submitting ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <Text style={styles.submitText}>SUBMIT DETAILS</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleSkip}
+            disabled={submitting}
+            hitSlop={8}
+          >
+            <Text style={styles.skip}>SKIP</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        <Text style={styles.timer}>
+          this form will close in {formatCountdown(remainingMs)}
+        </Text>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
     backgroundColor: colors.background,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.text,
-    marginTop: 16,
+  flex: {
+    flex: 1,
   },
-  subtitle: {
-    fontSize: 14,
+  content: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 16,
+    alignItems: "center",
+  },
+  sentAt: {
+    fontSize: 12,
     color: colors.muted,
     textAlign: "center",
-    marginTop: 8,
-    marginBottom: 24,
   },
-  button: {
+  successWrap: {
+    width: 128,
+    height: 128,
+    marginTop: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pulse: {
+    position: "absolute",
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: 3,
+    borderColor: colors.primary,
+  },
+  checkCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    marginTop: 8,
+    fontSize: 28,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: 0.6,
+  },
+  subtitle: {
+    marginTop: 6,
+    marginBottom: 18,
+    fontSize: 14,
+    color: colors.text,
+    textAlign: "center",
+  },
+  notes: {
+    width: "100%",
+    minHeight: 110,
+    borderWidth: 1,
+    borderColor: colors.text,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.text,
+  },
+  counter: {
+    alignSelf: "flex-end",
+    marginTop: 4,
+    marginBottom: 14,
+    fontSize: 11,
+    color: colors.muted,
+  },
+  galleryBox: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: colors.text,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+  },
+  gallery: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    height: 46,
-    paddingHorizontal: 28,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
+    gap: 12,
   },
-  buttonText: {
-    color: colors.white,
-    fontWeight: "700",
+  takePhoto: {
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  takePhotoDisabled: {
+    opacity: 0.45,
+  },
+  cameraIconWrap: {
+    width: 36,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  plusBadge: {
+    position: "absolute",
+    right: -4,
+    top: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  plusBadgeDisabled: {
+    backgroundColor: colors.muted,
+  },
+  takePhotoLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  takePhotoLabelDisabled: {
+    color: colors.muted,
+  },
+  thumbWrap: {
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: colors.surface,
+  },
+  thumbHit: {
+    flex: 1,
+  },
+  thumb: {
+    width: "100%",
+    height: "100%",
+  },
+  removeBtn: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.text,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 12,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.border,
+  },
+  dotActive: {
+    backgroundColor: colors.text,
+  },
+  caption: {
+    marginTop: 8,
+    fontSize: 12,
+    color: colors.muted,
+    textAlign: "center",
+  },
+  submit: {
+    marginTop: 22,
+    width: "100%",
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: colors.text,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.white,
+  },
+  submitText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: 0.4,
+  },
+  skip: {
+    marginTop: 14,
     fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+    letterSpacing: 0.8,
+  },
+  timer: {
+    paddingVertical: 12,
+    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.primary,
   },
 });

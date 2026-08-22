@@ -10,10 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { useRouter } from "expo-router";
 import colors from "../../constants/colors";
 import Logo from "../../components/ui/Logo";
 import FormInput from "../../components/ui/FormInput";
+import ConfirmModal from "../../components/ui/ConfirmModal";
 import { MaterialIcons } from "@expo/vector-icons";
+import { createPerson } from "../../services/personService";
 
 const GENDER_OPTIONS = [
   { label: "Male", value: "male" },
@@ -30,9 +33,12 @@ const DISABILITY_OPTIONS = [
   { label: "Other", value: "other" },
 ];
 
-const PET_OPTIONS = [
-  { label: "No", value: "no" },
-  { label: "Yes", value: "yes" },
+const PET_TYPE_OPTIONS = [
+  { label: "Dog", value: "dog" },
+  { label: "Cat", value: "cat" },
+  { label: "Bird", value: "bird" },
+  { label: "Fish", value: "fish" },
+  { label: "Other", value: "other" },
 ];
 
 export default function PersonalInfoScreen() {
@@ -48,12 +54,16 @@ export default function PersonalInfoScreen() {
     street: "",
     address: "",
     house_floors: "",
-    pets: null,
-    pet_count: "1",
+    pets: [],
+    pet_other: "",
     gender_other: "",
     disability_other: "",
   });
   const [errors, setErrors] = useState({});
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const router = useRouter();
 
   const updateField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -81,17 +91,14 @@ export default function PersonalInfoScreen() {
     });
   };
 
-  const incrementPets = () =>
+  const togglePet = (value) => {
     setForm((prev) => ({
       ...prev,
-      pet_count: String(Number(prev.pet_count || 0) + 1),
+      pets: prev.pets.includes(value)
+        ? prev.pets.filter((p) => p !== value)
+        : [...prev.pets, value],
     }));
-
-  const decrementPets = () =>
-    setForm((prev) => ({
-      ...prev,
-      pet_count: String(Math.max(1, Number(prev.pet_count || 1) - 1)),
-    }));
+  };
 
   const handleContinue = () => {
     const nextErrors = {};
@@ -102,7 +109,6 @@ export default function PersonalInfoScreen() {
       ["age", "Age"],
       ["city", "City"],
       ["barangay", "Barangay"],
-      ["street", "Street"],
       ["address", "Address"],
       ["house_floors", "House Floors"],
     ];
@@ -123,13 +129,142 @@ export default function PersonalInfoScreen() {
     if (
       !nextErrors.house_floors &&
       (Number.isNaN(Number(form.house_floors)) ||
-        Number(form.house_floors) <= 0)
+        Number(form.house_floors) < 1 ||
+        Number(form.house_floors) > 10)
     ) {
-      nextErrors.house_floors = "Enter a valid number of house floors";
+      nextErrors.house_floors =
+        "Enter a valid number of house floors (1-10)";
+    }
+
+    if (form.gender === "other" && !form.gender_other.trim()) {
+      nextErrors.gender_other = "Please specify your gender";
+    }
+    if (
+      form.disabilities.includes("other") &&
+      !form.disability_other.trim()
+    ) {
+      nextErrors.disability_other = "Please specify your disability";
+    }
+    if (form.pets.includes("other") && !form.pet_other.trim()) {
+      nextErrors.pet_other = "Please specify the type of pet";
     }
 
     setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length === 0) {
+      setSubmitError("");
+      setConfirmVisible(true);
+    }
   };
+
+  const buildPayload = () => {
+    const disabilities = form.disabilities.filter((d) => d !== "none");
+    const pets = [...form.pets.filter((p) => p !== "other")];
+    if (form.pets.includes("other")) {
+      pets.push(form.pet_other.trim());
+    }
+    return {
+      first_name: form.first_name.trim(),
+      ...(form.middle_name.trim()
+        ? { middle_name: form.middle_name.trim() }
+        : {}),
+      last_name: form.last_name.trim(),
+      gender: form.gender,
+      ...(disabilities.length ? { disabilities } : {}),
+      age: Number(form.age),
+      city: form.city.trim(),
+      barangay: form.barangay.trim(),
+      ...(form.street.trim() ? { street: form.street.trim() } : {}),
+      address: form.address.trim(),
+      house_floors: Number(form.house_floors),
+      ...(pets.length ? { pets } : {}),
+    };
+  };
+
+  const handleConfirm = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await createPerson(buildPayload());
+      router.replace("/");
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        setConfirmVisible(false);
+        router.replace("/login");
+        return;
+      }
+      setSubmitError(getSubmitErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getSubmitErrorMessage = (err) => {
+    if (err.response) {
+      const { status, data } = err.response;
+      if (status === 400) {
+        if (Array.isArray(data)) {
+          const messages = data
+            .map((validationError) => validationError.msg)
+            .filter(Boolean);
+          if (messages.length > 0) {
+            return messages.join("\n");
+          }
+        }
+        if (data && typeof data.message === "string") {
+          return data.message;
+        }
+        return "Please check your input and try again.";
+      }
+      if (status >= 500) {
+        return "Something went wrong on the server. Please try again later.";
+      }
+    }
+    return "Unable to reach the server. Check your connection and try again.";
+  };
+
+  const disabilitiesLabel = () => {
+    const selected = form.disabilities.filter((d) => d !== "none");
+    if (selected.length === 0) return "None";
+    return selected
+      .map(
+        (d) => DISABILITY_OPTIONS.find((option) => option.value === d)?.label
+      )
+      .filter(Boolean)
+      .join(", ");
+  };
+
+  const petsLabel = () => {
+    if (form.pets.length === 0) return "None";
+    return form.pets
+      .map((p) =>
+        p === "other" && form.pet_other.trim()
+          ? form.pet_other.trim()
+          : PET_TYPE_OPTIONS.find((option) => option.value === p)?.label
+      )
+      .filter(Boolean)
+      .join(", ");
+  };
+
+  const summaryRows = () => [
+    { label: "First Name", value: form.first_name.trim() },
+    { label: "Middle Name", value: form.middle_name.trim() },
+    { label: "Last Name", value: form.last_name.trim() },
+    {
+      label: "Gender",
+      value:
+        GENDER_OPTIONS.find((option) => option.value === form.gender)?.label,
+    },
+    { label: "Age", value: form.age },
+    { label: "Disabilities", value: disabilitiesLabel() },
+    { label: "City", value: form.city.trim() },
+    { label: "Barangay", value: form.barangay.trim() },
+    { label: "Street", value: form.street.trim() },
+    { label: "Address", value: form.address.trim() },
+    { label: "House Floors", value: form.house_floors },
+    { label: "Pets", value: petsLabel() },
+  ];
 
   const renderChip = (label, selected, onPress, style, error) => (
     <TouchableOpacity
@@ -243,6 +378,7 @@ export default function PersonalInfoScreen() {
                   onChangeText={(text) => updateField("gender_other", text)}
                   autoCapitalize="words"
                   autoCorrect={false}
+                  error={errors.gender_other}
                 />
               ) : null}
             </View>
@@ -286,6 +422,7 @@ export default function PersonalInfoScreen() {
                   onChangeText={(text) => updateField("disability_other", text)}
                   autoCapitalize="words"
                   autoCorrect={false}
+                  error={errors.disability_other}
                 />
               ) : null}
             </View>
@@ -358,43 +495,27 @@ export default function PersonalInfoScreen() {
                 <Text style={styles.label}>Pets</Text>
                 <Text style={styles.optionalInline}>(Optional)</Text>
               </View>
-              <Text style={styles.helper}>Do you have pets?</Text>
-              <View style={styles.chipRow}>
-                {PET_OPTIONS.map((option) =>
+              <Text style={styles.helper}>What types of pets do you have?</Text>
+              <View style={styles.chipWrap}>
+                {PET_TYPE_OPTIONS.map((option) =>
                   renderChip(
                     option.label,
-                    form.pets === option.value,
-                    () =>
-                      updateField(
-                        "pets",
-                        form.pets === option.value ? null : option.value
-                      ),
-                    styles.chipWide
+                    form.pets.includes(option.value),
+                    () => togglePet(option.value)
                   )
                 )}
               </View>
-              {form.pets === "yes" ? (
-                <View style={styles.stepperRow}>
-                  <TouchableOpacity
-                    style={styles.stepperButton}
-                    onPress={decrementPets}
-                    activeOpacity={0.7}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="remove" color={colors.text} size={18} />
-                  </TouchableOpacity>
-                  <View style={styles.stepperValue}>
-                    <Text style={styles.stepperText}>{form.pet_count}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.stepperButton}
-                    onPress={incrementPets}
-                    activeOpacity={0.7}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="add" color={colors.text} size={18} />
-                  </TouchableOpacity>
-                </View>
+              {form.pets.includes("other") ? (
+                <FormInput
+                  label="Specify Pet"
+                  icon={<MaterialIcons name="edit" color={colors.placeholder} size={20} />}
+                  placeholder="Enter the type of pet"
+                  value={form.pet_other}
+                  onChangeText={(text) => updateField("pet_other", text)}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  error={errors.pet_other}
+                />
               ) : null}
             </View>
 
@@ -408,6 +529,20 @@ export default function PersonalInfoScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title="Confirm your information"
+        subtitle="Please review your details before saving."
+        rows={summaryRows()}
+        confirmLabel="Confirm & Save"
+        submitting={submitting}
+        error={submitError}
+        onCancel={() => {
+          if (!submitting) setConfirmVisible(false);
+        }}
+        onConfirm={handleConfirm}
+      />
     </SafeAreaView>
   );
 }
@@ -517,34 +652,6 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     fontWeight: "700",
     color: colors.primary,
-  },
-  stepperRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 4,
-  },
-  stepperButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  stepperValue: {
-    flex: 1,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-  },
-  stepperText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
   },
   fieldError: {
     fontSize: 12,

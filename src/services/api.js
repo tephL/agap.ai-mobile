@@ -3,8 +3,9 @@ import * as SecureStore from "expo-secure-store";
 
 
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_LOCAL_URL ??
-  process.env.EXPO_PUBLIC_LOCAL_IP;
+  process.env.EXPO_PUBLIC_API_URL ??
+  process.env.EXPO_PUBLIC_LOCAL_IP ??
+  "http://localhost:3000";
 
 export const api = createAxios({
   baseURL: API_BASE_URL,
@@ -15,7 +16,7 @@ api.interceptors.request.use(async (config) => {
   try {
     const token = await SecureStore.getItemAsync("token");
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers.Cookie = `token=${token}`;
     }
   } catch {
     // Ignore SecureStore errors

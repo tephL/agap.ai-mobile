@@ -5,17 +5,23 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import colors from "../constants/colors";
-import { cameraStore } from "../store/cameraStore";
+import { cameraStore, MAX_PHOTOS, useCameraStore } from "../store/cameraStore";
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState("back");
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef(null);
   const router = useRouter();
+  const { photos } = useCameraStore();
+  const atLimit = photos.length >= MAX_PHOTOS;
+
+  const handleBack = () => {
+    cameraStore.clearPending();
+    router.back();
+  };
 
   const handleCapture = useCallback(async () => {
-    if (!cameraRef.current || isCapturing) return;
+    if (!cameraRef.current || isCapturing || atLimit) return;
     setIsCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -29,13 +35,8 @@ export default function CameraScreen() {
     } finally {
       setIsCapturing(false);
     }
-  }, [isCapturing, router]);
+  }, [atLimit, isCapturing, router]);
 
-  const toggleFacing = () => {
-    setFacing((prev) => (prev === "back" ? "front" : "back"));
-  };
-
-  // Permission state still resolving
   if (!permission) {
     return <View style={styles.container} />;
   }
@@ -55,8 +56,8 @@ export default function CameraScreen() {
         >
           <Text style={styles.permissionButtonText}>Grant Permission</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Text style={styles.cancelLink}>Cancel</Text>
+        <TouchableOpacity onPress={handleBack} hitSlop={12}>
+          <Text style={styles.cancelLink}>Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -64,31 +65,24 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
+      <CameraView ref={cameraRef} style={styles.camera} facing="back" />
 
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topBar}>
           <TouchableOpacity
             style={styles.iconButton}
-            onPress={() => router.back()}
+            onPress={handleBack}
             hitSlop={8}
           >
-            <Ionicons name="close" size={26} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={toggleFacing}
-            hitSlop={8}
-          >
-            <Ionicons name="camera-reverse" size={26} color="#fff" />
+            <Ionicons name="chevron-back" size={26} color="#fff" />
           </TouchableOpacity>
         </View>
 
         <View style={styles.bottomBar}>
           <TouchableOpacity
-            style={styles.shutterOuter}
+            style={[styles.shutterOuter, atLimit && styles.shutterDisabled]}
             onPress={handleCapture}
-            disabled={isCapturing}
+            disabled={isCapturing || atLimit}
             activeOpacity={0.8}
           >
             <View style={styles.shutterInner} />
@@ -108,7 +102,7 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     paddingHorizontal: 20,
     paddingTop: 12,
   },
@@ -132,6 +126,9 @@ const styles = StyleSheet.create({
     borderColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
+  },
+  shutterDisabled: {
+    opacity: 0.4,
   },
   shutterInner: {
     width: 62,

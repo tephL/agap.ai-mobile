@@ -18,7 +18,7 @@ import Logo from "../../components/ui/Logo";
 import FormInput from "../../components/ui/FormInput";
 import {
   register as registerAccount,
-  normalizePhoneNumber,
+  normalizePhoneForLogin,
 } from "../../services/authService";
 
 export default function RegisterScreen() {
@@ -39,8 +39,11 @@ export default function RegisterScreen() {
     if (!username.trim()) {
       nextErrors.username = "Username is required";
     }
-    if (!normalizePhoneNumber(phone)) {
+    const normalizedPhone = normalizePhoneForLogin(phone);
+    if (!normalizedPhone) {
       nextErrors.phone = "Phone number is required";
+    } else if (normalizedPhone.length !== 10) {
+      nextErrors.phone = "Enter a valid 10-digit mobile number";
     }
     if (!password) {
       nextErrors.password = "Password is required";
@@ -78,7 +81,7 @@ export default function RegisterScreen() {
     try {
       await registerAccount({
         username: username.trim(),
-        phone_number: normalizePhoneNumber(phone),
+        phone_number: normalizePhoneForLogin(phone),
         password,
       });
       router.replace("/login");
@@ -172,8 +175,11 @@ export default function RegisterScreen() {
               }}
               placeholder="917 123 4567"
               keyboardType="phone-pad"
+              maxLength={10}
               value={phone}
-              onChangeText={(text) => updateField("phone", text)}
+              onChangeText={(text) =>
+                updateField("phone", text.replace(/\D/g, "").slice(0, 10))
+              }
               autoComplete="tel"
               helper="Used for emergency alerts and SMS fallback."
               error={fieldErrors.phone}
