@@ -1,19 +1,24 @@
 import { View, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useState } from "react";
 import { Map, Camera, UserLocation } from '@maplibre/maplibre-react-native';
-import { uploadUserLocation } from '../../services/usersService.js';
 import { useFocusEffect } from "expo-router";
+
+
+// services
+import { uploadUserLocation } from '../../services/usersService.js';
+import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
+
+// components
+import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
+
 
 const MAPTILER_API_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
 const PH_CENTER = [121.7740, 12.8797]; 
-
-// "positron" and "dataviz" are the cleanest, most "app-like" MapTiler styles.
-// streets-v2 works too but reads more like Google Maps default.
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_API_KEY}`;
+
 
 export default function Index() {
   const [locationGranted, setLocationGranted] = useState(false);
@@ -29,6 +34,7 @@ export default function Index() {
       if (status !== "granted") console.log('permission denied');
     })();
   }, []);
+
 
   useFocusEffect(
     useCallback(() => {
@@ -52,11 +58,33 @@ export default function Index() {
         }
       };
 
+      async function fetchingFamilyLocations(){
+        try{ 
+          const { data } = await fetchFamilyLocation();
+          for(const member of data) {
+            const { last_seen, longitude, latitude, user_id } = member;
+            const timestampMs = new Date(last_seen).getTime();
+            await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
+          }
+        } catch(e){
+          console.log(e);
+        }
+      }
+
+      getFamilyPositions();
       sendLocation();
+      fetchingFamilyLocations();
+      const familyFetchInterval = setInterval(fetchingFamilyLocations, 1000 * 60);
       const sendInterval = setInterval(sendLocation, 1000 * 30);
-      return () => clearInterval(sendInterval);
+
+      return () => 
+        { 
+          clearInterval(sendInterval);
+          clearInterval(familyFetchInterval);
+        }
     }, [])
   );
+
 
   return (
     <View style={styles.container}>

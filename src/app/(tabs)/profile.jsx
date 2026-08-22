@@ -41,27 +41,16 @@ export default function ProfileScreen() {
 
   async function handleLogout() {
     const token = await SecureStore.getItemAsync("token");
-    console.log(token);
-    // Wipe this user's offline snapshot before the token is gone, so a
-    // different account can never see stale cached family data.
+
     const userId = await getCurrentUserId();
     if (userId != null) {
       try {
-        await clearForUser(userId);
+        await clearForUser();
       } catch {}
     }
 
     await SecureStore.deleteItemAsync("token");
-    console.log(token);
     router.replace("/login");
-  }
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
   }
 
   const p = profile || {};
@@ -160,7 +149,7 @@ export default function ProfileScreen() {
       {/* Logout */}
       <TouchableOpacity
         style={styles.logoutButton}
-        onPress={handleLogout}
+        onPress={() => handleLogout()}
         activeOpacity={0.85}
       >
         <Text style={styles.logoutText}>Logout</Text>
