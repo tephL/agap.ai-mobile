@@ -1,20 +1,18 @@
 import { useSyncExternalStore } from "react";
 
 export const MAX_PHOTOS = 3;
-export const REPORT_DURATION_MS = 5 * 60 * 1000;
 
 /**
  * Minimal external store (no extra dependency) holding the in-progress
- * report session: a 5:00 deadline, confirmed photos (max 3), the
- * pending capture shared by the camera and preview screens, and the
- * status of the /location call that creates the report row on the backend.
+ * report session: confirmed photos (max 3), the pending capture shared
+ * by the camera and preview screens, and the status of the /location
+ * call that creates the report row on the backend.
  */
 let state = {
   pending: null,
   photos: [],
   previewMode: "capture",
   viewingIndex: null,
-  reportExpiresAt: null,
   sentAt: null,
   locationStatus: "idle", // "idle" | "pending" | "success" | "error"
   locationError: null,
@@ -52,7 +50,6 @@ export const cameraStore = {
       photos: [],
       previewMode: "capture",
       viewingIndex: null,
-      reportExpiresAt: now + REPORT_DURATION_MS,
       sentAt: now,
       locationStatus: "idle",
       locationError: null,
@@ -65,7 +62,6 @@ export const cameraStore = {
       photos: [],
       previewMode: "capture",
       viewingIndex: null,
-      reportExpiresAt: null,
       sentAt: null,
       locationStatus: "idle",
       locationError: null,

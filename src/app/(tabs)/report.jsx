@@ -34,13 +34,6 @@ import {
 
 const NOTES_MAX = 500;
 
-function formatCountdown(ms) {
-  const total = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
-
 function formatSentAt(ts) {
   if (!ts) return "";
   return new Date(ts).toLocaleTimeString(undefined, {
@@ -116,31 +109,15 @@ function PingingCheckmark() {
 export default function ReportScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { photos, reportExpiresAt, sentAt, locationStatus, locationError } =
-    useCameraStore();
+  const { photos, sentAt, locationStatus, locationError } = useCameraStore();
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [galleryOffset, setGalleryOffset] = useState(0);
-  const [remainingMs, setRemainingMs] = useState(() =>
-    reportExpiresAt ? Math.max(0, reportExpiresAt - Date.now()) : 0
-  );
 
   useEffect(() => {
     setNotes("");
     setGalleryOffset(0);
   }, [sentAt]);
-
-  useEffect(() => {
-    if (!reportExpiresAt) {
-      setRemainingMs(0);
-      return;
-    }
-    const tick = () =>
-      setRemainingMs(Math.max(0, reportExpiresAt - Date.now()));
-    tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
-  }, [reportExpiresAt]);
 
   const atLimit = photos.length >= MAX_PHOTOS;
 
@@ -203,10 +180,14 @@ export default function ReportScreen() {
 
   const handleSkip = () => {
     if (submitting) return;
-    closeForm();
-    Alert.alert("Successfully submitted report", undefined, [
-      { text: "Confirm" },
-    ]);
+    Alert.alert(
+      "Skip this report?",
+      "None of these details will be sent, and they won't be saved.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Confirm", style: "destructive", onPress: closeForm },
+      ]
+    );
   };
 
   // Re-fires the location request if the first attempt failed (e.g. the
@@ -256,8 +237,7 @@ export default function ReportScreen() {
   // Surfaces a failed location request as soon as it happens, rather than
   // making the user discover it only when they hit Submit — this is an SOS
   // flow, so time matters. Guarded by a ref (not state) so it fires once
-  // per distinct failure, not on every unrelated re-render (e.g. the
-  // countdown timer ticking every 250ms).
+  // per distinct failure, not on every unrelated re-render.
   const lastLocationErrorRef = useRef(null);
   useEffect(() => {
     if (locationStatus !== "error" || !locationError) return;
@@ -298,9 +278,6 @@ export default function ReportScreen() {
       }
 
       closeForm();
-      Alert.alert("Successfully submitted report", undefined, [
-        { text: "Confirm" },
-      ]);
     } catch (err) {
       const message = err?.response
         ? err?.response?.data?.message ||
@@ -470,10 +447,6 @@ export default function ReportScreen() {
             <Text style={styles.skip}>SKIP</Text>
           </TouchableOpacity>
         </ScrollView>
-
-        <Text style={styles.timer}>
-          this form will close in {formatCountdown(remainingMs)}
-        </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -672,12 +645,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
     letterSpacing: 0.8,
-  },
-  timer: {
-    paddingVertical: 12,
-    textAlign: "center",
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.primary,
   },
 });
