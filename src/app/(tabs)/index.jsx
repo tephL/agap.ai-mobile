@@ -1,10 +1,9 @@
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useState } from "react";
-import { Map, Camera, UserLocation } from '@maplibre/maplibre-react-native';
+import { Map, Camera, UserLocation, GeoJSONSource, Layer, Images } from '@maplibre/maplibre-react-native';
 import { useFocusEffect } from "expo-router";
-
 
 // services
 import { uploadUserLocation } from '../../services/usersService.js';
@@ -21,6 +20,7 @@ const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MA
 
 
 export default function Index() {
+  const [familyMembers, setFamilyMembers] = useState([]);
   const [locationGranted, setLocationGranted] = useState(false);
   const [userLocation, setUserLocation] = useState({
     latitude: null,
@@ -115,6 +115,25 @@ export default function Index() {
           animationDuration={1200}
           trackUserLocation={locationGranted ? "default" : undefined}
         />
+
+        <Images images={{ pin: require('../../assets/images/mappinny2.png') }} />
+        <GeoJSONSource id="userLocationSource" data={pointGeojson}>
+          <Layer
+            type="symbol"
+            id="userLocationLayer"
+            layout={{
+              'icon-image': 'pin',
+              'icon-allow-overlap': true,
+              'icon-size': [
+                'interpolate', ['linear'], ['zoom'],
+                5, 0.3,
+                10, 0.6,
+                16, 1.0,
+              ],
+            }}
+          />
+        </GeoJSONSource>
+
         {locationGranted && (
           <UserLocation
             visible={true}
@@ -127,6 +146,23 @@ export default function Index() {
     </View>
   );
 }
+
+const pointGeojson = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      id: 'user-marker',
+      geometry: {
+        type: 'Point',
+        coordinates: [120.858151, 14.904649,], // [lng, lat] order
+      },
+      properties: {
+        name: 'You', // or member.first_name
+      },
+    },
+  ],
+};
 
 const styles = StyleSheet.create({
     container: {
@@ -149,4 +185,19 @@ const styles = StyleSheet.create({
         color: 'blue'
     }, 
     map: { flex: 1 },
+    marker: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: '#4287f5',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: '#ffffff',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.3,
+      shadowRadius: 2,
+      elevation: 3, // Android shadow
+    }
 });
