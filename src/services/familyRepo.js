@@ -57,6 +57,21 @@ export async function saveFamilySnapshot(userId, snapshot) {
       );
     }
 
+    // Drop members removed on the server so they never resurface offline.
+    if (members.length === 0) {
+      await txn.runAsync(`DELETE FROM member WHERE family_id = ?`, [
+        snapshot.family_id,
+      ]);
+    } else {
+      const placeholders = members.map(() => "?").join(",");
+      await txn.runAsync(
+        `DELETE FROM member
+          WHERE family_id = ?
+            AND family_member_id NOT IN (${placeholders})`,
+        [snapshot.family_id, ...members.map((m) => m.family_member_id)]
+      );
+    }
+
     // Stamp last-synced time for the "saved X ago" indicator + user scoping.
     await txn.runAsync(
       `INSERT OR REPLACE INTO meta (key, value) VALUES ('last_synced_${userId}', ?)`,
@@ -120,5 +135,9 @@ export async function clearForUser(userId) {
   await db.runAsync(`DELETE FROM family WHERE family_id IN (
     SELECT family_id FROM member WHERE user_id = ?)`, [userId]);
   await db.runAsync(`DELETE FROM member WHERE user_id = ?`, [userId]);
-  await db.runAsync(`DELETE FROM meta WHERE key LIKE ?`, [`%_${userId}`]);
+  // Exact keys only — a LIKE pattern here could match other users' entries.
+  await db.runAsync(`DELETE FROM meta WHERE key IN (?, ?)`, [
+    `last_synced_${userId}`,
+    `has_snapshot_${userId}`,
+  ]);
 }
