@@ -193,6 +193,39 @@ console.log(familyMembers);
   console.log('familyMembers updated:', familyMembers);
 }, [familyMembers]);
 
+    // pulsing dih effect
+    const [pulse, setPulse] = useState(0); 
+
+    useEffect(() => {
+      let raf;
+      const duration = 3500; // ms per pulse cycle
+      const start = Date.now();
+
+      const tick = () => {
+        const elapsed = (Date.now() - start) % duration;
+        setPulse(elapsed / duration); // 0 to 1
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+
+      return () => cancelAnimationFrame(raf);
+    }, []);
+
+  // color staleness
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 5000); // refresh every 5s
+    return () => clearInterval(interval);
+  }, []);
+  const ageMs = ['-', now, ['get', 'last_seen']];
+
+  const staleColorExpr = [
+    'case',
+    ['<', ageMs, 5 * 60 * 1000], '#22c55e',   // green: seen < 5 min ago
+    ['<', ageMs, 30 * 60 * 1000], '#eab308',  // yellow: < 30 min ago
+    '#a9a9a9',                                 // red: older / stale
+  ];
 
   return (
     <View style={styles.container}>
@@ -224,12 +257,21 @@ console.log(familyMembers);
           trackUserLocation={locationGranted ? "default" : undefined}
         />
 
-        <Images images={{ pin: require('../../assets/images/mappinny2.png') }} />
         <GeoJSONSource id="userLocationSource" data={familyGeojson}>
           <Layer
-            type="symbol"
+            type="circle"
             id="userLocationLayer"
             layout={{
+              circleColor: staleColorExpr, 
+              circleRadius: [
+                'interpolate', ['linear'], ['zoom'],
+                5, 2,
+                10, 5,
+                16, 8,
+              ],
+              circleStrokeWidth: 2,
+              circleStrokeColor: '#ffffff',
+              circleOpacity: 0.9,
               'icon-image': 'pin',
               'icon-allow-overlap': true,
               'icon-size': [
@@ -238,6 +280,24 @@ console.log(familyMembers);
                 10, 0.6,
                 16, 1.0,
               ],
+            }}
+          />
+        </GeoJSONSource>
+
+        <GeoJSONSource id="pulseSource" data={familyGeojson}>
+          <Layer
+            type="circle"
+            id="pulseLayer"
+            layout={{
+              circleColor: staleColorExpr,
+              circleRadius: [
+                'interpolate', ['linear'], ['zoom'],
+                5, 2 + pulse * 20,
+                10, 5 + pulse * 20,
+                16, 8 + pulse * 20,
+              ],
+              circleOpacity: 0.5 - pulse,          
+              circleStrokeWidth: 0,
             }}
           />
         </GeoJSONSource>
