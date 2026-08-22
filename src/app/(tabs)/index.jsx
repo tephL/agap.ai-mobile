@@ -92,7 +92,10 @@ export default function Index() {
 
   useFocusEffect(
     useCallback(() => {
+      let cancelled = false;
+
       const sendLocation = async () => {
+        if(cancelled) return;
         let offlineDownloadStarted = false;
         const locationData = await Location.getCurrentPositionAsync();
         const { coords: { latitude, longitude } } = locationData;
@@ -119,28 +122,29 @@ export default function Index() {
       };
 
       async function fetchingFamilyLocations(){
-  try {
-    const { data } = await fetchFamilyLocation();
-    for (const member of data) {
-      const { last_seen, longitude, latitude, user_id } = member;
-      const timestampMs = new Date(last_seen).getTime();
-      await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
-    }
-  } catch (e) {
-    console.log('fetch failed, falling back to local db', e);
-  }
+        if(cancelled) return;
+        try {
+          const { data } = await fetchFamilyLocation();
+          for (const member of data) {
+            const { last_seen, longitude, latitude, user_id } = member;
+            const timestampMs = new Date(last_seen).getTime();
+            await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
+          }
+        } catch (e) {
+          console.log('fetch failed, falling back to local db', e);
+        }
 
-  // Always read from local sqlite, whether the fetch above succeeded or not.
-  try {
-    const locations = await getFamilyPositions();
-    setFamilyMembers(() => locations);
+        // Always read from local sqlite, whether the fetch above succeeded or not.
+        try {
+          const locations = await getFamilyPositions();
+          setFamilyMembers(() => locations);
 
-    console.log(locations);
-    console.log(familyMembers);
-  } catch (e) {
-    console.log('failed to read local db', e);
-  }
-}
+          console.log(locations);
+          console.log(familyMembers);
+        } catch (e) {
+          console.log('failed to read local db', e);
+        }
+      }
       
       sendLocation();
       fetchingFamilyLocations();
@@ -150,6 +154,8 @@ console.log(familyMembers);
 
       return () => 
         { 
+          console.log('went out');
+          cancelled = true;
           clearInterval(sendInterval);
           clearInterval(familyFetchInterval);
         }
