@@ -106,6 +106,7 @@ export default function Index() {
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
   const hasRunOnce = useRef(false);
+  const cameraRef = useRef(null);
 
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
@@ -256,6 +257,12 @@ export default function Index() {
     if (!feature) return;
 
     setSelectedPerson(feature.properties);
+
+    cameraRef.current?.flyTo({
+      center: feature.geometry.coordinates, // [lng, lat]
+      zoom: 15,
+      duration: 1000,
+    });
   };
 
   const handleClosePersonCard = () => {
@@ -285,16 +292,14 @@ export default function Index() {
         onDidFinishLoadingMap={() => setMapReady(true)}
       >
         <Camera
+          ref={cameraRef}
           defaultSettings={{
             centerCoordinate: PH_CENTER,
             zoomLevel: 6,
           }}
-          bounds={PH_BOUNDS}
           maxBounds={PH_BOUNDS}
           minZoom={6}
           maxZoom={20}
-          animationMode="flyTo"
-          animationDuration={1200}
           trackUserLocation={locationGranted ? "default" : undefined}
         />
 
@@ -361,18 +366,21 @@ export default function Index() {
         )}
       </Map>
       
-      {selectedPerson && (
-        <PersonCard
-          age={selectedPerson.age}
-          first_name={selectedPerson.first_name}
-          last_name={selectedPerson.last_name}
-          phone_number={selectedPerson.phone_number}
-          relation={selectedPerson.relation}
-          user_id={selectedPerson.user_id}
-          onClose={handleClosePersonCard}
-          onCall={handleCallPerson}
-        />
-      )}
+    {selectedPerson && (
+      <PersonCard
+        age={selectedPerson.age}
+        first_name={selectedPerson.first_name}
+        last_name={selectedPerson.last_name}
+        phone_number={selectedPerson.phone_number}
+        relation={selectedPerson.relation}
+        user_id={selectedPerson.user_id}
+        last_seen={selectedPerson.last_seen}
+        staleYellowThresholdMs={STALE_YELLOW_THRESHOLD_MS}
+        staleGrayThresholdMs={STALE_GRAY_THRESHOLD_MS}
+        onClose={handleClosePersonCard}
+        onCall={handleCallPerson}
+      />
+    )}
       
     </View>
   );

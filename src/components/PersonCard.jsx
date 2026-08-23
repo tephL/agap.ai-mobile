@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,37 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
+const TAB_BAR_HEIGHT = 50;
+const NOW_TICK_INTERVAL_MS = 5000; // keep in sync with map's staleness re-check
+
+// Formats an epoch-ms timestamp into a short relative label.
+function formatLastSeen(lastSeenMs, nowMs) {
+  if (lastSeenMs == null) return '—';
+
+  const diffMs = nowMs - lastSeenMs;
+  if (diffMs < 0) return 'Just now';
+
+  const diffMin = Math.floor(diffMs / (60 * 1000));
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d ago`;
+}
+
+// Mirrors the map's staleColorExpr thresholds/colors.
+function getLastSeenColor(lastSeenMs, nowMs, yellowThresholdMs, grayThresholdMs) {
+  if (lastSeenMs == null) return COLORS.muted;
+
+  const ageMs = nowMs - lastSeenMs;
+  if (ageMs < yellowThresholdMs) return '#22c55e'; // green: seen < 5 min ago
+  if (ageMs < grayThresholdMs) return '#eab308';   // yellow: < 30 min ago
+  return '#a9a9a9';                                 // gray: older / stale
+}
+
 export const PersonCard = ({
   age,
   first_name,
@@ -30,11 +61,20 @@ export const PersonCard = ({
   phone_number,
   relation,
   user_id,
-  last_seen, 
+  last_seen,
   onClose,
   onCall,
+  staleYellowThresholdMs = 5 * 60 * 1000,
+  staleGrayThresholdMs = 30 * 60 * 1000,
 }) => {
   const slideAnim = useRef(new Animated.Value(height * 0.4)).current;
+
+  // live-ticking clock so last_seen label/color stay fresh while card is open
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), NOW_TICK_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     // Slide up animation on mount
@@ -61,11 +101,21 @@ export const PersonCard = ({
     }
   };
 
+  const lastSeenLabel = formatLastSeen(last_seen, now);
+  const lastSeenColor = getLastSeenColor(
+    last_seen,
+    now,
+    staleYellowThresholdMs,
+    staleGrayThresholdMs
+  );
+
   return (
     <Animated.View
       style={[
         styles.container,
         {
+          height: height * 0.4 + TAB_BAR_HEIGHT,
+          paddingBottom: 60 + TAB_BAR_HEIGHT,
           transform: [{ translateY: slideAnim }],
         },
       ]}
@@ -106,6 +156,18 @@ export const PersonCard = ({
             <Text style={styles.infoLabel}>Phone</Text>
             <Text style={styles.infoValue}>{phone_number}</Text>
           </View>
+
+          {/* Last seen */}
+          <View style={[styles.infoRow, styles.infoRowBorder]}>
+            <Ionicons name="time-outline" size={18} color={COLORS.muted} />
+            <Text style={styles.infoLabel}>Last seen</Text>
+            <View style={styles.lastSeenValueWrap}>
+              <View style={[styles.lastSeenDot, { backgroundColor: lastSeenColor }]} />
+              <Text style={[styles.infoValue, { color: lastSeenColor }]}>
+                {lastSeenLabel}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Call button */}
@@ -129,25 +191,23 @@ export const PersonCard = ({
 
 const styles = StyleSheet.create({
   container: {
-    zIndex: 9999,           // ← Add this (React Native)
-    elevation: 9999,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.4,
-    backgroundColor: COLORS.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 60,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
+      zIndex: 9999,
+      elevation: 9999,
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: COLORS.background,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 8,
+  }, 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -196,6 +256,17 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontWeight: '600',
     flex: 1,
+  },
+  lastSeenValueWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  lastSeenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   callButton: {
     backgroundColor: COLORS.primary,
