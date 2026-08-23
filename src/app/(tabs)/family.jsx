@@ -37,66 +37,66 @@ export default function FamilyScreen() {
   const loadRunRef = useRef(0);
 
   const loadData = useCallback(async () => {
-  // Only the most recent invocation may touch state — an older, slower
-  // response (focus-load vs pull-to-refresh overlap) must be discarded.
-  const runId = ++loadRunRef.current;
-  try {
-    const invites = await getMyInvitations().catch(() => []);
-    if (runId !== loadRunRef.current) return;
+    // Only the most recent invocation may touch state — an older, slower
+    // response (focus-load vs pull-to-refresh overlap) must be discarded.
+    const runId = ++loadRunRef.current;
+    try {
+      const invites = await getMyInvitations().catch(() => []);
+      if (runId !== loadRunRef.current) return;
 
-    const data = await getMyFamily();
-    if (runId !== loadRunRef.current) return;
+      const data = await getMyFamily();
+      if (runId !== loadRunRef.current) return;
 
-    setPendingCount(Array.isArray(invites) ? invites.length : 0);
+      setPendingCount(Array.isArray(invites) ? invites.length : 0);
 
-    // No family is a valid state, not an error.
-    if (!data) {
+      // No family is a valid state, not an error.
+      if (!data) {
+        setFamily(null);
+        setIsCreator(false);
+        setIsOffline(false);
+        setLastSyncedAt(null);
+        setLoadError(false);
+        return;
+      }
+
+      setIsCreator(Boolean(data.is_creator));
+      setFamily(data);
+      setLoadError(false);
+
+      // SQLite fallback includes last_synced_at.
+      setIsOffline(Boolean(data.last_synced_at));
+      setLastSyncedAt(data.last_synced_at ?? null);
+    } catch (err) {
+      if (runId !== loadRunRef.current) return;
+
+      const status = Number(err?.response?.status);
+
+      console.error(
+        "Family load error:",
+        err?.response?.data || err.message || err
+      );
+
+      // Dead session — go log in again instead of faking an empty state.
+      if (status === 401) {
+        await SecureStore.deleteItemAsync("token");
+        router.replace("/login");
+        return;
+      }
+
+      // Server/network failure is not the same as "no family yet".
+      setLoadError(true);
       setFamily(null);
       setIsCreator(false);
       setIsOffline(false);
       setLastSyncedAt(null);
-      setLoadError(false);
       return;
+    } finally {
+      if (runId === loadRunRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-
-    setIsCreator(Boolean(data.is_creator));
-    setFamily(data);
-    setLoadError(false);
-
-    // SQLite fallback includes last_synced_at.
-    setIsOffline(Boolean(data.last_synced_at));
-    setLastSyncedAt(data.last_synced_at ?? null);
-  } catch (err) {
-  if (runId !== loadRunRef.current) return;
-
-  const status = Number(err?.response?.status);
-
-  console.error(
-    "Family load error:",
-    err?.response?.data || err.message || err
-  );
-
-  // Dead session — go log in again instead of faking an empty state.
-  if (status === 401) {
-    await SecureStore.deleteItemAsync("token");
-    router.replace("/login");
-    return;
-  }
-
-  // Server/network failure is not the same as "no family yet".
-  setLoadError(true);
-  setFamily(null);
-  setIsCreator(false);
-  setIsOffline(false);
-  setLastSyncedAt(null);
-  return;
-  } finally {
-    if (runId === loadRunRef.current) {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }
-}, [router]);
+  }, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -151,6 +151,15 @@ export default function FamilyScreen() {
         },
       ]
     );
+  };
+
+  // Navigate to the map tab with this member pre-selected so it can
+  // fly the camera to them and open their PersonCard.
+  const goToMemberOnMap = (member) => {
+    router.push({
+      pathname: "/",
+      params: { selectedUserId: String(member.user_id) },
+    });
   };
 
   if (loading && !refreshing) {
@@ -335,7 +344,11 @@ export default function FamilyScreen() {
             />
           }
           renderItem={({ item }) => (
-            <View style={styles.memberCard}>
+            <TouchableOpacity
+              style={styles.memberCard}
+              activeOpacity={0.7}
+              onPress={() => goToMemberOnMap(item)}
+            >
               <View style={styles.memberAvatar}>
                 <Ionicons name="person" size={18} color={colors.primary} />
               </View>
@@ -361,7 +374,7 @@ export default function FamilyScreen() {
                   )}
                 </TouchableOpacity>
               )}
-            </View>
+            </TouchableOpacity>
           )}
           ListEmptyComponent={
             <Text style={styles.emptyList}>No members yet</Text>
@@ -572,8 +585,8 @@ const styles = StyleSheet.create({
   memberInfo: {
     flex: 1,
   },
-  fontSize: 16,
   memberName: {
+    fontSize: 16,
     fontWeight: "600",
     color: colors.text,
   },

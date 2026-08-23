@@ -1,9 +1,9 @@
-import { View, StyleSheet, Text } from "react-native";
+import { View, StyleSheet, Text, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Map, Camera, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 
 // services
 import { uploadUserLocation } from '../../services/usersService.js';
@@ -30,6 +30,10 @@ const STALE_YELLOW_THRESHOLD_MS = 5 * 60 * 1000;  // 5 min
 const STALE_GRAY_THRESHOLD_MS = 30 * 60 * 1000;   // 30 min
 const OFFLINE_PACK_NAME = 'current-area-offline';
 const OFFLINE_PACK_RADIUS_KM = 5;
+const SELECTED_PERSON_FLY_ZOOM = 15;
+const SELECTED_PERSON_FLY_DURATION_MS = 1000;
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const PERSON_CARD_HEIGHT_ESTIMATE = SCREEN_HEIGHT * 0.4;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -92,6 +96,8 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
 // Component
 // ---------------------------------------------------------------------------
 export default function Index() {
+  const { selectedUserId } = useLocalSearchParams();
+
   // location / permissions state
   const [locationGranted, setLocationGranted] = useState(false);
   const [userLocation, setUserLocation] = useState({
@@ -107,6 +113,10 @@ export default function Index() {
   const [mapReady, setMapReady] = useState(false);
   const hasRunOnce = useRef(false);
   const cameraRef = useRef(null);
+
+  // tracks which selectedUserId param value we've already acted on, so a
+  // background family refetch doesn't keep re-flying/re-opening the card
+  const handledSelectedUserIdRef = useRef(null);
 
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
@@ -199,6 +209,52 @@ export default function Index() {
     }, [])
   );
 
+  // ---- honor a selectedUserId passed in from FamilyScreen -----------------
+  useEffect(() => {
+  if (!selectedUserId) return;
+  if (handledSelectedUserIdRef.current === selectedUserId) return;
+  if (familyMembers.length === 0) return;
+
+  const match = familyMembers.find(
+    (m) => String(m.user_id) === String(selectedUserId)
+  );
+  if (!match) return;
+
+  const hasValidCoords =
+    typeof match.latitude === 'number' &&
+    typeof match.longitude === 'number' &&
+    !Number.isNaN(match.latitude) &&
+    !Number.isNaN(match.longitude);
+
+  handledSelectedUserIdRef.current = selectedUserId;
+
+  setSelectedPerson({
+      user_id: match.user_id,
+      first_name: match.first_name,
+      last_name: match.last_name,
+      relation: match.relation,
+      phone_number: match.phone_number,
+      age: match.age,
+      last_seen: match.last_seen,
+    });
+
+    if (hasValidCoords) {
+      cameraRef.current?.flyTo({
+        center: [match.longitude, match.latitude],
+        zoom: SELECTED_PERSON_FLY_ZOOM,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+        padding: {
+          top: 0,
+          bottom: PERSON_CARD_HEIGHT_ESTIMATE,
+          left: 0,
+          right: 0,
+        },
+      });
+    } else {
+      console.log(`No location yet for user ${match.user_id}, skipping flyTo`);
+    }
+  }, [selectedUserId, familyMembers]);
+
   // ---- derived geojson for family markers -------------------------------
   const familyGeojson = {
     type: 'FeatureCollection',
@@ -258,11 +314,22 @@ export default function Index() {
 
     setSelectedPerson(feature.properties);
 
-    cameraRef.current?.flyTo({
-      center: feature.geometry.coordinates, // [lng, lat]
-      zoom: 15,
-      duration: 1000,
-    });
+    const [lng, lat] = feature.geometry?.coordinates ?? [];
+    const hasValidCoords = typeof lng === 'number' && typeof lat === 'number';
+
+    if (hasValidCoords) {
+      cameraRef.current?.flyTo({
+        center: [lng, lat],
+        zoom: SELECTED_PERSON_FLY_ZOOM,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+        padding: {
+          top: 0,
+          bottom: PERSON_CARD_HEIGHT_ESTIMATE,
+          left: 0,
+          right: 0,
+        },
+      });
+    }
   };
 
   const handleClosePersonCard = () => {
@@ -276,9 +343,6 @@ export default function Index() {
   // ---------------------------------------------------------------------
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.dropdownWrap} pointerEvents="box-none">
-        <LiveNotificationDropdown />
-      </SafeAreaView>
 
       <Map
         style={styles.map}
@@ -365,23 +429,22 @@ export default function Index() {
           />
         )}
       </Map>
-      
-    {selectedPerson && (
-      <PersonCard
-        age={selectedPerson.age}
-        first_name={selectedPerson.first_name}
-        last_name={selectedPerson.last_name}
-        phone_number={selectedPerson.phone_number}
-        relation={selectedPerson.relation}
-        user_id={selectedPerson.user_id}
-        last_seen={selectedPerson.last_seen}
-        staleYellowThresholdMs={STALE_YELLOW_THRESHOLD_MS}
-        staleGrayThresholdMs={STALE_GRAY_THRESHOLD_MS}
-        onClose={handleClosePersonCard}
-        onCall={handleCallPerson}
-      />
-    )}
-      
+
+      {selectedPerson && (
+        <PersonCard
+          age={selectedPerson.age}
+          first_name={selectedPerson.first_name}
+          last_name={selectedPerson.last_name}
+          phone_number={selectedPerson.phone_number}
+          relation={selectedPerson.relation}
+          user_id={selectedPerson.user_id}
+          last_seen={selectedPerson.last_seen}
+          staleYellowThresholdMs={STALE_YELLOW_THRESHOLD_MS}
+          staleGrayThresholdMs={STALE_GRAY_THRESHOLD_MS}
+          onClose={handleClosePersonCard}
+          onCall={handleCallPerson}
+        />
+      )}
     </View>
   );
 }
