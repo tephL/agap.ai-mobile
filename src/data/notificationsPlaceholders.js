@@ -75,7 +75,12 @@ export function formatNotificationTime(date) {
   return `${hours}:${minutes}`;
 }
 
+// Used as a fallback in LiveGreeting / LiveNotificationDropdown when no
+// firstName prop is passed in.
+export const PLACEHOLDER_FIRST_NAME = "John Paul";
+
 export const PLACEHOLDER_LIVE_NOTIFICATION = {
+  id: "live-1",
   title: "Red Rainfall Warning",
   description:
     "Caution: NDDRMC has flagged your area for red rainfall warning. Take necessary precautions and monitor updates",
