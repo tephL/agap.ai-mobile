@@ -20,17 +20,25 @@ import colors from "../../constants/colors";
 import StatusBadge from "../../components/ui/StatusBadge";
 import CreateTeamModal from "../../components/dispatcher/CreateTeamModal";
 import { getTeams, getOpenClusters } from "../../services/teamService";
+import { clearDispatcherSession } from "../../services/dispatcherService";
 import { formatDistance, haversineMeters } from "../../utils/haversine";
+import { useCluster } from "../../context/ClusterContext";
 
 export default function TeamScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { activeClusterId } = useCluster();
 
   // Set when the dispatcher taps "Assign a Team" on a cluster —
-  // teams are then sorted by distance to that cluster.
-  const assignClusterId = params.assignClusterId
-    ? Number(params.assignClusterId)
-    : null;
+  // teams are then sorted by distance to that cluster. An explicit
+  // URL param (deep link) wins; otherwise fall back to the cluster
+  // selected elsewhere in the dispatcher tabs via ClusterContext.
+  const assignClusterId =
+    params.assignClusterId != null && params.assignClusterId !== ""
+      ? Number(params.assignClusterId)
+      : activeClusterId != null
+        ? Number(activeClusterId)
+        : null;
   const [exitedAssignMode, setExitedAssignMode] = useState(false);
   const assigning = Boolean(assignClusterId) && !exitedAssignMode;
 
@@ -39,6 +47,7 @@ export default function TeamScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const loadData = useCallback(
     async ({ refreshing = false } = {}) => {
@@ -95,6 +104,13 @@ export default function TeamScreen() {
     setTeams((prev) => [team, ...prev]);
   };
 
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    await clearDispatcherSession();
+    router.replace("/login");
+  };
+
   const renderDistance = (team) => {
     if (!activeCluster) return null;
     const label = formatDistance(haversineMeters(team, activeCluster));
@@ -144,14 +160,32 @@ export default function TeamScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.pageLabel}>Team</Text>
-          <TouchableOpacity
-            style={styles.createButton}
-            activeOpacity={0.8}
-            onPress={() => setCreateOpen(true)}
-          >
-            <MaterialIcons name="add" size={18} color={colors.white} />
-            <Text style={styles.createButtonText}>Create Team</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              activeOpacity={0.8}
+              disabled={loggingOut}
+              onPress={handleLogout}
+            >
+              {loggingOut ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <>
+                  <MaterialIcons name="logout" size={16} color={colors.primary} />
+                  <Text style={styles.logoutButtonText}>Logout</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.createButton, loggingOut && styles.buttonDisabled]}
+              activeOpacity={0.8}
+              disabled={loggingOut}
+              onPress={() => setCreateOpen(true)}
+            >
+              <MaterialIcons name="add" size={18} color={colors.white} />
+              <Text style={styles.createButtonText}>Create Team</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {assigning ? (
@@ -239,6 +273,31 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     textTransform: "uppercase",
     color: colors.muted,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    minHeight: 34,
+  },
+  logoutButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   createButton: {
     flexDirection: "row",
