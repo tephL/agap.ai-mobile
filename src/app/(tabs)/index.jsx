@@ -12,6 +12,7 @@ import { getMyFamily } from '../../services/familyService.js';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
+import { PersonCard } from '@/components/PersonCard';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -100,6 +101,7 @@ export default function Index() {
 
   // family markers state
   const [familyMembers, setFamilyMembers] = useState([]);
+  const [selectedPerson, setSelectedPerson] = useState(null);
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -250,7 +252,18 @@ export default function Index() {
 
   // ---- handlers -----------------------------------------------------------
   const handleUserLocationPress = (event) => {
-    console.log('clicker');
+    const feature = event?.nativeEvent?.features?.[0];
+    if (!feature) return;
+
+    setSelectedPerson(feature.properties);
+  };
+
+  const handleClosePersonCard = () => {
+    setSelectedPerson(null);
+  };
+
+  const handleCallPerson = (phone_number, user_id) => {
+    // TODO: implement (e.g. Linking.openURL(`tel:${phone_number}`))
   };
 
   // ---------------------------------------------------------------------
@@ -347,6 +360,20 @@ export default function Index() {
           />
         )}
       </Map>
+      
+      {selectedPerson && (
+        <PersonCard
+          age={selectedPerson.age}
+          first_name={selectedPerson.first_name}
+          last_name={selectedPerson.last_name}
+          phone_number={selectedPerson.phone_number}
+          relation={selectedPerson.relation}
+          user_id={selectedPerson.user_id}
+          onClose={handleClosePersonCard}
+          onCall={handleCallPerson}
+        />
+      )}
+      
     </View>
   );
 }

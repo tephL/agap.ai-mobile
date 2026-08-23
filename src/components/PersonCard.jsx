@@ -30,6 +30,7 @@ export const PersonCard = ({
   phone_number,
   relation,
   user_id,
+  last_seen, 
   onClose,
   onCall,
 }) => {
@@ -140,7 +141,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 60,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
