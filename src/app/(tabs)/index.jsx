@@ -81,6 +81,7 @@ export default function Index() {
     latitude: null,
     longitude: null
   });
+  const [mapReady, setMapReady] = useState(false);
   const hasRunOnce = useRef(false);
 
   useEffect(() => {
@@ -238,6 +239,7 @@ console.log(familyMembers);
         compassViewPosition={3}   
         rotateEnabled={true}
         pitchEnabled={true}
+        onDidFinishLoadingMap={() => setMapReady(true)}
       >
         <Camera
           defaultSettings={{
@@ -253,6 +255,8 @@ console.log(familyMembers);
           trackUserLocation={locationGranted ? "default" : undefined}
         />
 
+    { mapReady && (
+        <>
         <GeoJSONSource id="userLocationSource" data={familyGeojson}>
           <Layer
             type="circle"
@@ -297,6 +301,8 @@ console.log(familyMembers);
             }}
           />
         </GeoJSONSource>
+        </>
+    )}
 
         {locationGranted && (
           <UserLocation
