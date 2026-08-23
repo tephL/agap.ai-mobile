@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import colors from "../constants/colors";
 import { cameraStore, useCameraStore } from "../store/cameraStore";
+import { requestReportLocation } from "../services/reportService";
 import ReportHoldButton from "./ReportHoldButton";
 
 const ICONS = {
@@ -44,6 +45,12 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
 
   const onHoldComplete = () => {
     cameraStore.startReport();
+    // Fire the location request immediately, in parallel with navigating —
+    // this is the ONLY call that creates the report row on the backend.
+    // ReportScreen awaits this (via cameraStore.waitForLocation()) before
+    // it uploads any photos or a description, so nothing can race ahead
+    // of the report actually existing.
+    cameraStore.setLocationRequest(requestReportLocation());
     navigation.navigate("report");
   };
 
