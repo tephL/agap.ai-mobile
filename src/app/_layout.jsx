@@ -11,6 +11,9 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)/register" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)/personal-info" options={{ headerShown: false }} />
 
+      {/* Admin screens (guarded) */}
+      <Stack.Screen name="(admin)" options={{ headerShown: false }} />
+
       {/* Family Manager Screens*/}
       <Stack.Screen
         name="create-family"

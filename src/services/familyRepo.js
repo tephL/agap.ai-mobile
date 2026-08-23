@@ -59,6 +59,21 @@ export async function saveFamilySnapshot(userId, snapshot) {
       );
     }
 
+    // Drop members removed on the server so they never resurface offline.
+    if (members.length === 0) {
+      await txn.runAsync(`DELETE FROM member WHERE family_id = ?`, [
+        snapshot.family_id,
+      ]);
+    } else {
+      const placeholders = members.map(() => "?").join(",");
+      await txn.runAsync(
+        `DELETE FROM member
+          WHERE family_id = ?
+            AND family_member_id NOT IN (${placeholders})`,
+        [snapshot.family_id, ...members.map((m) => m.family_member_id)]
+      );
+    }
+
     // Stamp last-synced time for the "saved X ago" indicator + user scoping.
     await txn.runAsync(
       `INSERT OR REPLACE INTO meta (key, value) VALUES ('last_synced_${userId}', ?)`,

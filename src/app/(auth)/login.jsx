@@ -21,7 +21,13 @@ import {
   login as loginAccount,
   normalizePhoneForLogin,
   limitPhoneInput,
+  decodeToken,
+  CITIZEN_ROLE_ID,
 } from "../../services/authService";
+import {
+  DISPATCHER_ROLE_ID,
+  saveDispatcherSession,
+} from "../../services/dispatcherService";
 import {
   getMyProfile,
   hasPersonalInfo,
@@ -85,11 +91,21 @@ export default function LoginScreen() {
         password,
       });
       const data = response.data;
-      if (data && data.token) {
-        await SecureStore.setItemAsync("token", data.token);
-        console.log(data.user_id);
-        await SecureStore.setItemAsync("user_id", String(data.user_id));
+      const session = decodeToken(data?.token);
+      const isCitizen = session?.role_id === CITIZEN_ROLE_ID;
+      const isDispatcher = session?.role_id === DISPATCHER_ROLE_ID;
+      if (!isCitizen && !isDispatcher) {
+        setError(
+          "This account type is not recognized. Please contact support."
+        );
+        return;
       }
+      if (isDispatcher) {
+        await saveDispatcherSession(data.token);
+        router.replace("/home");
+        return;
+      }
+      await SecureStore.setItemAsync("token", data.token);
       try {
         const profile = await getMyProfile();
         if (hasPersonalInfo(profile)) {

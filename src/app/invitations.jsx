@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -24,20 +24,27 @@ export default function InvitationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actingId, setActingId] = useState(null);
+  const loadRunRef = useRef(0);
 
   const load = useCallback(async () => {
+    // Discard stale completions when focus-load and pull-to-refresh overlap.
+    const runId = ++loadRunRef.current;
     try {
       const data = await getMyInvitations();
+      if (runId !== loadRunRef.current) return;
       setInvites(Array.isArray(data) ? data : []);
     } catch (err) {
+      if (runId !== loadRunRef.current) return;
       Alert.alert(
         "Error",
         err?.response?.data?.error || "Failed to load invitations"
       );
       setInvites([]);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (runId === loadRunRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -54,12 +61,10 @@ export default function InvitationsScreen() {
     try {
       await acceptInvitation(id);
 
-      Alert.alert("Joined family", "You are now part of this family.", [
-        {
-          text: "OK",
-          onPress: () => router.replace("/(tabs)/family"),
-        },
-      ]);
+      // Navigate first — never make routing depend on an optional
+      // dialog button (Android back can dismiss it without pressing OK).
+      router.replace("/(tabs)/family");
+      Alert.alert("Joined family", "You are now part of this family.");
     } catch (err) {
       Alert.alert(
         "Error",

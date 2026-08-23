@@ -1,27 +1,62 @@
 import { Tabs, useRouter } from "expo-router";
 import CustomTabBar from '../../components/CustomTabBar';
-import * as SecureStore from 'expo-secure-store';
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import colors from "../../constants/colors";
+import { getStoredSession } from "../../services/authService";
+import {
+  getDispatcherSession,
+} from "../../services/dispatcherService";
 
 export default function RootLayout() {
   const router = useRouter()
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    async function checkIfTokenExists(){
-      const token = await SecureStore.getItemAsync("token");
-      if (!token) router.replace('/login');
+    let active = true;
+
+    async function guard() {
+      const session = await getStoredSession();
+
+      if (!session) {
+        const dispatcherSession = await getDispatcherSession();
+        if (!active) return;
+
+        if (dispatcherSession) {
+          router.replace("/home");
+          return;
+        }
+
+        router.replace("/login");
+        return;
+      }
+
+      if (active) setChecking(false);
     }
-    checkIfTokenExists();
-  }, []);
+
+    guard();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  if (checking) {
+    return (
+      <View style={styles.loader}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
-      <Tabs 
+      <Tabs
         screenOptions={{
           tabBarActiveTintColor: '#1c1c1cff',
           headerShown: false
         }}
         tabBar={(props) => <CustomTabBar {...props} />}
-      > 
+      >
         <Tabs.Screen name="index" options={{ title: 'Map' }} />
         <Tabs.Screen name="assistant" options={{ title: 'Assistant' }} />
         <Tabs.Screen name="report" options={{ title: 'Report' }} />
@@ -30,3 +65,12 @@ export default function RootLayout() {
       </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  loader: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
+});
