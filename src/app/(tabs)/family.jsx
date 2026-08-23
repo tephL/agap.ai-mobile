@@ -343,39 +343,45 @@ export default function FamilyScreen() {
               tintColor={colors.primary}
             />
           }
-          renderItem={({ item }) => (
+          
+    renderItem={({ item, index }) => {
+      // The first member (typically the account owner) is fixed:
+      // no map navigation, no remove option.
+      const isFirst = index === 0;
+      const CardWrapper = isFirst ? View : TouchableOpacity;
+      const wrapperProps = isFirst
+        ? {}
+        : { activeOpacity: 0.7, onPress: () => goToMemberOnMap(item) };
+      return (
+        <CardWrapper style={styles.memberCard} {...wrapperProps}>
+          <View style={styles.memberAvatar}>
+            <Ionicons name="person" size={18} color={colors.primary} />
+          </View>
+          <View style={styles.memberInfo}>
+            <Text style={styles.memberName}>
+              {memberDisplayName(item)}
+            </Text>
+            <Text style={styles.memberRelation}>
+              {relationLabel(item.relation)}
+            </Text>
+          </View>
+          {isCreator && !isFirst && (
             <TouchableOpacity
-              style={styles.memberCard}
-              activeOpacity={0.7}
-              onPress={() => goToMemberOnMap(item)}
+              style={styles.removeBtn}
+              onPress={() => handleRemove(item)}
+              disabled={removingId === item.family_member_id}
             >
-              <View style={styles.memberAvatar}>
-                <Ionicons name="person" size={18} color={colors.primary} />
-              </View>
-              <View style={styles.memberInfo}>
-                <Text style={styles.memberName}>
-                  {memberDisplayName(item)}
-                </Text>
-                <Text style={styles.memberRelation}>
-                  {relationLabel(item.relation)}
-                </Text>
-              </View>
-
-              {isCreator && (
-                <TouchableOpacity
-                  style={styles.removeBtn}
-                  onPress={() => handleRemove(item)}
-                  disabled={removingId === item.family_member_id}
-                >
-                  {removingId === item.family_member_id ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <Text style={styles.removeText}>Remove</Text>
-                  )}
-                </TouchableOpacity>
+              {removingId === item.family_member_id ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={styles.removeText}>Remove</Text>
               )}
             </TouchableOpacity>
           )}
+        </CardWrapper>
+      );
+    }}
+
           ListEmptyComponent={
             <Text style={styles.emptyList}>No members yet</Text>
           }
