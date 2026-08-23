@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import { getDispatcherSession } from "../../services/dispatcherService";
+
+const TAB_ICONS = {
+  reports: "document-text",
+  map: "map",
+  team: "people",
+};
 
 export default function AdminLayout() {
   const [checking, setChecking] = useState(true);
@@ -39,9 +46,41 @@ export default function AdminLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="home" />
-    </Stack>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.placeholder,
+      }}
+    >
+      <Tabs.Screen
+        name="reports"
+        options={{
+          title: "Reports",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={TAB_ICONS.reports} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="map"
+        options={{
+          title: "Map",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={TAB_ICONS.map} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="team"
+        options={{
+          title: "Team",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={TAB_ICONS.team} size={size} color={color} />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
 

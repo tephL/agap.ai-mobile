@@ -164,6 +164,46 @@ export default function FamilyScreen() {
     );
   }
 
+  // A failed refresh is not the same as "no family" — show a dedicated
+  // error state so users retry instead of thinking their family is gone.
+  if (loadError && !family) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <StatusBar style="dark" />
+        <View style={styles.container}>
+          <Text style={styles.pageLabel}>Family</Text>
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIcon}>
+              <Ionicons
+                name="cloud-offline-outline"
+                size={32}
+                color={colors.primary}
+              />
+            </View>
+            <Text style={styles.emptyTitle}>Can&apos;t reach the server</Text>
+            <Text style={styles.emptyCopy}>
+              We couldn&apos;t refresh your family just now. Check your
+              connection — or make sure the backend is running — and try
+              again.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, styles.retryBtn]}
+              activeOpacity={0.85}
+              onPress={() => {
+                setLoading(true);
+                loadData();
+              }}
+            >
+              <Ionicons name="refresh" size={18} color={colors.white} />
+              <Text style={styles.primaryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!family) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -180,26 +220,6 @@ export default function FamilyScreen() {
               emergencies.
             </Text>
           </View>
-
-          {loadError ? (
-            <TouchableOpacity
-              style={styles.loadErrorBox}
-              activeOpacity={0.8}
-              onPress={() => {
-                setLoading(true);
-                loadData();
-              }}
-            >
-              <Ionicons
-                name="cloud-offline-outline"
-                size={16}
-                color={colors.muted}
-              />
-              <Text style={styles.loadErrorText}>
-                Couldn&apos;t refresh your family. Tap to retry.
-              </Text>
-            </TouchableOpacity>
-          ) : null}
 
           <View style={styles.emptyActions}>
             <TouchableOpacity
@@ -455,18 +475,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  loadErrorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  loadErrorText: {
-    fontSize: 13,
-    color: colors.muted,
-  },
   emptyIcon: {
     width: 56,
     height: 56,
@@ -490,6 +498,10 @@ const styles = StyleSheet.create({
   },
   emptyActions: {
     gap: 10,
+  },
+  retryBtn: {
+    alignSelf: "stretch",
+    marginTop: 16,
   },
   actions: {
     flexDirection: "row",

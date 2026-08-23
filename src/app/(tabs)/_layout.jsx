@@ -23,7 +23,7 @@ export default function RootLayout() {
         if (!active) return;
 
         if (dispatcherSession) {
-          router.replace("/home");
+          router.replace("/reports");
           return;
         }
 
