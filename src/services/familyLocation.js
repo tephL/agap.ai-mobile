@@ -41,7 +41,7 @@ export async function getFamilyPositions(){
 export async function setFamilyPositions({ latitude, longitude, millisec, user_id }) {
   const db = await getDb();
   return db.withExclusiveTransactionAsync(async (txn) => {
-    await txn.runAsync(
+    const result = await txn.runAsync(
       `UPDATE member
        SET latitude = ?, longitude = ?, last_seen = ?, updated_at = ?
        WHERE user_id = ?`,

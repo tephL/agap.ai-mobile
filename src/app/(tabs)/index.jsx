@@ -93,11 +93,14 @@ export default function Index() {
 
 
   useFocusEffect(
-    useCallback(async () => {
-      if(!hasRunOnce.current){
-        hasRunOnce.current = true;
-        await getMyFamily();
-      }
+    useCallback(() => {
+      (async () => {
+        if(!hasRunOnce.current){
+          hasRunOnce.current = true;
+          await getMyFamily();
+        }
+      })();
+
       let cancelled = false;
 
       const sendLocation = async () => {
@@ -119,7 +122,6 @@ export default function Index() {
         try{
           const logLocation = await uploadUserLocation({ latitude, longitude });
           console.log('sent location');
-          console.log(logLocation);
         } catch(e){
           console.error(e.response?.data);
           console.error(e.response?.status);
@@ -134,6 +136,7 @@ export default function Index() {
           for (const member of data) {
             const { last_seen, longitude, latitude, user_id } = member;
             const timestampMs = new Date(last_seen).getTime();
+            console.log(user_id, last_seen);
             await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
           }
         } catch (e) {
@@ -144,9 +147,6 @@ export default function Index() {
         try {
           const locations = await getFamilyPositions();
           setFamilyMembers(() => locations);
-
-          console.log(locations);
-          console.log(familyMembers);
         } catch (e) {
           console.log('failed to read local db', e);
         }
@@ -188,10 +188,6 @@ console.log(familyMembers);
         },
       })),
     };
-
-  useEffect(() => {
-  console.log('familyMembers updated:', familyMembers);
-}, [familyMembers]);
 
     // pulsing dih effect
     const [pulse, setPulse] = useState(0); 
