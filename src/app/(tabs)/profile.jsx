@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -13,31 +14,59 @@ import * as SecureStore from "expo-secure-store";
 import { getMyProfile } from "@/services/personService";
 import { getCurrentUserId } from "@/services/currentUser";
 import { clearForUser } from "@/services/familyRepo";
+import { clearProfileForUser } from "@/services/profileRepo";
+import { timeAgo } from "@/utils/timeAgo";
 import colors from "@/constants/colors";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const data = await getMyProfile();
+
+      if (!data) {
+        setProfile(null);
+        setIsOffline(false);
+        setLastSyncedAt(null);
+        return;
+      }
+
+      setProfile(data);
+
+      // SQLite fallback includes last_synced_at.
+      setIsOffline(Boolean(data.last_synced_at));
+      setLastSyncedAt(data.last_synced_at ?? null);
+    } catch (err) {
+      console.error(
+        "Profile load error:",
+        err?.response?.data || err.message || err
+      );
+      setProfile(null);
+      setIsOffline(false);
+      setLastSyncedAt(null);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      (async () => {
-        try {
-          const res = await getMyProfile();
-          if (active) setProfile(res.data);
-        } catch {
-          if (active) setProfile(null);
-        } finally {
-          if (active) setLoading(false);
-        }
-      })();
-      return () => {
-        active = false;
-      };
-    }, [])
+      setLoading(true);
+      loadProfile();
+    }, [loadProfile])
   );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadProfile();
+  };
 
   async function handleLogout() {
     const token = await SecureStore.getItemAsync("token");
@@ -46,6 +75,13 @@ export default function ProfileScreen() {
     if (userId != null) {
       try {
         await clearForUser();
+    console.log(token);
+    // Wipe this user's offline snapshots before the token is gone, so a
+    // different account can never see stale cached family/profile data.
+    const userId = await getCurrentUserId();
+    if (userId != null) {
+      try {
+        await Promise.all([clearForUser(), clearProfileForUser(userId)]);
       } catch {}
     }
 
@@ -85,9 +121,30 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+        />
+      }
+    >
       {/* Page Label */}
       <Text style={styles.pageLabel}>PROFILE</Text>
+
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>Offline</Text>
+          <Text style={styles.offlineBannerCopy}>
+            Showing last saved profile data
+            {timeAgo(lastSyncedAt) ? ` · saved ${timeAgo(lastSyncedAt)}` : ""}.
+            Pull to refresh when you’re back online.
+          </Text>
+        </View>
+      )}
 
       {/* Personal Information */}
       <View style={styles.card}>
@@ -199,6 +256,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     marginBottom: 12,
+  },
+
+  /* Offline banner */
+  offlineBanner: {
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginBottom: 4,
+  },
+  offlineBannerText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  offlineBannerCopy: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.text,
+    marginTop: 4,
   },
 
   /* Cards */

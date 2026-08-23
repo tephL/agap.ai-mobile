@@ -92,7 +92,7 @@ export default function LoginScreen() {
       }
       try {
         const profile = await getMyProfile();
-        if (hasPersonalInfo(profile.data)) {
+        if (hasPersonalInfo(profile)) {
           router.replace("/");
         } else {
           router.replace("/personal-info");
