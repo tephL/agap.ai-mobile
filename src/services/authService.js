@@ -13,7 +13,7 @@ export function normalizePhoneForLogin(value) {
   return digits;
 }
 
-export function limitPhoneInput(value, maxDigits = 11) {
+export function limitPhoneInput(value, maxDigits = 10) {
   return normalizePhoneNumber(value).slice(0, maxDigits);
 }
 

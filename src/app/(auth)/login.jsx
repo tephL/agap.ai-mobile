@@ -179,7 +179,7 @@ export default function LoginScreen() {
               }}
               placeholder="917 123 4567"
               keyboardType="phone-pad"
-              maxLength={11}
+              maxLength={10}
               value={phone}
               onChangeText={(text) => updateField("phone", text)}
               autoComplete="tel"
