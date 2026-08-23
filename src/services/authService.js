@@ -53,9 +53,8 @@ export function limitPhoneInput(value, maxDigits = 10) {
   return normalizePhoneNumber(value).slice(0, maxDigits);
 }
 
-export async function register({ username, phone_number, password }) {
+export async function register({ phone_number, password }) {
   const response = await api.post("/api/auth/register", {
-    username,
     phone_number,
     password,
   });

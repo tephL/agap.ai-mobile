@@ -22,23 +22,21 @@ import {
 } from "../../services/authService";
 
 export default function RegisterScreen() {
-  const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const phoneRef = useRef(null);
   const passwordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
 
   const validate = () => {
     const nextErrors = {};
-    if (!username.trim()) {
-      nextErrors.username = "Username is required";
-    }
     const normalizedPhone = normalizePhoneForLogin(phone);
     if (!normalizedPhone) {
       nextErrors.phone = "Phone number is required";
@@ -50,13 +48,18 @@ export default function RegisterScreen() {
     } else if (password.length < 8) {
       nextErrors.password = "Password must be at least 8 characters";
     }
+    if (!confirmPassword) {
+      nextErrors.confirmPassword = "Please confirm your password";
+    } else if (password !== confirmPassword) {
+      nextErrors.confirmPassword = "Passwords do not match";
+    }
     return nextErrors;
   };
 
   const updateField = (key, value) => {
-    if (key === "username") setUsername(value);
     if (key === "phone") setPhone(value);
     if (key === "password") setPassword(value);
+    if (key === "confirmPassword") setConfirmPassword(value);
     setFieldErrors((prev) => {
       if (!prev[key]) return prev;
       const next = { ...prev };
@@ -80,7 +83,6 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await registerAccount({
-        username: username.trim(),
         phone_number: normalizePhoneForLogin(phone),
         password,
       });
@@ -142,26 +144,6 @@ export default function RegisterScreen() {
             </View>
 
             <FormInput
-              label="Username"
-              icon={
-                <MaterialIcons
-                  name="person"
-                  color={colors.placeholder}
-                  size={20}
-                />
-              }
-              placeholder="Enter your username"
-              value={username}
-              onChangeText={(text) => updateField("username", text)}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="username"
-              returnKeyType="next"
-              onSubmitEditing={() => phoneRef.current?.focus()}
-              error={fieldErrors.username}
-            />
-
-            <FormInput
               label="Phone Number"
               prefix={{
                 icon: (
@@ -183,7 +165,8 @@ export default function RegisterScreen() {
               autoComplete="tel"
               helper="Used for emergency alerts and SMS fallback."
               error={fieldErrors.phone}
-              inputRef={phoneRef}
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
 
             <FormInput
@@ -202,8 +185,8 @@ export default function RegisterScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="new-password"
-              returnKeyType="done"
-              onSubmitEditing={handleRegister}
+              returnKeyType="next"
+              onSubmitEditing={() => confirmPasswordRef.current?.focus()}
               accessory={
                 <TouchableOpacity
                   onPress={() => setShowPassword((prev) => !prev)}
@@ -219,6 +202,42 @@ export default function RegisterScreen() {
               }
               error={fieldErrors.password}
               inputRef={passwordRef}
+              style={styles.passwordField}
+            />
+
+            <FormInput
+              label="Confirm Password"
+              icon={
+                <MaterialIcons
+                  name="lock"
+                  color={colors.placeholder}
+                  size={20}
+                />
+              }
+              placeholder="Re-enter your password"
+              value={confirmPassword}
+              onChangeText={(text) => updateField("confirmPassword", text)}
+              secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="new-password"
+              returnKeyType="done"
+              onSubmitEditing={handleRegister}
+              accessory={
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword((prev) => !prev)}
+                  hitSlop={8}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons
+                    name={showConfirmPassword ? "visibility-off" : "visibility"}
+                    color={colors.placeholder}
+                    size={20}
+                  />
+                </TouchableOpacity>
+              }
+              error={fieldErrors.confirmPassword}
+              inputRef={confirmPasswordRef}
               style={styles.passwordField}
             />
 
