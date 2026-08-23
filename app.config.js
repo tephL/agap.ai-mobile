@@ -18,7 +18,8 @@ export default {
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.tephl.agap_ai"
+      "package": "com.tephl.agap_ai",
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "static",

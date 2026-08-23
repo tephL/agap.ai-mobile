@@ -55,6 +55,18 @@ export default function RootLayout() {
           headerTitleStyle: { fontWeight: "700" },
         }}
       />
+
+      {/* Dispatcher Screens */}
+      <Stack.Screen
+        name="team-detail"
+        options={{
+          title: "Team Detail",
+          headerShadowVisible: false,
+          headerTintColor: "#182033",
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTitleStyle: { fontWeight: "700" },
+        }}
+      />
       
       {/* Reporting Screens */}
       <Stack.Screen
