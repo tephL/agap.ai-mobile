@@ -138,7 +138,7 @@ async function hydrateFamily(db, family, userId) {
  * identity is available (e.g. unreadable token), since stale data must
  * never outlive its owner.
  */
-export async function clearForUser(userId) {
+export async function clearForUser() {
   try {
     const db = await getDb();
     await db.withExclusiveTransactionAsync(async (txn) => {

@@ -1,10 +1,25 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, Clickable, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
+import * as SecureStore from 'expo-secure-store';
+import { useRouter } from "expo-router";
 
 export default function ReportsScreen() {
+  const router = useRouter();
+  async function handleLogout() {
+    // Wipe this user's offline snapshots before the token is gone, so a
+    // different account can never see stale cached family/profile data.
+    try {
+      await Promise.all([clearForUser(), clearProfileForUser()]);
+    } catch {}
+
+    await SecureStore.deleteItemAsync("token");
+    await SecureStore.deleteItemAsync("user_id");
+    router.replace("/login");
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <StatusBar style="dark" />
@@ -18,6 +33,9 @@ export default function ReportsScreen() {
           <Text style={styles.copy}>
             Incoming emergency reports will appear here.
           </Text>
+          <Pressable onPress={() => handleLogout()}>
+            <Text>Logout</Text>
+          </Pressable>
         </View>
       </View>
     </SafeAreaView>
