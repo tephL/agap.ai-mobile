@@ -108,11 +108,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "transparent",
+    borderColor: colors.border,
     overflow: "hidden",
   },
   inputWrapFocused: {
-    borderColor: colors.primary,
+    borderColor: colors.text,
   },
   inputWrapError: {
     borderColor: colors.primary,
