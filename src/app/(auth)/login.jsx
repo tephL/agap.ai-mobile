@@ -87,6 +87,8 @@ export default function LoginScreen() {
       const data = response.data;
       if (data && data.token) {
         await SecureStore.setItemAsync("token", data.token);
+        console.log(data.user_id);
+        await SecureStore.setItemAsync("user_id", String(data.user_id));
       }
       try {
         const profile = await getMyProfile();

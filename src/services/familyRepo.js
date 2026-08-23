@@ -1,4 +1,6 @@
 import { getDb } from "./familyDb";
+import * as SQLite from 'expo-sqlite';
+import { DATABASE_NAME } from "./familyDb";
 
 
 /**
@@ -115,10 +117,16 @@ async function hydrateFamily(db, family, userId) {
 }
 
 /** Wipe only this user's cached snapshot (on logout). */
-export async function clearForUser(userId) {
-  const db = await getDb();
-  await db.runAsync(`DELETE FROM family WHERE family_id IN (
-    SELECT family_id FROM member WHERE user_id = ?)`, [userId]);
-  await db.runAsync(`DELETE FROM member WHERE user_id = ?`, [userId]);
-  await db.runAsync(`DELETE FROM meta WHERE key LIKE ?`, [`%_${userId}`]);
+export async function clearForUser() {
+  try {
+    const db = await getDb();
+    console.log('deleting db now');
+    await db.withExclusiveTransactionAsync(async (txn) => {
+        await txn.runAsync(`delete from member;`);
+        await txn.runAsync(`delete from family;`);
+    });
+    console.log('done deletion');
+  } catch (e) {
+    console.log('failed to delete db ', e);
+  }
 }

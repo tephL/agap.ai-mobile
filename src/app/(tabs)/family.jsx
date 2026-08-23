@@ -18,7 +18,7 @@ import {
   removeMember,
   getMyInvitations,
   relationLabel,
-} from "@/services/familyService";
+} from "../../services/familyService";
 import colors from "@/constants/colors";
 
 // last_synced_at is stored as a unix second timestamp; render it as
