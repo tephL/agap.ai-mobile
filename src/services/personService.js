@@ -1,8 +1,30 @@
 import { api } from "./api";
+import { getCurrentUserId } from "./currentUser";
+import { saveProfileSnapshot, getProfileFromCache } from "./profileRepo";
 
 export async function getMyProfile() {
-  const response = await api.get("/api/auth/profile");
-  return response;
+  const userId = await getCurrentUserId();
+
+  try {
+    const { data } = await api.get("/api/auth/profile");
+
+    if (userId && data) {
+      await saveProfileSnapshot(userId, data);
+    }
+
+    return data;
+  } catch (err) {
+    // Network/offline = try SQLite.
+    if (userId && !err?.response) {
+      const cached = await getProfileFromCache(userId);
+
+      if (cached) {
+        return cached;
+      }
+    }
+
+    throw err;
+  }
 }
 
 export function hasPersonalInfo(profile) {

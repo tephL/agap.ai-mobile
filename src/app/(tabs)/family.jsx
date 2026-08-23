@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter, useFocusEffect } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import { Ionicons } from "@expo/vector-icons";
 import {
   getMyFamily,
@@ -19,25 +20,8 @@ import {
   getMyInvitations,
   relationLabel,
 } from "@/services/familyService";
+import { timeAgo } from "@/utils/timeAgo";
 import colors from "@/constants/colors";
-
-// last_synced_at is stored as a unix second timestamp; render it as
-// "just now" / "4 minutes ago" / "3 hours ago" / "2 days ago" for the banner.
-function timeAgo(unixSeconds) {
-  if (!unixSeconds) return null;
-  const diffSec = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-
-  if (diffSec < 60) return "just now";
-
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
-
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
-
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
-}
 
 export default function FamilyScreen() {
   const router = useRouter();
@@ -48,11 +32,20 @@ export default function FamilyScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [isOffline, setIsOffline] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [removingId, setRemovingId] = useState(null);
+  const loadRunRef = useRef(0);
 
   const loadData = useCallback(async () => {
+  // Only the most recent invocation may touch state — an older, slower
+  // response (focus-load vs pull-to-refresh overlap) must be discarded.
+  const runId = ++loadRunRef.current;
   try {
     const invites = await getMyInvitations().catch(() => []);
+    if (runId !== loadRunRef.current) return;
+
     const data = await getMyFamily();
+    if (runId !== loadRunRef.current) return;
 
     setPendingCount(Array.isArray(invites) ? invites.length : 0);
 
@@ -62,16 +55,20 @@ export default function FamilyScreen() {
       setIsCreator(false);
       setIsOffline(false);
       setLastSyncedAt(null);
+      setLoadError(false);
       return;
     }
 
     setIsCreator(Boolean(data.is_creator));
     setFamily(data);
+    setLoadError(false);
 
     // SQLite fallback includes last_synced_at.
     setIsOffline(Boolean(data.last_synced_at));
     setLastSyncedAt(data.last_synced_at ?? null);
   } catch (err) {
+  if (runId !== loadRunRef.current) return;
+
   const status = Number(err?.response?.status);
 
   console.error(
@@ -79,18 +76,27 @@ export default function FamilyScreen() {
     err?.response?.data || err.message || err
   );
 
-  // No family or any family-loading error:
-  // keep the normal "No family yet" UI.
+  // Dead session — go log in again instead of faking an empty state.
+  if (status === 401) {
+    await SecureStore.deleteItemAsync("token");
+    router.replace("/login");
+    return;
+  }
+
+  // Server/network failure is not the same as "no family yet".
+  setLoadError(true);
   setFamily(null);
   setIsCreator(false);
   setIsOffline(false);
   setLastSyncedAt(null);
   return;
   } finally {
-    setLoading(false);
-    setRefreshing(false);
+    if (runId === loadRunRef.current) {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }
-}, []);
+}, [router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -128,15 +134,18 @@ export default function FamilyScreen() {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
+            if (removingId) return; // one removal at a time
+            setRemovingId(member.family_member_id);
             try {
               await removeMember(family.family_id, member.family_member_id);
-              Alert.alert("Success", "Member removed");
               loadData();
             } catch (err) {
               Alert.alert(
                 "Error",
                 err.response?.data?.error || "Failed to remove"
               );
+            } finally {
+              setRemovingId(null);
             }
           },
         },
@@ -171,6 +180,26 @@ export default function FamilyScreen() {
               emergencies.
             </Text>
           </View>
+
+          {loadError ? (
+            <TouchableOpacity
+              style={styles.loadErrorBox}
+              activeOpacity={0.8}
+              onPress={() => {
+                setLoading(true);
+                loadData();
+              }}
+            >
+              <Ionicons
+                name="cloud-offline-outline"
+                size={16}
+                color={colors.muted}
+              />
+              <Text style={styles.loadErrorText}>
+                Couldn&apos;t refresh your family. Tap to retry.
+              </Text>
+            </TouchableOpacity>
+          ) : null}
 
           <View style={styles.emptyActions}>
             <TouchableOpacity
@@ -303,8 +332,13 @@ export default function FamilyScreen() {
                 <TouchableOpacity
                   style={styles.removeBtn}
                   onPress={() => handleRemove(item)}
+                  disabled={removingId === item.family_member_id}
                 >
-                  <Text style={styles.removeText}>Remove</Text>
+                  {removingId === item.family_member_id ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={styles.removeText}>Remove</Text>
+                  )}
                 </TouchableOpacity>
               )}
             </View>
@@ -420,6 +454,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: "center",
     marginBottom: 20,
+  },
+  loadErrorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  loadErrorText: {
+    fontSize: 13,
+    color: colors.muted,
   },
   emptyIcon: {
     width: 56,

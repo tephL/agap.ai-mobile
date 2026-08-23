@@ -1,6 +1,6 @@
 import { openDatabaseAsync } from "expo-sqlite";
 
-const DATABASE_NAME = "family-offline.db";
+export const DATABASE_NAME = "family-offline.db";
 
 let dbPromise = null;
 
@@ -10,14 +10,7 @@ let dbPromise = null;
  */
 const MIGRATIONS = [
   `
-  CREATE TABLE IF NOT EXISTS family (
-    family_id        INTEGER PRIMARY KEY NOT NULL,
-    name             TEXT NOT NULL,
-    created_by       INTEGER,
-    is_creator       INTEGER NOT NULL DEFAULT 0,
-    updated_at       INTEGER NOT NULL
-  );
-
+  CREATE TABLE IF NOT EXISTS family ( ... );
   CREATE TABLE IF NOT EXISTS member (
     family_member_id INTEGER PRIMARY KEY NOT NULL,
     user_id          INTEGER NOT NULL,
@@ -30,12 +23,28 @@ const MIGRATIONS = [
     relation         TEXT,
     updated_at       INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS meta ( ... );
+  `, // index 0 — leave exactly as it was for anyone who already ran it
 
-  CREATE TABLE IF NOT EXISTS meta (
-    key   TEXT PRIMARY KEY NOT NULL,
-    value TEXT
-  );
-  `,
+  async (db) => {
+    // index 1 — new migration: add the location columns
+    const columns = await db.getAllAsync(`PRAGMA table_info(member);`);
+    const names = columns.map((c) => c.name);
+
+    if (!names.includes('longitude')) {
+      await db.execAsync(`ALTER TABLE member ADD COLUMN longitude REAL;`);
+    }
+    if (!names.includes('latitude')) {
+      await db.execAsync(`ALTER TABLE member ADD COLUMN latitude REAL;`);
+    }
+    if (!names.includes('last_seen')) {
+      await db.execAsync(`ALTER TABLE member ADD COLUMN last_seen INTEGER;`);
+    }
+
+    await db.execAsync(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_member_user_id ON member(user_id);`
+    );
+  },
 ];
 
 async function openDb() {
@@ -51,10 +60,17 @@ async function openDb() {
     let current = row ? Number(row.user_version ?? row[0] ?? 0) : 0;
 
     while (current < MIGRATIONS.length) {
-      await db.execAsync(MIGRATIONS[current]);
-      current += 1;
-      await db.execAsync(`PRAGMA user_version = ${current};`);
+    const migration = MIGRATIONS[current];
+
+    if (typeof migration === 'function') {
+      await migration(db);
+    } else {
+      await db.execAsync(migration);
     }
+
+    current += 1;
+    await db.execAsync(`PRAGMA user_version = ${current};`);
+  }
 
     return db;
   });

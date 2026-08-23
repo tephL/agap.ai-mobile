@@ -21,7 +21,13 @@ import {
   login as loginAccount,
   normalizePhoneForLogin,
   limitPhoneInput,
+  decodeToken,
+  CITIZEN_ROLE_ID,
 } from "../../services/authService";
+import {
+  DISPATCHER_ROLE_ID,
+  saveDispatcherSession,
+} from "../../services/dispatcherService";
 import {
   getMyProfile,
   hasPersonalInfo,
@@ -45,7 +51,7 @@ export default function LoginScreen() {
     if (!normalizedPhone) {
       nextErrors.phone = "Phone number is required";
     } else if (normalizedPhone.length !== 10) {
-      nextErrors.phone = "Enter a valid 10-digit mobile number";
+      nextErrors.phone = "Enter a valid mobile number (e.g., 917 123 4567)";
     }
     if (!password) {
       nextErrors.password = "Password is required";
@@ -85,12 +91,24 @@ export default function LoginScreen() {
         password,
       });
       const data = response.data;
-      if (data && data.token) {
-        await SecureStore.setItemAsync("token", data.token);
+      const session = decodeToken(data?.token);
+      const isCitizen = session?.role_id === CITIZEN_ROLE_ID;
+      const isDispatcher = session?.role_id === DISPATCHER_ROLE_ID;
+      if (!isCitizen && !isDispatcher) {
+        setError(
+          "This account type is not recognized. Please contact support."
+        );
+        return;
       }
+      if (isDispatcher) {
+        await saveDispatcherSession(data.token);
+        router.replace("/home");
+        return;
+      }
+      await SecureStore.setItemAsync("token", data.token);
       try {
         const profile = await getMyProfile();
-        if (hasPersonalInfo(profile.data)) {
+        if (hasPersonalInfo(profile)) {
           router.replace("/");
         } else {
           router.replace("/personal-info");
@@ -179,6 +197,7 @@ export default function LoginScreen() {
               }}
               placeholder="917 123 4567"
               keyboardType="phone-pad"
+              maxLength={10}
               value={phone}
               onChangeText={(text) => updateField("phone", text)}
               autoComplete="tel"

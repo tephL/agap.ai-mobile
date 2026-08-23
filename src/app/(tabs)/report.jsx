@@ -7,6 +7,7 @@ import {
   Easing,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,11 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import colors from "../../constants/colors";
-import { uploadReportPhoto } from "../../services/reportService";
+import {
+  uploadReportPhoto,
+  attachReportDescription,
+  requestReportLocation,
+} from "../../services/reportService";
 import {
   cameraStore,
   MAX_PHOTOS,
@@ -28,13 +33,6 @@ import {
 } from "../../store/cameraStore";
 
 const NOTES_MAX = 500;
-
-function formatCountdown(ms) {
-  const total = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-}
 
 function formatSentAt(ts) {
   if (!ts) return "";
@@ -111,30 +109,15 @@ function PingingCheckmark() {
 export default function ReportScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { photos, reportExpiresAt, sentAt } = useCameraStore();
+  const { photos, sentAt, locationStatus, locationError } = useCameraStore();
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [galleryOffset, setGalleryOffset] = useState(0);
-  const [remainingMs, setRemainingMs] = useState(() =>
-    reportExpiresAt ? Math.max(0, reportExpiresAt - Date.now()) : 0
-  );
 
   useEffect(() => {
     setNotes("");
     setGalleryOffset(0);
   }, [sentAt]);
-
-  useEffect(() => {
-    if (!reportExpiresAt) {
-      setRemainingMs(0);
-      return;
-    }
-    const tick = () =>
-      setRemainingMs(Math.max(0, reportExpiresAt - Date.now()));
-    tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
-  }, [reportExpiresAt]);
 
   const atLimit = photos.length >= MAX_PHOTOS;
 
@@ -197,25 +180,104 @@ export default function ReportScreen() {
 
   const handleSkip = () => {
     if (submitting) return;
-    closeForm();
-    Alert.alert("Successfully submitted report", undefined, [
-      { text: "Confirm" },
-    ]);
+    Alert.alert(
+      "Skip this report?",
+      "None of these details will be sent, and they won't be saved.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Confirm", style: "destructive", onPress: closeForm },
+      ]
+    );
   };
+
+  // Re-fires the location request if the first attempt failed (e.g. the
+  // user turned Location Services / permission on and wants to try again).
+  const retryLocation = () => {
+    cameraStore.setLocationRequest(requestReportLocation());
+  };
+
+  // Routes a failed location request to the right fix. "Services off" and
+  // "permission denied" open different settings screens, so they get
+  // different copy and both offer a direct path to fix it plus a retry.
+  const showLocationErrorAlert = (error) => {
+    if (error?.code === "SERVICES_DISABLED") {
+      Alert.alert(
+        "Turn on Location Services",
+        "Your device's location services are off, so we can't attach your location to this report. Turn them on, then retry.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+          { text: "Retry", onPress: retryLocation },
+        ]
+      );
+    } else if (error?.code === "PERMISSION_DENIED") {
+      Alert.alert(
+        "Location Permission Needed",
+        "Allow location access so we can attach it to your report.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+          { text: "Retry", onPress: retryLocation },
+        ]
+      );
+    } else {
+      Alert.alert(
+        "Couldn't confirm your location",
+        error?.message
+          ? `We couldn't get your location (${error.message}). Please try again.`
+          : "We couldn't get your location. Please try again.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Retry", onPress: retryLocation },
+        ]
+      );
+    }
+  };
+
+  // Surfaces a failed location request as soon as it happens, rather than
+  // making the user discover it only when they hit Submit — this is an SOS
+  // flow, so time matters. Guarded by a ref (not state) so it fires once
+  // per distinct failure, not on every unrelated re-render.
+  const lastLocationErrorRef = useRef(null);
+  useEffect(() => {
+    if (locationStatus !== "error" || !locationError) return;
+    if (lastLocationErrorRef.current === locationError) return;
+    lastLocationErrorRef.current = locationError;
+    showLocationErrorAlert(locationError);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationStatus, locationError]);
 
   const handleSubmit = async () => {
     if (submitting) return;
+
+    const description = notes.trim();
+    if (photos.length === 0 && !description) {
+      Alert.alert(
+        "Add a detail",
+        "Add at least a photo or a description before submitting."
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const description = notes.trim();
-      for (let i = 0; i < photos.length; i += 1) {
-        const extra = i === 0 && description ? { description } : {};
-        await uploadReportPhoto(photos[i].uri, extra);
+      // This resolves once /api/reports/location has actually created the
+      // report row. Uploading photos or a description before this finishes
+      // is what previously caused "No report to attach image/description to".
+      const { ok, error } = await cameraStore.waitForLocation();
+      if (!ok) {
+        showLocationErrorAlert(error);
+        return;
       }
+
+      for (let i = 0; i < photos.length; i += 1) {
+        await uploadReportPhoto(photos[i].uri);
+      }
+      if (description) {
+        await attachReportDescription(description);
+      }
+
       closeForm();
-      Alert.alert("Successfully submitted report", undefined, [
-        { text: "Confirm" },
-      ]);
     } catch (err) {
       const message = err?.response
         ? err?.response?.data?.message ||
@@ -385,10 +447,6 @@ export default function ReportScreen() {
             <Text style={styles.skip}>SKIP</Text>
           </TouchableOpacity>
         </ScrollView>
-
-        <Text style={styles.timer}>
-          this form will close in {formatCountdown(remainingMs)}
-        </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -587,12 +645,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
     letterSpacing: 0.8,
-  },
-  timer: {
-    paddingVertical: 12,
-    textAlign: "center",
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.primary,
   },
 });

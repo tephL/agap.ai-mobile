@@ -1,4 +1,6 @@
 import { getDb } from "./familyDb";
+import * as SQLite from 'expo-sqlite';
+import { DATABASE_NAME } from "./familyDb";
 
 
 /**
@@ -54,6 +56,21 @@ export async function saveFamilySnapshot(userId, snapshot) {
           m.relation ? String(m.relation).toLowerCase() : null,
           now,
         ]
+      );
+    }
+
+    // Drop members removed on the server so they never resurface offline.
+    if (members.length === 0) {
+      await txn.runAsync(`DELETE FROM member WHERE family_id = ?`, [
+        snapshot.family_id,
+      ]);
+    } else {
+      const placeholders = members.map(() => "?").join(",");
+      await txn.runAsync(
+        `DELETE FROM member
+          WHERE family_id = ?
+            AND family_member_id NOT IN (${placeholders})`,
+        [snapshot.family_id, ...members.map((m) => m.family_member_id)]
       );
     }
 
@@ -115,10 +132,16 @@ async function hydrateFamily(db, family, userId) {
 }
 
 /** Wipe only this user's cached snapshot (on logout). */
-export async function clearForUser(userId) {
-  const db = await getDb();
-  await db.runAsync(`DELETE FROM family WHERE family_id IN (
-    SELECT family_id FROM member WHERE user_id = ?)`, [userId]);
-  await db.runAsync(`DELETE FROM member WHERE user_id = ?`, [userId]);
-  await db.runAsync(`DELETE FROM meta WHERE key LIKE ?`, [`%_${userId}`]);
+export async function clearForUser() {
+  try {
+    const db = await getDb();
+    console.log('deleting db now');
+    await db.withExclusiveTransactionAsync(async (txn) => {
+        await txn.runAsync(`delete from member;`);
+        await txn.runAsync(`delete from family;`);
+    });
+    console.log('done deletion');
+  } catch (e) {
+    console.log('failed to delete db ', e);
+  }
 }
