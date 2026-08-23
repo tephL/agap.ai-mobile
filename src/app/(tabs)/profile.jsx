@@ -71,11 +71,6 @@ export default function ProfileScreen() {
   async function handleLogout() {
     const token = await SecureStore.getItemAsync("token");
 
-    const userId = await getCurrentUserId();
-    if (userId != null) {
-      try {
-        await clearForUser();
-    console.log(token);
     // Wipe this user's offline snapshots before the token is gone, so a
     // different account can never see stale cached family/profile data.
     const userId = await getCurrentUserId();
