@@ -1,5 +1,4 @@
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +8,7 @@ import { fetchClustersWithinLocation, fetchClusterReports } from '../../services
 import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
 import AssignTeamModal from '../../components/dispatcher/AssignTeamModal';
+import useLiveLocation from '../../hooks/useLiveLocation.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -45,12 +45,8 @@ const REPORT_COLOR = '#2563eb';
 // Component
 // ---------------------------------------------------------------------------
 export default function Index() {
-  // location / permissions state
-  const [locationGranted, setLocationGranted] = useState(false);
-  const [userLocation, setUserLocation] = useState({
-    latitude: null,
-    longitude: null,
-  });
+  // location / permissions
+  const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
 
   // cluster markers state
@@ -71,15 +67,6 @@ export default function Index() {
   // team.jsx reads the selected cluster across tabs; focusNonce marks
   // explicit focus requests coming from the Reports tab
   const { activeClusterId, setActiveClusterId, focusNonce } = useCluster();
-
-  // ---- permissions -----------------------------------------------------
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationGranted(status === "granted");
-      if (status !== "granted") console.log('permission denied');
-    })();
-  }, []);
 
   // ---- clusters fetch loop -----------------------------------------------
   const refreshClusters = useCallback(async () => {
@@ -173,20 +160,13 @@ export default function Index() {
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
     if (locating) return;
-    setLocating(true);
+    if (!getCachedCoords()) setLocating(true);
     try {
-      let lat = userLocation.latitude;
-      let lng = userLocation.longitude;
-
-      if (lat == null || lng == null) {
-        const locationData = await Location.getCurrentPositionAsync();
-        lat = locationData.coords.latitude;
-        lng = locationData.coords.longitude;
-        setUserLocation({ latitude: lat, longitude: lng });
-      }
+      const coords = await resolveCoords();
+      if (!coords) return;
 
       cameraRef.current?.flyTo({
-        center: [lng, lat],
+        center: [coords.longitude, coords.latitude],
         zoom: LOCATE_ZOOM,
         duration: LOCATE_FLY_DURATION_MS,
       });
