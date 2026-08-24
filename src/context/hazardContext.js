@@ -13,6 +13,7 @@ import {
   describeDamStatus,
 } from "../components/hazards/damSeverity";
 import { getInfluencingDams } from "../components/hazards/damInfluence";
+import { getImpactTier } from "../data/hydrology";
 
 function severitySentence(dam) {
   const severity = resolveDamSeverity(dam);
@@ -36,27 +37,32 @@ function severitySentence(dam) {
 /**
  * Build the hazard context snapshot for the given user location.
  * @param {{latitude:number|null, longitude:number|null}} userLocation
+ * @param {number|null} [userElevation] ground elevation (m ASL), optional
  * @returns {Promise<object|null>} null when no dam data is available at all
  */
-export async function getNearestDamContext(userLocation) {
+export async function getNearestDamContext(userLocation, userElevation = null) {
   const { dams } = await getDamStatuses();
   if (!Array.isArray(dams) || dams.length === 0) return null;
 
-  // Dams that can plausibly affect the user (severity-weighted radius),
-  // nearest first. Falls back to the single closest dam when none qualify.
-  const influencing = getInfluencingDams(dams, userLocation);
+  // Hydrology-first selection: corridor dams that can actually reach the
+  // user, nearest first; single-nearest fallback when nothing matches.
+  const influencing = getInfluencingDams(dams, userLocation, { userElevation });
   if (influencing.length === 0) return null;
 
   const hasOrigin =
     userLocation?.latitude != null && userLocation?.longitude != null;
 
-  const relevantDams = influencing.map(({ dam, distanceMeters }) => {
+  const relevantDams = influencing.map(({ dam, distanceMeters, impact, tierNote, minor }) => {
     const severity = resolveDamSeverity(dam);
+    const tier = getImpactTier(impact.key);
     return {
       name: dam.name,
       slug: dam.slug,
       distanceMeters,
       distanceText: formatDistance(distanceMeters),
+      impactTier: { ...impact, plainSummary: tier?.plainSummary ?? null },
+      tierNote: tierNote ?? null,
+      minor,
       reservoirWaterLevel: dam.reservoirWaterLevel ?? null,
       normalHighWaterLevel: dam.normalHighWaterLevel ?? null,
       deviationFromNHWL: dam.deviationFromNHWL ?? null,
@@ -90,17 +96,37 @@ export async function getNearestDamContext(userLocation) {
   const summaryParts = [
     `Dams that may affect this user (${ordered.length}):`,
     ...ordered.flatMap((entry) => [
-      `${entry.name} — ${entry.distanceText} away, status ${entry.severity.label}: ${severitySentence(
-        dams.find((d) => d.slug === entry.slug)
-      )}`,
+      [
+        `${entry.name}${entry.minor ? " (minor structure)" : ""} — ${entry.distanceText} away.`,
+        entry.impactTier.plainSummary
+          ? `${entry.impactTier.label} impact: ${entry.impactTier.plainSummary}`
+          : `${entry.impactTier.label} impact zone.`,
+        `Reservoir status: ${entry.severity.label}.`,
+        severitySentence(dams.find((d) => d.slug === entry.slug)),
+        entry.tierNote ? `Note: ${entry.tierNote}` : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
     ]),
   ];
+  if (
+    hasOrigin &&
+    userElevation != null
+  ) {
+    summaryParts.push(
+      `User ground elevation: ~${Math.round(userElevation)} m above sea level.`
+    );
+  }
+  summaryParts.push(
+    "Impact zones are approximate estimates pending official flood maps."
+  );
 
   return {
     generatedAt: new Date().toISOString(),
     userLocation: hasOrigin
       ? { latitude: userLocation.latitude, longitude: userLocation.longitude }
       : null,
+    userElevation: userElevation ?? null,
     nearestDamSlug,
     relevantDams,
     summary: summaryParts.join(" "),

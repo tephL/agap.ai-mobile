@@ -2,6 +2,8 @@ import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { haversineMeters, formatDistance } from "../../utils/haversine";
 import { resolveDamSeverity } from "./damSeverity";
+import { getDamImpact, getImpactTier } from "../../data/hydrology";
+import HazardDisclaimer from "./HazardDisclaimer";
 
 const EXPECTED_DAM_COUNT = 9;
 const NEAREST_TINT = "rgba(66, 135, 245, ";
@@ -57,6 +59,8 @@ export default function DamsTab({
         rows.map(({ dam, distanceMeters }) => {
           const severity = resolveDamSeverity(dam);
           const dev = dam.deviationFromNHWL;
+          const impact = getDamImpact(dam, userLocation);
+          const impactTier = impact ? getImpactTier(impact.impact.key) : null;
           const isNearest = dam.slug === nearest;
           const isInfluencing = influencingSlugs.includes(dam.slug);
 
@@ -98,6 +102,24 @@ export default function DamsTab({
                       {severity.label}
                     </Text>
                   </View>
+                  {impact && isInfluencing && impactTier && (
+                    <View
+                      style={[
+                        styles.impactMiniChip,
+                        { backgroundColor: `${impactTier.color}1A` },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.impactMiniChipText,
+                          { color: impactTier.color },
+                        ]}
+                      >
+                        {impactTier.label}
+                        {impact.minor ? " · minor" : ""}
+                      </Text>
+                    </View>
+                  )}
                   {distanceMeters != null && (
                     <Text style={styles.distance}>
                       {formatDistance(distanceMeters)}
@@ -119,6 +141,8 @@ export default function DamsTab({
           );
         })
       )}
+
+      <HazardDisclaimer style={styles.disclaimer} />
     </View>
   );
 }
@@ -230,6 +254,17 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
+  impactMiniChip: {
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  impactMiniChipText: {
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
   distance: {
     fontSize: 12,
     fontWeight: "600",
@@ -245,5 +280,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#182033",
     fontVariant: ["tabular-nums"],
+  },
+  disclaimer: {
+    marginTop: 4,
+    textAlign: "center",
   },
 });

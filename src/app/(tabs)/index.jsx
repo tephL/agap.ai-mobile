@@ -13,6 +13,7 @@ import { getMyFamily } from '../../services/familyService.js';
 import { getDamStatuses } from '../../services/hazardService.js';
 import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/damSeverity';
 import { getInfluencingDams } from '@/components/hazards/damInfluence';
+import { useHazardElevation } from '../../hooks/useHazardElevation';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
@@ -331,13 +332,19 @@ export default function Index() {
     })),
   };
 
+  // Ground elevation for the hydrology risk factor (graceful when unknown).
+  const { elevation: userElevation } = useHazardElevation(
+    userLocation.latitude,
+    userLocation.longitude
+  );
+
   // ---- derived geojson for dam markers + influencing-dam highlight -------
-  // Dams whose severity lets them reach the user (severity-weighted radius),
-  // nearest first. All of them get the emphasized ring, a dashed route line,
-  // and a tappable route.
+  // Dams whose downstream corridors actually reach the user (hydrology-
+  // first; see data/hydrology.js), nearest first. All of them get the
+  // emphasized ring, a dashed route line, and a tappable route.
   const influencingDams = useMemo(
-    () => getInfluencingDams(dams, userLocation),
-    [dams, userLocation]
+    () => getInfluencingDams(dams, userLocation, { userElevation }),
+    [dams, userLocation, userElevation]
   );
 
   const nearestDamSlug = influencingDams[0]?.dam.slug ?? null;
@@ -847,6 +854,7 @@ export default function Index() {
               ? Object.keys(influencingBySlug)
               : EMPTY_SLUGS
           }
+          userElevation={userElevation}
           dam={selectedDam}
           expanded={sheetExpanded}
           onExpandedChange={setSheetExpanded}

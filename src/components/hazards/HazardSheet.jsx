@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,7 +20,14 @@ import {
   formatObservationAge,
 } from "./damStatus";
 import HazardTabs from "./HazardTabs";
+import HazardDisclaimer from "./HazardDisclaimer";
+import ImpactZoneDetail from "./ImpactZoneDetail";
 import { resolveDamSeverity, describeDamStatus } from "./damSeverity";
+import {
+  getDamImpact,
+  CREST_ELEVATIONS,
+  getImpactTier,
+} from "../../data/hydrology";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -46,6 +54,7 @@ export default function HazardSheet({
   userLocation,
   nearestSlug,
   influencingSlugs = [],
+  userElevation = null,
   dam,
   expanded,
   onExpandedChange,
@@ -56,6 +65,7 @@ export default function HazardSheet({
   const [activeTab, setActiveTab] = useState("dams");
   const [now, setNow] = useState(0);
   const [fetchState, setFetchState] = useState({ slug: null, data: null, error: null });
+  const [impactDetailVisible, setImpactDetailVisible] = useState(false);
 
   const slug = dam?.slug ?? null;
 
@@ -131,6 +141,25 @@ export default function HazardSheet({
     observationMs != null ? damFreshnessColor(observationMs, now) : "#a9a9a9";
 
   const severity = shownDam ? resolveDamSeverity(shownDam) : null;
+
+  // Hydrology impact context for the shown dam (tier, corridor note, minor).
+  const impactContext = useMemo(
+    () => (shownDam ? getDamImpact(shownDam, userLocation) : null),
+    [shownDam, userLocation]
+  );
+  const damCrest = shownDam
+    ? CREST_ELEVATIONS[shownDam.slug] ?? shownDam.normalHighWaterLevel ?? null
+    : null;
+  const elevationAboveCrest =
+    userElevation != null && damCrest != null && userElevation >= damCrest + 2;
+  const elevationAboveNHWL =
+    !elevationAboveCrest &&
+    userElevation != null &&
+    shownDam?.normalHighWaterLevel != null &&
+    userElevation >= shownDam.normalHighWaterLevel;
+  const currentTier = impactContext
+    ? getImpactTier(impactContext.impact.key) ?? null
+    : null;
 
   const handleClose = () => {
     Animated.timing(translateY, {
@@ -239,6 +268,60 @@ export default function HazardSheet({
               </View>
             )}
 
+            {impactContext && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.impactCard,
+                  { borderLeftColor: currentTier?.color ?? "#182033" },
+                  pressed && styles.impactCardPressed,
+                ]}
+                onPress={() => setImpactDetailVisible(true)}
+              >
+                <View style={styles.impactRow}>
+                  <Text style={styles.impactLabel}>Impact zone</Text>
+                  <View
+                    style={[
+                      styles.impactChip,
+                      { backgroundColor: currentTier?.color ?? "#182033" },
+                    ]}
+                  >
+                    <Text style={styles.impactChipText}>
+                      {currentTier?.label}
+                      {impactContext.minor ? " · minor" : ""}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.impactPlain}>
+                  {currentTier?.plainSummary}
+                </Text>
+                <View style={styles.impactNotes}>
+                  {elevationAboveCrest ? (
+                    <Text style={styles.impactNote}>
+                      Your ground elevation (~{Math.round(userElevation)} m ASL)
+                      is above the reservoir level ({damCrest} m) — floodwater
+                      cannot reach this elevation.
+                    </Text>
+                  ) : (
+                    <>
+                      {userElevation != null && (
+                        <Text style={styles.impactNote}>
+                          Your ground elevation ~{Math.round(userElevation)} m
+                          ASL
+                          {elevationAboveNHWL ? " — above NHWL, reduced reach" : ""}.
+                        </Text>
+                      )}
+                      {impactContext.tierNote && (
+                        <Text style={styles.impactNote}>
+                          {impactContext.tierNote}
+                        </Text>
+                      )}
+                    </>
+                  )}
+                  <HazardDisclaimer />
+                </View>
+              </Pressable>
+            )}
+
             {showStaleBanner && (
               <View style={styles.staleBanner}>
                 <Ionicons name="warning-outline" size={14} color="#E32F31" />
@@ -305,6 +388,19 @@ export default function HazardSheet({
           />
         </View>
       </ScrollView>
+
+      {impactContext && (
+        <ImpactZoneDetail
+          visible={impactDetailVisible}
+          onClose={() => setImpactDetailVisible(false)}
+          damName={shownDam?.name}
+          tierKey={impactContext.impact.key}
+          minor={impactContext.minor}
+          distanceText={
+            distanceMeters != null ? formatDistance(distanceMeters) : null
+          }
+        />
+      )}
     </Animated.View>
   );
 }
@@ -443,6 +539,58 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#737B8C",
     lineHeight: 17,
+  },
+  impactCard: {
+    backgroundColor: "#F6F7FA",
+    borderColor: "#E0E2E7",
+    borderLeftWidth: 4,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+    gap: 6,
+  },
+  impactCardPressed: {
+    backgroundColor: "#EEF1F5",
+  },
+  impactPlain: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "600",
+    color: "#182033",
+  },
+  impactNotes: {
+    gap: 3,
+  },
+  impactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  impactLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: "#737B8C",
+  },
+  impactChip: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: "#182033",
+  },
+  impactChipText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  impactNote: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#5A6273",
   },
   staleBanner: {
     flexDirection: "row",
