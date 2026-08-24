@@ -124,6 +124,9 @@ export default function Index() {
           !Number.isNaN(c.latitude) &&
           !Number.isNaN(c.longitude)
       )
+      // empty clusters are cleaned up server-side; hide any stale ones
+      // still cached between refreshes so they never render a pin
+      .filter((c) => (c.report_count ?? 0) > 0)
       .map((cluster, index) => ({
         type: 'Feature',
         id: `cluster-${cluster.city}-${index}`,
