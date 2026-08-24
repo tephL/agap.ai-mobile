@@ -28,7 +28,11 @@ POST  /api/dispatcher/assignments               → team_id, cluster_id
 PATCH /api/dispatcher/assignments/:id/status    → id, status          (pending|dispatched|resolved)
 ```
 
-- Validation failures return **422** with `{ errors: [...] }`.
+- Validation failures return **422** with `{ errors: [...] }`. Other
+  failures return `{ error: "..." }` — read it via
+  `assignmentError(err, fallback)` from `teamService.js` instead of
+  `err.message`, which only yields axios generics like
+  "Request failed with status code 409".
 - Everything under `/api/dispatcher` is scoped to the dispatcher's own
   city (resolved server-side via users → people → cities). Teams and
   clusters from other cities are never returned, and cross-city
@@ -91,4 +95,17 @@ const ClusterContext = createContext({ activeClusterId: null, setActiveClusterId
 
 - Team: `available | busy | offline`
 - Cluster: `open | saved | resolved`
-- Assignment: `pending → dispatched → resolved`
+- Assignment: `pending → dispatched → resolved` (forward-only; the API
+  answers **409** on any regression, e.g. `resolved → dispatched`)
+
+## Assignment lifecycle rules (server-enforced)
+
+- A team can hold only one active (`pending`/`dispatched`) assignment at
+  a time; a second `POST /assignments` fails with **409**.
+- Resolving an assignment frees the team (`assigned_to` cleared) once it
+  has no other active assignment.
+- Marking a cluster `resolved` via `PATCH /clusters/:id/status` also
+  resolves its active assignments and frees the responding teams —
+  teams never stay busy against a resolved cluster.
+- Deleting empty clusters (server cleanup job) cascades their
+  assignments away, so affected teams become `available`.

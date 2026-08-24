@@ -15,6 +15,7 @@ import StatusBadge from "../ui/StatusBadge";
 import PriorityChip from "../ui/PriorityChip";
 import {
   assignTeamToCluster,
+  assignmentError,
   getOpenClusters,
   getTeams,
 } from "../../services/teamService";
@@ -119,7 +120,9 @@ export default function AssignTeamModal({
       onAssigned?.(assignment, team);
       onClose?.();
     } catch (err) {
-      setError(err?.message ?? "Failed to assign this team.");
+      setError(
+        assignmentError(err, "Failed to assign this team.")
+      );
     } finally {
       setAssigningId(null);
     }

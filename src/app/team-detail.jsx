@@ -20,6 +20,7 @@ import {
   getOpenClusters,
   getTeams,
   assignTeamToCluster,
+  assignmentError,
   updateAssignmentStatus,
 } from "@/services/teamService";
 
@@ -90,6 +91,13 @@ export default function TeamDetailScreen() {
           setTeam(teamList.find((t) => t.team_id === teamId) ?? null);
           setAssignment(assignment);
           setClusters(clusterList);
+          // Drop a preselected cluster that is no longer open (resolved by
+          // someone else, cleaned up, ...) so Assign can't hit a 404.
+          setSelectedClusterId((prev) =>
+            prev != null && clusterList.some((c) => c.cluster_id === prev)
+              ? prev
+              : null
+          );
         } catch (err) {
           console.log("team-detail load error:", err?.message || err);
           if (active) setError("Something went wrong loading this team.");
@@ -105,16 +113,19 @@ export default function TeamDetailScreen() {
     }, [teamId])
   );
 
+  // Server-derived truth: team status comes from the teams endpoint
+  // (busy while an active assignment exists), never guessed locally.
   const refresh = useCallback(async () => {
-    const [assignment, clusterList] = await Promise.all([
+    const [teamList, assignment, clusterList] = await Promise.all([
+      getTeams(),
       getAssignmentForTeam(teamId),
       getOpenClusters(),
     ]);
+    setTeam((prev) =>
+      prev ? (teamList.find((t) => t.team_id === prev.team_id) ?? prev) : null
+    );
     setAssignment(assignment);
     setClusters(clusterList);
-    setTeam((prev) =>
-      prev ? { ...prev, status: assignment?.status === "resolved" ? "available" : prev.status } : prev
-    );
   }, [teamId]);
 
   const handleAssign = async () => {
@@ -129,7 +140,10 @@ export default function TeamDetailScreen() {
         prev.filter((c) => c.cluster_id !== selectedClusterId)
       );
     } catch (err) {
-      setError(err?.message ?? "Failed to assign team.");
+      setError(assignmentError(err, "Failed to assign team."));
+      // A rejection usually means state moved elsewhere (team got assigned
+      // or the cluster closed) — resync with the server.
+      refresh().catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -151,7 +165,8 @@ export default function TeamDetailScreen() {
       await updateAssignmentStatus(assignment.assignment_id, next);
       await refresh();
     } catch (err) {
-      setError(err?.message ?? "Failed to update status.");
+      setError(assignmentError(err, "Failed to update status."));
+      refresh().catch(() => {});
     } finally {
       setBusy(false);
     }
