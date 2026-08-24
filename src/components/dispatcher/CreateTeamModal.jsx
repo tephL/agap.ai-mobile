@@ -17,14 +17,12 @@ const PHONE_RE = /^[0-9+\-\s()]{7,}$/;
 export default function CreateTeamModal({ visible, onClose, onCreated }) {
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
-  const [location, setLocation] = useState("");
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   const resetForm = () => {
     setName("");
     setContact("");
-    setLocation("");
     setErrors({});
   };
 
@@ -42,7 +40,6 @@ export default function CreateTeamModal({ visible, onClose, onCreated }) {
     } else if (!PHONE_RE.test(contact.trim())) {
       next.contact = "Enter a valid contact number.";
     }
-    if (!location.trim()) next.location = "Location is required.";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -54,7 +51,6 @@ export default function CreateTeamModal({ visible, onClose, onCreated }) {
       const team = await createTeam({
         name,
         contact_number: contact,
-        location_text: location,
       });
       resetForm();
       onCreated?.(team);
@@ -95,13 +91,6 @@ export default function CreateTeamModal({ visible, onClose, onCreated }) {
             keyboardType="phone-pad"
             error={errors.contact}
             placeholder="09XXXXXXXXX"
-          />
-          <FormInput
-            label="Location"
-            value={location}
-            onChangeText={(v) => setLocation(v)}
-            error={errors.location}
-            placeholder="e.g. Barangay Hall, San Roque"
           />
 
           <TouchableOpacity
