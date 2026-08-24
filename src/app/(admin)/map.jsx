@@ -92,7 +92,7 @@ export default function Index() {
         },
         properties: {
           city: cluster.city,
-          priority: cluster.priority,
+          priority: cluster.priority_level,
           status: cluster.status,
           report_count: cluster.report_count,
           people_affected: cluster.people_affected,
