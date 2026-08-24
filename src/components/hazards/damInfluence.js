@@ -1,5 +1,6 @@
 // Which dams "can affect or influence" the user?
 //
+<<<<<<< HEAD
 // v2 model — hydrology-first:
 //   1. Dams with a sourced downstream corridor (see data/hydrology.js)
 //      influence users near any corridor waypoint.
@@ -44,16 +45,40 @@ function tierIndexSafe(impact) {
   const index = TIER_ORDER.indexOf(impact?.key);
   return index === -1 ? TIER_ORDER.length - 1 : index;
 }
+=======
+// Tier 1 model (no hydrology data yet): a dam qualifies when its severity
+// class is allowed to reach that far — danger travels farthest, normal only
+// counts as proximity awareness. When real river-basin data lands (Tier 2),
+// replace getInfluencingDams()'s internals with basin matching; every
+// consumer (map, drawer chips, AI context) already speaks this output shape.
+
+import { haversineMeters } from "../../utils/haversine";
+import { resolveDamSeverity } from "./damSeverity";
+
+export const INFLUENCE_RADIUS_KM = {
+  danger: 100,
+  caution: 60,
+  normal: 30,
+};
+
+export const MAX_INFLUENCING_DAMS = 4;
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 
 /**
  * Select the dams relevant to the user, nearest first.
  * @param {Array<object>} dams - records from /api/dams
  * @param {{latitude:number|null, longitude:number|null}} userLocation
+<<<<<<< HEAD
  * @param {{userElevation?:number|null}} [options]
  * @returns {Array<{dam:object, distanceMeters:number, impact:{key,label},
  *                   tierNote:string|null, minor:boolean, nearestFallback:boolean}>}
  */
 export function getInfluencingDams(dams, userLocation, options = {}) {
+=======
+ * @returns {Array<{dam:object, distanceMeters:number}>}
+ */
+export function getInfluencingDams(dams, userLocation) {
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   if (
     !Array.isArray(dams) ||
     dams.length === 0 ||
@@ -64,6 +89,7 @@ export function getInfluencingDams(dams, userLocation, options = {}) {
   }
 
   const origin = { lat: userLocation.latitude, lng: userLocation.longitude };
+<<<<<<< HEAD
   const userElevation = options.userElevation ?? null;
 
   // Distance to every dam once.
@@ -169,4 +195,37 @@ export function getInfluencingDams(dams, userLocation, options = {}) {
 
   enriched.sort((a, b) => a.distanceMeters - b.distanceMeters);
   return enriched.slice(0, MAX_INFLUENCING_DAMS);
+=======
+
+  const candidates = [];
+  for (const dam of dams) {
+    if (!dam.coordinates) continue;
+    const distanceMeters = haversineMeters(origin, dam.coordinates);
+    if (distanceMeters == null) continue;
+
+    const radiusKm = INFLUENCE_RADIUS_KM[resolveDamSeverity(dam).level];
+    if (radiusKm != null && distanceMeters / 1000 <= radiusKm) {
+      candidates.push({ dam, distanceMeters });
+    }
+  }
+
+  candidates.sort((a, b) => a.distanceMeters - b.distanceMeters);
+
+  // Fallback: far from everything — surface the single closest dam so the
+  // UI and AI context never go empty.
+  if (candidates.length === 0) {
+    let fallback = null;
+    for (const dam of dams) {
+      if (!dam.coordinates) continue;
+      const distanceMeters = haversineMeters(origin, dam.coordinates);
+      if (distanceMeters == null) continue;
+      if (fallback == null || distanceMeters < fallback.distanceMeters) {
+        fallback = { dam, distanceMeters };
+      }
+    }
+    return fallback ? [fallback] : [];
+  }
+
+  return candidates.slice(0, MAX_INFLUENCING_DAMS);
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 }

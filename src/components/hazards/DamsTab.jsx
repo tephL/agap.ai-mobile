@@ -2,17 +2,24 @@ import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { haversineMeters, formatDistance } from "../../utils/haversine";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { resolveDamSeverity } from "./damSeverity";
 import { getDamImpact, getImpactTier } from "../../data/hydrology";
 import HazardDisclaimer from "./HazardDisclaimer";
 =======
 import { parseDamObservationMs, damFreshnessColor } from "./damStatus";
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+import { resolveDamSeverity } from "./damSeverity";
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 
 const EXPECTED_DAM_COUNT = 9;
 const NEAREST_TINT = "rgba(66, 135, 245, ";
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 export default function DamsTab({
   dams,
   userLocation,
@@ -20,9 +27,12 @@ export default function DamsTab({
   influencingSlugs = [],
   onSelect,
 }) {
+<<<<<<< HEAD
 =======
 export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   const rows = useMemo(() => {
     const hasOrigin =
       userLocation?.latitude != null && userLocation?.longitude != null;
@@ -45,6 +55,7 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
   }, [dams, userLocation]);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   // Fallback for the Closest chip before the map computes its own nearest.
   const nearest = nearestSlug ?? rows[0]?.dam.slug ?? null;
   const incomplete = rows.length > 0 && rows.length < EXPECTED_DAM_COUNT;
@@ -55,6 +66,11 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
   const incomplete =
     rows.length > 0 && rows.length < EXPECTED_DAM_COUNT;
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+  // Fallback for the Closest chip before the map computes its own nearest.
+  const nearest = nearestSlug ?? rows[0]?.dam.slug ?? null;
+  const incomplete = rows.length > 0 && rows.length < EXPECTED_DAM_COUNT;
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 
   return (
     <View style={styles.wrap}>
@@ -74,6 +90,7 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
       ) : (
         rows.map(({ dam, distanceMeters }) => {
 <<<<<<< HEAD
+<<<<<<< HEAD
           const severity = resolveDamSeverity(dam);
           const dev = dam.deviationFromNHWL;
           const impact = getDamImpact(dam, userLocation);
@@ -90,6 +107,12 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
           const dev = dam.deviationFromNHWL;
           const isNearest = dam.slug === nearest;
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+          const severity = resolveDamSeverity(dam);
+          const dev = dam.deviationFromNHWL;
+          const isNearest = dam.slug === nearest;
+          const isInfluencing = influencingSlugs.includes(dam.slug);
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 
           return (
             <TouchableOpacity
@@ -99,10 +122,14 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
               activeOpacity={0.7}
             >
 <<<<<<< HEAD
+<<<<<<< HEAD
               <View style={[styles.dot, { backgroundColor: severity.color }]} />
 =======
               <View style={[styles.dot, { backgroundColor: dotColor }]} />
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+              <View style={[styles.dot, { backgroundColor: severity.color }]} />
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
               <View style={styles.main}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name}>{dam.name}</Text>
@@ -112,6 +139,9 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
                     </View>
                   )}
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
                   {!isNearest && isInfluencing && (
                     <View style={[styles.chip, styles.chipRange]}>
                       <Text style={[styles.chipText, styles.chipTextRange]}>
@@ -134,6 +164,7 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
                       {severity.label}
                     </Text>
                   </View>
+<<<<<<< HEAD
                   {impact && isInfluencing && impactTier && (
                     <View
                       style={[
@@ -154,6 +185,8 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
                   )}
 =======
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
                   {distanceMeters != null && (
                     <Text style={styles.distance}>
                       {formatDistance(distanceMeters)}
@@ -164,10 +197,14 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
                   {dev != null
                     ? `${dev > 0 ? "+" : ""}${dev} m vs NHWL`
 <<<<<<< HEAD
+<<<<<<< HEAD
                     : severity.title}
 =======
                     : "No NHWL reference"}
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+                    : severity.title}
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
                 </Text>
               </View>
               <Text style={styles.rwl}>
@@ -258,10 +295,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
 <<<<<<< HEAD
+<<<<<<< HEAD
     gap: 6,
 =======
     gap: 8,
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+    gap: 6,
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
     flexWrap: "wrap",
   },
   name: {
@@ -283,6 +324,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   chipRange: {
     backgroundColor: "rgba(115, 123, 140, 0.12)",
   },
@@ -300,6 +344,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
+<<<<<<< HEAD
   impactMiniChip: {
     borderRadius: 8,
     paddingHorizontal: 6,
@@ -313,6 +358,8 @@ const styles = StyleSheet.create({
   },
 =======
 >>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   distance: {
     fontSize: 12,
     fontWeight: "600",

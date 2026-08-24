@@ -13,7 +13,10 @@ import {
   describeDamStatus,
 } from "../components/hazards/damSeverity";
 import { getInfluencingDams } from "../components/hazards/damInfluence";
+<<<<<<< HEAD
 import { getImpactTier } from "../data/hydrology";
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 
 function severitySentence(dam) {
   const severity = resolveDamSeverity(dam);
@@ -37,6 +40,7 @@ function severitySentence(dam) {
 /**
  * Build the hazard context snapshot for the given user location.
  * @param {{latitude:number|null, longitude:number|null}} userLocation
+<<<<<<< HEAD
  * @param {number|null} [userElevation] ground elevation (m ASL), optional
  * @returns {Promise<object|null>} null when no dam data is available at all
  */
@@ -47,22 +51,41 @@ export async function getNearestDamContext(userLocation, userElevation = null) {
   // Hydrology-first selection: corridor dams that can actually reach the
   // user, nearest first; single-nearest fallback when nothing matches.
   const influencing = getInfluencingDams(dams, userLocation, { userElevation });
+=======
+ * @returns {Promise<object|null>} null when no dam data is available at all
+ */
+export async function getNearestDamContext(userLocation) {
+  const { dams } = await getDamStatuses();
+  if (!Array.isArray(dams) || dams.length === 0) return null;
+
+  // Dams that can plausibly affect the user (severity-weighted radius),
+  // nearest first. Falls back to the single closest dam when none qualify.
+  const influencing = getInfluencingDams(dams, userLocation);
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   if (influencing.length === 0) return null;
 
   const hasOrigin =
     userLocation?.latitude != null && userLocation?.longitude != null;
 
+<<<<<<< HEAD
   const relevantDams = influencing.map(({ dam, distanceMeters, impact, tierNote, minor }) => {
     const severity = resolveDamSeverity(dam);
     const tier = getImpactTier(impact.key);
+=======
+  const relevantDams = influencing.map(({ dam, distanceMeters }) => {
+    const severity = resolveDamSeverity(dam);
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
     return {
       name: dam.name,
       slug: dam.slug,
       distanceMeters,
       distanceText: formatDistance(distanceMeters),
+<<<<<<< HEAD
       impactTier: { ...impact, plainSummary: tier?.plainSummary ?? null },
       tierNote: tierNote ?? null,
       minor,
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
       reservoirWaterLevel: dam.reservoirWaterLevel ?? null,
       normalHighWaterLevel: dam.normalHighWaterLevel ?? null,
       deviationFromNHWL: dam.deviationFromNHWL ?? null,
@@ -96,6 +119,7 @@ export async function getNearestDamContext(userLocation, userElevation = null) {
   const summaryParts = [
     `Dams that may affect this user (${ordered.length}):`,
     ...ordered.flatMap((entry) => [
+<<<<<<< HEAD
       [
         `${entry.name}${entry.minor ? " (minor structure)" : ""} — ${entry.distanceText} away.`,
         entry.impactTier.plainSummary
@@ -120,13 +144,23 @@ export async function getNearestDamContext(userLocation, userElevation = null) {
   summaryParts.push(
     "Impact zones are approximate estimates pending official flood maps."
   );
+=======
+      `${entry.name} — ${entry.distanceText} away, status ${entry.severity.label}: ${severitySentence(
+        dams.find((d) => d.slug === entry.slug)
+      )}`,
+    ]),
+  ];
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 
   return {
     generatedAt: new Date().toISOString(),
     userLocation: hasOrigin
       ? { latitude: userLocation.latitude, longitude: userLocation.longitude }
       : null,
+<<<<<<< HEAD
     userElevation: userElevation ?? null,
+=======
+>>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
     nearestDamSlug,
     relevantDams,
     summary: summaryParts.join(" "),
