@@ -1,13 +1,18 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { haversineMeters, formatDistance } from "../../utils/haversine";
+<<<<<<< HEAD
 import { resolveDamSeverity } from "./damSeverity";
 import { getDamImpact, getImpactTier } from "../../data/hydrology";
 import HazardDisclaimer from "./HazardDisclaimer";
+=======
+import { parseDamObservationMs, damFreshnessColor } from "./damStatus";
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
 
 const EXPECTED_DAM_COUNT = 9;
 const NEAREST_TINT = "rgba(66, 135, 245, ";
 
+<<<<<<< HEAD
 export default function DamsTab({
   dams,
   userLocation,
@@ -15,6 +20,9 @@ export default function DamsTab({
   influencingSlugs = [],
   onSelect,
 }) {
+=======
+export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
   const rows = useMemo(() => {
     const hasOrigin =
       userLocation?.latitude != null && userLocation?.longitude != null;
@@ -36,9 +44,17 @@ export default function DamsTab({
       });
   }, [dams, userLocation]);
 
+<<<<<<< HEAD
   // Fallback for the Closest chip before the map computes its own nearest.
   const nearest = nearestSlug ?? rows[0]?.dam.slug ?? null;
   const incomplete = rows.length > 0 && rows.length < EXPECTED_DAM_COUNT;
+=======
+  // The nearest slug comes from the map (nearestDamSlug); fall back to the
+  // closest row so the highlight still works before the first map render.
+  const nearest = nearestSlug ?? rows[0]?.dam.slug ?? null;
+  const incomplete =
+    rows.length > 0 && rows.length < EXPECTED_DAM_COUNT;
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
 
   return (
     <View style={styles.wrap}>
@@ -57,12 +73,23 @@ export default function DamsTab({
         </View>
       ) : (
         rows.map(({ dam, distanceMeters }) => {
+<<<<<<< HEAD
           const severity = resolveDamSeverity(dam);
           const dev = dam.deviationFromNHWL;
           const impact = getDamImpact(dam, userLocation);
           const impactTier = impact ? getImpactTier(impact.impact.key) : null;
           const isNearest = dam.slug === nearest;
           const isInfluencing = influencingSlugs.includes(dam.slug);
+=======
+          const observationMs = parseDamObservationMs(
+            dam.observationDate,
+            dam.observationTime
+          );
+          const dotColor =
+            observationMs != null ? damFreshnessColor(observationMs) : "#a9a9a9";
+          const dev = dam.deviationFromNHWL;
+          const isNearest = dam.slug === nearest;
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
 
           return (
             <TouchableOpacity
@@ -71,7 +98,11 @@ export default function DamsTab({
               onPress={() => onSelect(dam)}
               activeOpacity={0.7}
             >
+<<<<<<< HEAD
               <View style={[styles.dot, { backgroundColor: severity.color }]} />
+=======
+              <View style={[styles.dot, { backgroundColor: dotColor }]} />
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
               <View style={styles.main}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name}>{dam.name}</Text>
@@ -80,6 +111,7 @@ export default function DamsTab({
                       <Text style={styles.chipText}>Closest</Text>
                     </View>
                   )}
+<<<<<<< HEAD
                   {!isNearest && isInfluencing && (
                     <View style={[styles.chip, styles.chipRange]}>
                       <Text style={[styles.chipText, styles.chipTextRange]}>
@@ -120,6 +152,8 @@ export default function DamsTab({
                       </Text>
                     </View>
                   )}
+=======
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
                   {distanceMeters != null && (
                     <Text style={styles.distance}>
                       {formatDistance(distanceMeters)}
@@ -129,7 +163,11 @@ export default function DamsTab({
                 <Text style={styles.caption}>
                   {dev != null
                     ? `${dev > 0 ? "+" : ""}${dev} m vs NHWL`
+<<<<<<< HEAD
                     : severity.title}
+=======
+                    : "No NHWL reference"}
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
                 </Text>
               </View>
               <Text style={styles.rwl}>
@@ -141,8 +179,11 @@ export default function DamsTab({
           );
         })
       )}
+<<<<<<< HEAD
 
       <HazardDisclaimer style={styles.disclaimer} />
+=======
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
     </View>
   );
 }
@@ -216,7 +257,11 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
+<<<<<<< HEAD
     gap: 6,
+=======
+    gap: 8,
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
     flexWrap: "wrap",
   },
   name: {
@@ -237,6 +282,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
+<<<<<<< HEAD
   chipRange: {
     backgroundColor: "rgba(115, 123, 140, 0.12)",
   },
@@ -265,6 +311,8 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
+=======
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
   distance: {
     fontSize: 12,
     fontWeight: "600",
@@ -281,8 +329,11 @@ const styles = StyleSheet.create({
     color: "#182033",
     fontVariant: ["tabular-nums"],
   },
+<<<<<<< HEAD
   disclaimer: {
     marginTop: 4,
     textAlign: "center",
   },
+=======
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
 });

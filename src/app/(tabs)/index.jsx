@@ -10,6 +10,8 @@ import { uploadUserLocation } from '../../services/usersService.js';
 import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
 import { getMyFamily } from '../../services/familyService.js';
 import { getDamStatuses } from '../../services/hazardService.js';
+import { haversineMeters } from '../../utils/haversine.js';
+import { getDamStatuses } from '../../services/hazardService.js';
 import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/damSeverity';
 import { getInfluencingDams } from '@/components/hazards/damInfluence';
 import { useHazardElevation } from '../../hooks/useHazardElevation';
@@ -17,6 +19,7 @@ import { useHazardElevation } from '../../hooks/useHazardElevation';
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import { PersonCard } from '@/components/PersonCard';
+<<<<<<< HEAD
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
 import HazardLayersPanel from '@/components/HazardLayersPanel';
 
@@ -25,9 +28,11 @@ import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
 import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
+=======
 import HazardSheet from '@/components/hazards/HazardSheet';
 import LayersControl from '@/components/hazards/LayersControl';
 import { HAZARD_LAYERS } from '@/components/hazards/layerRegistry';
+>>>>>>> 20e20ee (feat(monitoring) working frotnend for dams dev build jp)
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -979,6 +984,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+<<<<<<< HEAD
   // sits directly above the GPS/locate button, right-aligned
   layersButtonWrap: {
     position: 'absolute',
@@ -992,16 +998,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
+=======
+  hazardsButton: {
+    position: 'absolute',
+    height: 44,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+>>>>>>> 20e20ee (feat(monitoring) working frotnend for dams dev build jp)
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
   },
-  hazardsButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#E32F31',
+<<<<<<< HEAD
   layersDot: {
     position: 'absolute',
     top: 2,
@@ -1012,6 +1026,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#208AEF',
     borderWidth: 2,
     borderColor: '#ffffff',
+=======
+  hazardsButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E32F31',
+>>>>>>> 20e20ee (feat(monitoring) working frotnend for dams dev build jp)
   },
   locateButtonIcon: {
     fontSize: 22,

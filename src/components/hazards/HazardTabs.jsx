@@ -64,7 +64,10 @@ export default function HazardTabs({
   dams,
   userLocation,
   nearestSlug,
+<<<<<<< HEAD
   influencingSlugs = [],
+=======
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
   onSelectDam,
 }) {
   const active = TABS.find((tab) => tab.key === activeTab);
@@ -107,7 +110,10 @@ export default function HazardTabs({
             dams={dams}
             userLocation={userLocation}
             nearestSlug={nearestSlug}
+<<<<<<< HEAD
             influencingSlugs={influencingSlugs}
+=======
+>>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
             onSelect={onSelectDam}
           />
         ) : (
