@@ -1,4 +1,4 @@
-import { View, StyleSheet, Text, Dimensions, TouchableOpacity } from "react-native";
+import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -105,6 +105,7 @@ export default function Index() {
     latitude: null,
     longitude: null,
   });
+  const [locating, setLocating] = useState(false);
 
   // family markers state
   const [familyMembers, setFamilyMembers] = useState([]);
@@ -132,6 +133,27 @@ export default function Index() {
       setLocationGranted(status === "granted");
       if (status !== "granted") console.log('permission denied');
     })();
+  }, []);
+
+  // ---- location sending + family fetch loop (runs while screen focused) ---
+  const refreshFamilyLocations = useCallback(async () => {
+    try {
+      const { data } = await fetchFamilyLocation();
+      for (const member of data) {
+        const { last_seen, longitude, latitude, user_id } = member;
+        const timestampMs = new Date(last_seen).getTime();
+        await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
+      }
+    } catch (e) {
+      console.log('fetch failed, falling back to local db', e);
+    }
+
+    try {
+      const locations = await getFamilyPositions();
+      setFamilyMembers(locations);
+    } catch (e) {
+      console.log('failed to read local db', e);
+    }
   }, []);
 
   // ---- location sending + family fetch loop (runs while screen focused) ---
@@ -172,32 +194,9 @@ export default function Index() {
         }
       };
 
-      async function fetchingFamilyLocations() {
-        if (cancelled) return;
-        try {
-          const { data } = await fetchFamilyLocation();
-          for (const member of data) {
-            const { last_seen, longitude, latitude, user_id } = member;
-            const timestampMs = new Date(last_seen).getTime();
-            console.log(user_id, last_seen);
-            await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
-          }
-        } catch (e) {
-          console.log('fetch failed, falling back to local db', e);
-        }
-
-        // Always read from local sqlite, whether the fetch above succeeded or not.
-        try {
-          const locations = await getFamilyPositions();
-          setFamilyMembers(() => locations);
-        } catch (e) {
-          console.log('failed to read local db', e);
-        }
-      }
-
+      refreshFamilyLocations();
       sendLocation();
-      fetchingFamilyLocations();
-      const familyFetchInterval = setInterval(fetchingFamilyLocations, FAMILY_FETCH_INTERVAL_MS);
+      const familyFetchInterval = setInterval(refreshFamilyLocations, FAMILY_FETCH_INTERVAL_MS);
       const sendInterval = setInterval(sendLocation, SEND_LOCATION_INTERVAL_MS);
       console.log(familyMembers);
 
@@ -207,7 +206,7 @@ export default function Index() {
         clearInterval(sendInterval);
         clearInterval(familyFetchInterval);
       }
-    }, [])
+    }, [refreshFamilyLocations])
   );
 
   // ---- honor a selectedUserId passed in from FamilyScreen -----------------
@@ -342,11 +341,12 @@ export default function Index() {
   };
 
   const handleLocatePress = async () => {
+    if (locating) return;
+    setLocating(true);
     try {
       let lat = userLocation.latitude;
       let lng = userLocation.longitude;
 
-      // fall back to a fresh fix if we don't have one cached yet
       if (lat == null || lng == null) {
         const locationData = await Location.getCurrentPositionAsync();
         lat = locationData.coords.latitude;
@@ -359,8 +359,12 @@ export default function Index() {
         zoom: SELECTED_PERSON_FLY_ZOOM,
         duration: SELECTED_PERSON_FLY_DURATION_MS,
       });
+
+      await refreshFamilyLocations();
     } catch (e) {
       console.log('Failed to locate user', e);
+    } finally {
+      setLocating(false);
     }
   };
 
@@ -401,25 +405,17 @@ export default function Index() {
               <Layer
                 type="circle"
                 id="userLocationLayer"
-                layout={{
-                  circleColor: staleColorExpr,
-                  circleRadius: [
+                paint={{
+                  'circle-color': staleColorExpr,
+                  'circle-radius': [
                     'interpolate', ['linear'], ['zoom'],
                     5, 2,
                     10, 5,
                     16, 8,
                   ],
-                  circleStrokeWidth: 2,
-                  circleStrokeColor: '#ffffff',
-                  circleOpacity: 0.9,
-                  'icon-image': 'pin',
-                  'icon-allow-overlap': true,
-                  'icon-size': [
-                    'interpolate', ['linear'], ['zoom'],
-                    5, 0.3,
-                    10, 0.6,
-                    16, 1.0,
-                  ],
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#ffffff',
+                  'circle-opacity': 0.9,
                 }}
               />
             </GeoJSONSource>
@@ -428,16 +424,16 @@ export default function Index() {
               <Layer
                 type="circle"
                 id="pulseLayer"
-                layout={{
-                  circleColor: staleColorExpr,
-                  circleRadius: [
+                paint={{
+                  'circle-color': staleColorExpr,
+                  'circle-radius': [
                     'interpolate', ['linear'], ['zoom'],
                     5, 2 + pulse * 20,
                     10, 5 + pulse * 20,
                     16, 8 + pulse * 20,
                   ],
-                  circleOpacity: 0.5 - pulse,
-                  circleStrokeWidth: 0,
+                  'circle-opacity': Math.max(0.5 - pulse, 0),
+                  'circle-stroke-width': 0,
                 }}
               />
             </GeoJSONSource>
@@ -454,13 +450,18 @@ export default function Index() {
         )}
       </Map>
 
-    <TouchableOpacity
-      style={styles.locateButton}
-      onPress={handleLocatePress}
-      activeOpacity={0.7}
+      <TouchableOpacity
+        style={styles.locateButton}
+        onPress={handleLocatePress}
+        activeOpacity={0.7}
+        disabled={locating}
       >
-      <Ionicons name="locate" size={24} color="#4287f5" />
-    </TouchableOpacity>
+        {locating ? (
+          <ActivityIndicator size="small" color="#4287f5" />
+        ) : (
+          <Ionicons name="locate" size={24} color="#4287f5" />
+        )}
+      </TouchableOpacity>
 
       {selectedPerson && (
         <PersonCard
