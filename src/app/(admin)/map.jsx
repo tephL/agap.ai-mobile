@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { fetchClustersWithinLocation, fetchClusterReports } from '../../services/dispatcher/clusterServ.js';
 import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
+import AssignTeamModal from '../../components/dispatcher/AssignTeamModal';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -60,6 +61,7 @@ export default function Index() {
   const [selectedCluster, setSelectedCluster] = useState(null);
   const [clusterReports, setClusterReports] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -380,8 +382,17 @@ export default function Index() {
           reports={clusterReports}
           loading={reportsLoading}
           onClose={collapseCluster}
+          onAssignTeam={() => setAssignOpen(true)}
         />
       )}
+
+      <AssignTeamModal
+        visible={assignOpen}
+        clusterId={selectedCluster?.cluster_id}
+        clusterName={selectedCluster?.city}
+        onClose={() => setAssignOpen(false)}
+        onAssigned={() => refreshClusters()}
+      />
     </View>
   );
 }
