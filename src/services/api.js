@@ -14,7 +14,11 @@ export const api = createAxios({
 
 api.interceptors.request.use(async (config) => {
   try {
-    const token = await SecureStore.getItemAsync("token");
+    // Dispatcher sessions take priority — a device is either a citizen
+    // or a dispatcher, never both at once.
+    const dispatcherToken = await SecureStore.getItemAsync("dispatcher_token");
+    const token =
+      dispatcherToken ?? (await SecureStore.getItemAsync("token"));
     if (token) {
       config.headers.Cookie = `token=${token}`;
     }

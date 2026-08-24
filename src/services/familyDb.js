@@ -10,7 +10,13 @@ let dbPromise = null;
  */
 const MIGRATIONS = [
   `
-  CREATE TABLE IF NOT EXISTS family ( ... );
+  CREATE TABLE IF NOT EXISTS family (
+    family_id  INTEGER PRIMARY KEY NOT NULL,
+    name       TEXT,
+    created_by INTEGER,
+    is_creator INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS member (
     family_member_id INTEGER PRIMARY KEY NOT NULL,
     user_id          INTEGER NOT NULL,
@@ -23,7 +29,10 @@ const MIGRATIONS = [
     relation         TEXT,
     updated_at       INTEGER NOT NULL
   );
-  CREATE TABLE IF NOT EXISTS meta ( ... );
+  CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY NOT NULL,
+    value TEXT
+  );
   `, // index 0 — leave exactly as it was for anyone who already ran it
 
   async (db) => {

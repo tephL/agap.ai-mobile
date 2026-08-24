@@ -1,9 +1,10 @@
-import { View, StyleSheet, Text } from "react-native";
+import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Map, Camera, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
-import { useFocusEffect } from "expo-router";
+import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Ionicons } from '@expo/vector-icons';
 
 // services
 import { uploadUserLocation } from '../../services/usersService.js';
@@ -12,12 +13,32 @@ import { getMyFamily } from '../../services/familyService.js';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
+import { PersonCard } from '@/components/PersonCard';
 
-
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 const MAPTILER_API_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
-const PH_CENTER = [121.7740, 12.8797]; 
+const PH_CENTER = [121.7740, 12.8797];
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_API_KEY}`;
+
+const FAMILY_FETCH_INTERVAL_MS = 1000 * 60;      // 1 min
+const SEND_LOCATION_INTERVAL_MS = 1000 * 30;     // 30 sec
+const PULSE_DURATION_MS = 3500;                  // ms per pulse cycle
+const NOW_TICK_INTERVAL_MS = 5000;               // staleness re-check
+const STALE_YELLOW_THRESHOLD_MS = 5 * 60 * 1000;  // 5 min
+const STALE_GRAY_THRESHOLD_MS = 30 * 60 * 1000;   // 30 min
+const OFFLINE_PACK_NAME = 'current-area-offline';
+const OFFLINE_PACK_RADIUS_KM = 5;
+const SELECTED_PERSON_FLY_ZOOM = 15;
+const SELECTED_PERSON_FLY_DURATION_MS = 1000;
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const PERSON_CARD_HEIGHT_ESTIMATE = SCREEN_HEIGHT * 0.4;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 // Builds a [west, south, east, north] box around a center point.
 // radiusKm controls how far out from the user's location to cache tiles.
@@ -38,19 +59,17 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
     return;
   }
 
-  const packName = 'current-area-offline';
-
   // Skip if we already have a pack for this area from a previous session.
   const existingPacks = await OfflineManager.getPacks();
   const alreadyDownloaded = existingPacks.some(
-    (p) => p.metadata?.name === packName
+    (p) => p.metadata?.name === OFFLINE_PACK_NAME
   );
   if (alreadyDownloaded) {
     console.log('Offline pack already exists, skipping download');
     return;
   }
 
-  const bounds = boundsAroundPoint(userLocation.latitude, userLocation.longitude, 5);
+  const bounds = boundsAroundPoint(userLocation.latitude, userLocation.longitude, OFFLINE_PACK_RADIUS_KM);
 
   const progressListener = (pack, status) => {
     console.log(`${status.percentage}% complete`);
@@ -65,7 +84,7 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
       minZoom: 10,
       maxZoom: 16,
       bounds,
-      metadata: { name: packName },
+      metadata: { name: OFFLINE_PACK_NAME },
     },
     progressListener,
     errorListener,
@@ -74,16 +93,40 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
   return pack;
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export default function Index() {
-  const [familyMembers, setFamilyMembers] = useState([]);
+  const { selectedUserId } = useLocalSearchParams();
+
+  // location / permissions state
   const [locationGranted, setLocationGranted] = useState(false);
   const [userLocation, setUserLocation] = useState({
     latitude: null,
-    longitude: null
+    longitude: null,
   });
+  const [locating, setLocating] = useState(false);
+
+  // family markers state
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [selectedPerson, setSelectedPerson] = useState(null);
+
+  // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
   const hasRunOnce = useRef(false);
+  const cameraRef = useRef(null);
 
+  // tracks which selectedUserId param value we've already acted on, so a
+  // background family refetch doesn't keep re-flying/re-opening the card
+  const handledSelectedUserIdRef = useRef(null);
+
+  // pulsing "dih" effect state
+  const [pulse, setPulse] = useState(0);
+
+  // staleness re-check clock
+  const [now, setNow] = useState(Date.now());
+
+  // ---- permissions -----------------------------------------------------
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -92,11 +135,32 @@ export default function Index() {
     })();
   }, []);
 
+  // ---- location sending + family fetch loop (runs while screen focused) ---
+  const refreshFamilyLocations = useCallback(async () => {
+    try {
+      const { data } = await fetchFamilyLocation();
+      for (const member of data) {
+        const { last_seen, longitude, latitude, user_id } = member;
+        const timestampMs = new Date(last_seen).getTime();
+        await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
+      }
+    } catch (e) {
+      console.log('fetch failed, falling back to local db', e);
+    }
 
+    try {
+      const locations = await getFamilyPositions();
+      setFamilyMembers(locations);
+    } catch (e) {
+      console.log('failed to read local db', e);
+    }
+  }, []);
+
+  // ---- location sending + family fetch loop (runs while screen focused) ---
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        if(!hasRunOnce.current){
+        if (!hasRunOnce.current) {
           hasRunOnce.current = true;
           await getMyFamily();
         }
@@ -105,130 +169,208 @@ export default function Index() {
       let cancelled = false;
 
       const sendLocation = async () => {
-        if(cancelled) return;
+        if (cancelled) return;
         let offlineDownloadStarted = false;
         const locationData = await Location.getCurrentPositionAsync();
         const { coords: { latitude, longitude } } = locationData;
 
         setUserLocation({
-          latitude: latitude, 
-          longitude: longitude
+          latitude: latitude,
+          longitude: longitude,
         });
 
-         if (!offlineDownloadStarted) {
+        if (!offlineDownloadStarted) {
           offlineDownloadStarted = true;
           downloadOfflineMapForCurrentArea({ latitude, longitude });
         }
 
-        try{
+        try {
           const logLocation = await uploadUserLocation({ latitude, longitude });
           console.log('sent location');
-        } catch(e){
+        } catch (e) {
           console.error(e.response?.data);
           console.error(e.response?.status);
           console.error(e.config?.data);
         }
       };
 
-      async function fetchingFamilyLocations(){
-        if(cancelled) return;
-        try {
-          const { data } = await fetchFamilyLocation();
-          for (const member of data) {
-            const { last_seen, longitude, latitude, user_id } = member;
-            const timestampMs = new Date(last_seen).getTime();
-            console.log(user_id, last_seen);
-            await setFamilyPositions({ latitude, longitude, millisec: timestampMs, user_id });
-          }
-        } catch (e) {
-          console.log('fetch failed, falling back to local db', e);
-        }
-
-        // Always read from local sqlite, whether the fetch above succeeded or not.
-        try {
-          const locations = await getFamilyPositions();
-          setFamilyMembers(() => locations);
-        } catch (e) {
-          console.log('failed to read local db', e);
-        }
-      }
-      
+      refreshFamilyLocations();
       sendLocation();
-      fetchingFamilyLocations();
-      const familyFetchInterval = setInterval(fetchingFamilyLocations, 1000 * 60);
-      const sendInterval = setInterval(sendLocation, 1000 * 30);
-console.log(familyMembers);
+      const familyFetchInterval = setInterval(refreshFamilyLocations, FAMILY_FETCH_INTERVAL_MS);
+      const sendInterval = setInterval(sendLocation, SEND_LOCATION_INTERVAL_MS);
+      console.log(familyMembers);
 
-      return () => 
-        { 
-          console.log('went out');
-          cancelled = true;
-          clearInterval(sendInterval);
-          clearInterval(familyFetchInterval);
-        }
-    }, [])
+      return () => {
+        console.log('went out');
+        cancelled = true;
+        clearInterval(sendInterval);
+        clearInterval(familyFetchInterval);
+      }
+    }, [refreshFamilyLocations])
   );
 
-    const familyGeojson = {
-      type: 'FeatureCollection',
-      features: familyMembers.map((member) => ({
-        type: 'Feature',
-        id: `family-${member.user_id}`,
-        geometry: {
-          type: 'Point',
-          coordinates: [member.longitude, member.latitude], // [lng, lat] order
-        },
-        properties: {
-          user_id: member.user_id,
-          first_name: member.first_name,
-          last_name: member.last_name,
-          relation: member.relation,
-          phone_number: member.phone_number,
-          age: member.age,
-          last_seen: member.last_seen,
-        },
-      })),
-    };
-
-    // pulsing dih effect
-    const [pulse, setPulse] = useState(0); 
-
-    useEffect(() => {
-      let raf;
-      const duration = 3500; // ms per pulse cycle
-      const start = Date.now();
-
-      const tick = () => {
-        const elapsed = (Date.now() - start) % duration;
-        setPulse(elapsed / duration); // 0 to 1
-        raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
-
-      return () => cancelAnimationFrame(raf);
-    }, []);
-
-  // color staleness
-  const [now, setNow] = useState(Date.now());
-
+  // ---- honor a selectedUserId passed in from FamilyScreen -----------------
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 5000); // refresh every 5s
+  if (!selectedUserId) return;
+  if (handledSelectedUserIdRef.current === selectedUserId) return;
+  if (familyMembers.length === 0) return;
+
+  const match = familyMembers.find(
+    (m) => String(m.user_id) === String(selectedUserId)
+  );
+  if (!match) return;
+
+  const hasValidCoords =
+    typeof match.latitude === 'number' &&
+    typeof match.longitude === 'number' &&
+    !Number.isNaN(match.latitude) &&
+    !Number.isNaN(match.longitude);
+
+  handledSelectedUserIdRef.current = selectedUserId;
+
+  setSelectedPerson({
+      user_id: match.user_id,
+      first_name: match.first_name,
+      last_name: match.last_name,
+      relation: match.relation,
+      phone_number: match.phone_number,
+      age: match.age,
+      last_seen: match.last_seen,
+    });
+
+    if (hasValidCoords) {
+      cameraRef.current?.flyTo({
+        center: [match.longitude, match.latitude],
+        zoom: SELECTED_PERSON_FLY_ZOOM,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+        padding: {
+          top: 0,
+          bottom: PERSON_CARD_HEIGHT_ESTIMATE,
+          left: 0,
+          right: 0,
+        },
+      });
+    } else {
+      console.log(`No location yet for user ${match.user_id}, skipping flyTo`);
+    }
+  }, [selectedUserId, familyMembers]);
+
+  // ---- derived geojson for family markers -------------------------------
+  const familyGeojson = {
+    type: 'FeatureCollection',
+    features: familyMembers.map((member) => ({
+      type: 'Feature',
+      id: `family-${member.user_id}`,
+      geometry: {
+        type: 'Point',
+        coordinates: [member.longitude, member.latitude], // [lng, lat] order
+      },
+      properties: {
+        user_id: member.user_id,
+        first_name: member.first_name,
+        last_name: member.last_name,
+        relation: member.relation,
+        phone_number: member.phone_number,
+        age: member.age,
+        last_seen: member.last_seen,
+      },
+    })),
+  };
+
+  // ---- pulsing "dih" effect ----------------------------------------------
+  useEffect(() => {
+    let raf;
+    const start = Date.now();
+
+    const tick = () => {
+      const elapsed = (Date.now() - start) % PULSE_DURATION_MS;
+      setPulse(elapsed / PULSE_DURATION_MS); // 0 to 1
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // ---- color staleness ----------------------------------------------------
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), NOW_TICK_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
+
   const ageMs = ['-', now, ['get', 'last_seen']];
 
   const staleColorExpr = [
     'case',
-    ['<', ageMs, 5 * 60 * 1000], '#22c55e',   // green: seen < 5 min ago
-    ['<', ageMs, 30 * 60 * 1000], '#eab308',  // yellow: < 30 min ago
-    '#a9a9a9',                                 // red: older / stale
+    ['<', ageMs, STALE_YELLOW_THRESHOLD_MS], '#22c55e',  // green: seen < 5 min ago
+    ['<', ageMs, STALE_GRAY_THRESHOLD_MS], '#eab308',    // yellow: < 30 min ago
+    '#a9a9a9',                                            // gray: older / stale
   ];
 
+  // ---- handlers -----------------------------------------------------------
+  const handleUserLocationPress = (event) => {
+    const feature = event?.nativeEvent?.features?.[0];
+    if (!feature) return;
+
+    setSelectedPerson(feature.properties);
+
+    const [lng, lat] = feature.geometry?.coordinates ?? [];
+    const hasValidCoords = typeof lng === 'number' && typeof lat === 'number';
+
+    if (hasValidCoords) {
+      cameraRef.current?.flyTo({
+        center: [lng, lat],
+        zoom: SELECTED_PERSON_FLY_ZOOM,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+        padding: {
+          top: 0,
+          bottom: PERSON_CARD_HEIGHT_ESTIMATE,
+          left: 0,
+          right: 0,
+        },
+      });
+    }
+  };
+
+  const handleClosePersonCard = () => {
+    setSelectedPerson(null);
+  };
+
+  const handleCallPerson = (phone_number, user_id) => {
+    // TODO: implement (e.g. Linking.openURL(`tel:${phone_number}`))
+  };
+
+  const handleLocatePress = async () => {
+    if (locating) return;
+    setLocating(true);
+    try {
+      let lat = userLocation.latitude;
+      let lng = userLocation.longitude;
+
+      if (lat == null || lng == null) {
+        const locationData = await Location.getCurrentPositionAsync();
+        lat = locationData.coords.latitude;
+        lng = locationData.coords.longitude;
+        setUserLocation({ latitude: lat, longitude: lng });
+      }
+
+      cameraRef.current?.flyTo({
+        center: [lng, lat],
+        zoom: SELECTED_PERSON_FLY_ZOOM,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+      });
+
+      await refreshFamilyLocations();
+    } catch (e) {
+      console.log('Failed to locate user', e);
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.dropdownWrap} pointerEvents="box-none">
-        <LiveNotificationDropdown />
-      </SafeAreaView>
 
       <Map
         style={styles.map}
@@ -236,122 +378,164 @@ console.log(familyMembers);
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={true}
-        compassViewPosition={3}   
+        compassViewPosition={3}
         rotateEnabled={true}
         pitchEnabled={true}
         onDidFinishLoadingMap={() => setMapReady(true)}
       >
         <Camera
+          ref={cameraRef}
           defaultSettings={{
             centerCoordinate: PH_CENTER,
             zoomLevel: 6,
           }}
-          bounds={PH_BOUNDS}
           maxBounds={PH_BOUNDS}
           minZoom={6}
           maxZoom={20}
-          animationMode="flyTo"
-          animationDuration={1200}
           trackUserLocation={locationGranted ? "default" : undefined}
         />
 
-    { mapReady && (
-        <>
-        <GeoJSONSource id="userLocationSource" data={familyGeojson}>
-          <Layer
-            type="circle"
-            id="userLocationLayer"
-            layout={{
-              circleColor: staleColorExpr, 
-              circleRadius: [
-                'interpolate', ['linear'], ['zoom'],
-                5, 2,
-                10, 5,
-                16, 8,
-              ],
-              circleStrokeWidth: 2,
-              circleStrokeColor: '#ffffff',
-              circleOpacity: 0.9,
-              'icon-image': 'pin',
-              'icon-allow-overlap': true,
-              'icon-size': [
-                'interpolate', ['linear'], ['zoom'],
-                5, 0.3,
-                10, 0.6,
-                16, 1.0,
-              ],
-            }}
-          />
-        </GeoJSONSource>
+        {mapReady && (
+          <>
+            <GeoJSONSource
+              id="userLocationSource"
+              data={familyGeojson}
+              onPress={handleUserLocationPress}
+            >
+              <Layer
+                type="circle"
+                id="userLocationLayer"
+                paint={{
+                  'circle-color': staleColorExpr,
+                  'circle-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    5, 2,
+                    10, 5,
+                    16, 8,
+                  ],
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#ffffff',
+                  'circle-opacity': 0.9,
+                }}
+              />
+            </GeoJSONSource>
 
-        <GeoJSONSource id="pulseSource" data={familyGeojson}>
-          <Layer
-            type="circle"
-            id="pulseLayer"
-            layout={{
-              circleColor: staleColorExpr,
-              circleRadius: [
-                'interpolate', ['linear'], ['zoom'],
-                5, 2 + pulse * 20,
-                10, 5 + pulse * 20,
-                16, 8 + pulse * 20,
-              ],
-              circleOpacity: 0.5 - pulse,          
-              circleStrokeWidth: 0,
-            }}
-          />
-        </GeoJSONSource>
-        </>
-    )}
+            <GeoJSONSource id="pulseSource" data={familyGeojson}>
+              <Layer
+                type="circle"
+                id="pulseLayer"
+                paint={{
+                  'circle-color': staleColorExpr,
+                  'circle-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    5, 2 + pulse * 20,
+                    10, 5 + pulse * 20,
+                    16, 8 + pulse * 20,
+                  ],
+                  'circle-opacity': Math.max(0.5 - pulse, 0),
+                  'circle-stroke-width': 0,
+                }}
+              />
+            </GeoJSONSource>
+          </>
+        )}
 
         {locationGranted && (
-          <UserLocation
-            visible={true}
-            animated={true}
-            showsUserHeadingIndicator={true}
-            renderMode="native"
+          <NativeUserLocation
+            androidRenderMode="gps"
           />
         )}
       </Map>
+
+      <TouchableOpacity
+        style={styles.locateButton}
+        onPress={handleLocatePress}
+        activeOpacity={0.7}
+        disabled={locating}
+      >
+        {locating ? (
+          <ActivityIndicator size="small" color="#4287f5" />
+        ) : (
+          <Ionicons name="locate" size={24} color="#4287f5" />
+        )}
+      </TouchableOpacity>
+
+      {selectedPerson && (
+        <PersonCard
+          age={selectedPerson.age}
+          first_name={selectedPerson.first_name}
+          last_name={selectedPerson.last_name}
+          phone_number={selectedPerson.phone_number}
+          relation={selectedPerson.relation}
+          user_id={selectedPerson.user_id}
+          last_seen={selectedPerson.last_seen}
+          staleYellowThresholdMs={STALE_YELLOW_THRESHOLD_MS}
+          staleGrayThresholdMs={STALE_GRAY_THRESHOLD_MS}
+          onClose={handleClosePersonCard}
+          onCall={handleCallPerson}
+        />
+      )}
     </View>
   );
 }
 
-
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    dropdownWrap: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-        paddingHorizontal: 16,
-    },
-    text:{
-        color: "#f3eee3ff", 
-    }, 
-    button: {
-        textDecorationLine: 'underline',
-        fontSize: 20,
-        color: 'blue'
-    }, 
-    map: { flex: 1 },
-    marker: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: '#4287f5',
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 2,
-      borderColor: '#ffffff',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.3,
-      shadowRadius: 2,
-      elevation: 3, // Android shadow
-    }
+  container: {
+    flex: 1,
+  },
+  dropdownWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    paddingHorizontal: 16,
+  },
+  text: {
+    color: "#f3eee3ff",
+  },
+  button: {
+    textDecorationLine: 'underline',
+    fontSize: 20,
+    color: 'blue'
+  },
+  map: { flex: 1 },
+  marker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#4287f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3, // Android shadow
+  }, 
+  locateButton: {
+    position: 'absolute',
+    bottom: 32,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  locateButtonIcon: {
+    fontSize: 22,
+    color: '#4287f5',
+  },
 });

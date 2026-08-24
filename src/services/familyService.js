@@ -3,7 +3,6 @@ import { getCurrentUserId } from "./currentUser";
 import {
   saveFamilySnapshot,
   getMyFamily as getMyFamilyFromCache,
-  clearForUser,
 } from "./familyRepo";
 
 export const RELATIONS = [
@@ -31,8 +30,6 @@ export async function createFamily({ name, relation }) {
 
 export async function getMyFamily() {
   const userId = await getCurrentUserId();
-  console.log('getting family');
-  console.log('getting family');
 
   try {
     const { data } = await api.get("/api/families/mine");
@@ -49,7 +46,6 @@ export async function getMyFamily() {
     console.log("response data:", err?.response?.data);
     console.log("has response:", !!err?.response);
     console.log("==========================");
-
     // 404 = account has no family.
     if (Number(err?.response?.status) === 404) {
       return null;
