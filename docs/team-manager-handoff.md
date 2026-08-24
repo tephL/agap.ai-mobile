@@ -20,7 +20,7 @@ Do **not** edit: `.env`, database migrations, `teamService.js` internals
 
 ```
 GET   /api/dispatcher/teams                     → (none)
-POST  /api/dispatcher/teams                     → name, contact_number, location_text, latitude, longitude
+POST  /api/dispatcher/teams                     → name, contact_number, latitude, longitude
 GET   /api/dispatcher/teams/:teamId/assignment  → teamId
 GET   /api/dispatcher/clusters                  → status   (query, optional: open|saved|resolved)
 PATCH /api/dispatcher/clusters/:id/status       → id, status          (open|saved|resolved)
@@ -29,8 +29,20 @@ PATCH /api/dispatcher/assignments/:id/status    → id, status          (pending
 ```
 
 - Validation failures return **422** with `{ errors: [...] }`.
+- Everything under `/api/dispatcher` is scoped to the dispatcher's own
+  city (resolved server-side via users → people → cities). Teams and
+  clusters from other cities are never returned, and cross-city
+  assignments are rejected with a 404.
+- Teams come back with `location_text` set to the team's **city name**
+  (the schema no longer stores free-text locations) and `status`
+  derived server-side: `offline` when archived, `busy` while it has an
+  active assignment (`teams.assigned_to`), else `available`. Newly
+  created teams are always `available` and land in the dispatcher's
+  city.
 - Teams/clusters come back with `lat` / `lng` keys (already aliased server-side).
 - Cluster objects include: `cluster_id, name, lat, lng, priority, report_count, people_affected`.
+  `name` is a server-generated label (`Cluster #<id>`) — the live
+  clusters table has no name column.
 
 ## Easiest integration: `AssignTeamModal`
 
