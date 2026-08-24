@@ -1,9 +1,10 @@
-import { View, StyleSheet, Text, Dimensions } from "react-native";
+import { View, StyleSheet, Text, Dimensions, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Map, Camera, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Ionicons } from '@expo/vector-icons';
 
 // services
 import { uploadUserLocation } from '../../services/usersService.js';
@@ -340,6 +341,29 @@ export default function Index() {
     // TODO: implement (e.g. Linking.openURL(`tel:${phone_number}`))
   };
 
+  const handleLocatePress = async () => {
+    try {
+      let lat = userLocation.latitude;
+      let lng = userLocation.longitude;
+
+      // fall back to a fresh fix if we don't have one cached yet
+      if (lat == null || lng == null) {
+        const locationData = await Location.getCurrentPositionAsync();
+        lat = locationData.coords.latitude;
+        lng = locationData.coords.longitude;
+        setUserLocation({ latitude: lat, longitude: lng });
+      }
+
+      cameraRef.current?.flyTo({
+        center: [lng, lat],
+        zoom: SELECTED_PERSON_FLY_ZOOM,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+      });
+    } catch (e) {
+      console.log('Failed to locate user', e);
+    }
+  };
+
   // ---------------------------------------------------------------------
   return (
     <View style={styles.container}>
@@ -430,6 +454,14 @@ export default function Index() {
         )}
       </Map>
 
+    <TouchableOpacity
+      style={styles.locateButton}
+      onPress={handleLocatePress}
+      activeOpacity={0.7}
+      >
+      <Ionicons name="locate" size={24} color="#4287f5" />
+    </TouchableOpacity>
+
       {selectedPerson && (
         <PersonCard
           age={selectedPerson.age}
@@ -487,5 +519,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 2,
     elevation: 3, // Android shadow
-  }
+  }, 
+  locateButton: {
+    position: 'absolute',
+    bottom: 32,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  locateButtonIcon: {
+    fontSize: 22,
+    color: '#4287f5',
+  },
 });
