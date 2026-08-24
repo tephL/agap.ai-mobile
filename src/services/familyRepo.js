@@ -142,23 +142,12 @@ export async function clearForUser() {
   try {
     const db = await getDb();
     await db.withExclusiveTransactionAsync(async (txn) => {
-      if (userId != null) {
-        await txn.runAsync(`DELETE FROM member WHERE user_id = ?`, [userId]);
-        await txn.runAsync(
-          `DELETE FROM family WHERE family_id NOT IN (
-             SELECT DISTINCT family_id FROM member
-           )`
-        );
-        await txn.runAsync(`DELETE FROM meta WHERE key IN (?, ?)`, [
-          `last_synced_${userId}`,
-          `has_snapshot_${userId}`,
-        ]);
-      } else {
         await txn.runAsync(`DELETE FROM member;`);
         await txn.runAsync(`DELETE FROM family;`);
         await txn.runAsync(`DELETE FROM meta;`);
-      }
     });
+    console.log('deleted db');
+
   } catch (e) {
     console.log('failed to delete db ', e);
   }
