@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,27 +14,16 @@ import PriorityChip from "../ui/PriorityChip";
 
 const TABS = [
   { key: "plan", label: "Action Plan" },
-  { key: "people", label: "Affected People" },
+  { key: "reports", label: "Reports" },
 ];
 
-// Unique reporters within the cluster become the "affected people" cards.
-function collectAffectedPeople(reports) {
-  const byUserId = new Map();
-  for (const report of reports ?? []) {
-    const reporter = report.reporter;
-    if (!reporter || reporter.user_id == null) continue;
-    if (!byUserId.has(reporter.user_id)) {
-      byUserId.set(reporter.user_id, {
-        user_id: reporter.user_id,
-        name: reporter.name,
-        username: reporter.username,
-        reports: [],
-      });
-    }
-    byUserId.get(reporter.user_id).reports.push(report);
-  }
-  return [...byUserId.values()];
-}
+// Soft badge variants matching the map's status dot colors.
+const REPORT_STATUS_STYLES = {
+  open: { bg: "#FEE2E2", fg: "#B91C1C" },
+  saved: { bg: "#FEF3C7", fg: "#A16207" },
+  resolved: { bg: "#DCFCE7", fg: "#15803D" },
+  unknown: { bg: colors.surface, fg: colors.muted },
+};
 
 function formatDate(value) {
   if (!value) return "—";
@@ -54,10 +44,7 @@ export default function ClusterDetailsWindow({
   const [activeTab, setActiveTab] = useState("plan");
 
   // Rebuild only when a different set of reports arrives.
-  const affectedPeople = useMemo(
-    () => collectAffectedPeople(reports),
-    [reports]
-  );
+  const reportList = useMemo(() => reports ?? [], [reports]);
 
   if (!cluster) return null;
 
@@ -184,40 +171,77 @@ export default function ClusterDetailsWindow({
               color={colors.primary}
               style={styles.loader}
             />
-          ) : affectedPeople.length > 0 ? (
-            affectedPeople.map((person) => (
-              <TouchableOpacity
-                key={person.user_id}
-                style={styles.personCard}
-                activeOpacity={0.7}
-                onPress={() => {
-                  // Cards will be wired to a person detail view later.
-                }}
-              >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {(person.name ?? person.username ?? "?")
-                      .charAt(0)
-                      .toUpperCase()}
-                  </Text>
+          ) : reportList.length > 0 ? (
+            reportList.map((report) => {
+              const statusStyle =
+                REPORT_STATUS_STYLES[report.status] ??
+                REPORT_STATUS_STYLES.unknown;
+              const reporterLabel = report.reporter
+                ? (report.reporter.name || report.reporter.username)
+                : null;
+              const metaText = [
+                reporterLabel,
+                (report.people_affected ?? 0) > 0
+                  ? `${report.people_affected} affected`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              const thumbnail = report.images?.[0];
+
+              return (
+                <View key={report.report_id} style={styles.reportCard}>
+                  {thumbnail ? (
+                    <Image
+                      source={{ uri: thumbnail }}
+                      style={styles.reportImage}
+                    />
+                  ) : (
+                    <View style={[styles.reportImage, styles.reportImagePlaceholder]}>
+                      <Ionicons
+                        name="image-outline"
+                        size={16}
+                        color={colors.placeholder}
+                      />
+                    </View>
+                  )}
+                  <View style={styles.reportBody}>
+                    <View style={styles.reportTopRow}>
+                      <View
+                        style={[
+                          styles.statusChip,
+                          { backgroundColor: statusStyle.bg },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusChipText,
+                            { color: statusStyle.fg },
+                          ]}
+                        >
+                          {report.status}
+                        </Text>
+                      </View>
+                      <Text style={styles.reportDate} numberOfLines={1}>
+                        {formatDate(report.created_at)}
+                      </Text>
+                    </View>
+                    <Text style={styles.reportDescription} numberOfLines={3}>
+                      {report.description ??
+                        report.ai_summary ??
+                        "No description provided."}
+                    </Text>
+                    {metaText ? (
+                      <Text style={styles.reportMeta} numberOfLines={1}>
+                        {metaText}
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
-                <View style={styles.personInfo}>
-                  <Text style={styles.personName} numberOfLines={1}>
-                    {person.name ?? "Unknown"}
-                  </Text>
-                  <Text style={styles.personSummary} numberOfLines={2}>
-                    {cluster.ai_summary ?? "No summary yet."}
-                  </Text>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={colors.placeholder}
-                />
-              </TouchableOpacity>
-            ))
+              );
+            })
           ) : (
-            <Text style={styles.emptyText}>No affected people reported.</Text>
+            <Text style={styles.emptyText}>No reports yet.</Text>
           )}
         </ScrollView>
       )}
@@ -402,39 +426,56 @@ const styles = StyleSheet.create({
   loader: {
     marginVertical: 16,
   },
-  personCard: {
+  reportCard: {
     flexDirection: "row",
-    alignItems: "center",
     backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 10,
     gap: 10,
   },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.primary,
+  reportImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: colors.border,
+  },
+  reportImagePlaceholder: {
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: colors.white,
-  },
-  personInfo: {
+  reportBody: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
-  personName: {
-    fontSize: 14,
+  reportTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  statusChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  statusChipText: {
+    fontSize: 11,
     fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  reportDate: {
+    flex: 1,
+    fontSize: 11,
+    color: colors.placeholder,
+    textAlign: "right",
+  },
+  reportDescription: {
+    fontSize: 13,
+    lineHeight: 17,
     color: colors.text,
   },
-  personSummary: {
-    fontSize: 12,
-    lineHeight: 16,
+  reportMeta: {
+    fontSize: 11,
     color: colors.muted,
   },
   emptyText: {
