@@ -1,75 +1,428 @@
-import { StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
-import colors from "../../constants/colors";
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import * as Location from 'expo-location';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Map, Camera, NativeUserLocation, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function MapScreen() {
+// adjust this import to wherever fetchClustersWithinLocation actually lives
+import { fetchClustersWithinLocation, fetchClusterReports } from '../../services/dispatcher/clusterServ.js';
+import { useCluster } from '../../context/ClusterContext';
+import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
+import AssignTeamModal from '../../components/dispatcher/AssignTeamModal';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const MAPTILER_API_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
+const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
+const PH_CENTER = [121.7740, 12.8797];
+const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_API_KEY}`;
+
+const LOCATE_ZOOM = 15;
+const LOCATE_FLY_DURATION_MS = 1000;
+const CLUSTERS_FETCH_INTERVAL_MS = 1000 * 60; // 1 min
+
+// where the camera settles when a cluster is expanded
+const CLUSTER_FOCUS_ZOOM = 15;
+const CLUSTER_FOCUS_DURATION_MS = 800;
+// pushes the visual center upward so the cluster sits in the
+// upper-middle of the screen instead of behind the details window
+const CLUSTER_FOCUS_PADDING = { top: 80, right: 0, bottom: 400, left: 0 };
+
+const CLUSTER_PRIORITY_COLOR_EXPR = [
+  'match',
+  ['get', 'priority'],
+  'high', '#ef4444',
+  'medium', '#eab308',
+  'low', '#22c55e',
+  '#a9a9a9', // fallback for unknown priority
+];
+
+// individual reports inside an expanded cluster
+const REPORT_COLOR = '#2563eb';
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+export default function Index() {
+  // location / permissions state
+  const [locationGranted, setLocationGranted] = useState(false);
+  const [userLocation, setUserLocation] = useState({
+    latitude: null,
+    longitude: null,
+  });
+  const [locating, setLocating] = useState(false);
+
+  // cluster markers state
+  const [clusters, setClusters] = useState([]);
+
+  // expanded cluster state (reports shown on map + details window)
+  const [selectedClusterId, setSelectedClusterId] = useState(null);
+  const [selectedCluster, setSelectedCluster] = useState(null);
+  const [clusterReports, setClusterReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+
+  // map lifecycle state
+  const [mapReady, setMapReady] = useState(false);
+  const cameraRef = useRef(null);
+
+  // team.jsx reads the selected cluster across tabs
+  const { setActiveClusterId } = useCluster();
+
+  // ---- permissions -----------------------------------------------------
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationGranted(status === "granted");
+      if (status !== "granted") console.log('permission denied');
+    })();
+  }, []);
+
+  // ---- clusters fetch loop -----------------------------------------------
+  const refreshClusters = useCallback(async () => {
+    try {
+      const { data } = await fetchClustersWithinLocation();
+      setClusters(data ?? []);
+    } catch (e) {
+      console.log('failed to fetch clusters', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshClusters();
+    const interval = setInterval(refreshClusters, CLUSTERS_FETCH_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [refreshClusters]);
+
+  // ---- derived geojson for cluster markers --------------------------------
+  const clustersGeojson = {
+    type: 'FeatureCollection',
+    features: clusters
+      .filter(
+        (c) =>
+          typeof c.latitude === 'number' &&
+          typeof c.longitude === 'number' &&
+          !Number.isNaN(c.latitude) &&
+          !Number.isNaN(c.longitude)
+      )
+      .map((cluster, index) => ({
+        type: 'Feature',
+        id: `cluster-${cluster.city}-${index}`,
+        geometry: {
+          type: 'Point',
+          coordinates: [cluster.longitude, cluster.latitude],
+        },
+        properties: {
+          cluster_id: cluster.cluster_id,
+          city: cluster.city,
+          priority: cluster.priority_level,
+          status: cluster.status,
+          report_count: cluster.report_count,
+          people_affected: cluster.people_affected,
+          ai_summary: cluster.ai_summary,
+          action_plan: cluster.action_plan,
+        },
+      })),
+  };
+
+  // reports inside the expanded cluster, as map markers
+  const reportsGeojson = useMemo(() => {
+    return {
+      type: 'FeatureCollection',
+      features: (selectedClusterId != null ? clusterReports : [])
+        .filter(
+          (r) =>
+            typeof r.latitude === 'number' &&
+            typeof r.longitude === 'number' &&
+            !Number.isNaN(r.latitude) &&
+            !Number.isNaN(r.longitude)
+        )
+        .map((report) => ({
+          type: 'Feature',
+          id: `report-${report.report_id}`,
+          geometry: {
+            type: 'Point',
+            coordinates: [report.longitude, report.latitude],
+          },
+          properties: {
+            report_id: report.report_id,
+            status: report.status,
+          },
+        })),
+    };
+  }, [clusterReports, selectedClusterId]);
+
+  // the selected cluster re-emitted on its own source, so the halo can
+  // inherit its priority color without a filter expression
+  const selectedClusterGeojson = useMemo(() => {
+    const feature =
+      selectedClusterId != null
+        ? clustersGeojson.features.find(
+            (f) => f.properties.cluster_id === selectedClusterId
+          )
+        : null;
+    return {
+      type: 'FeatureCollection',
+      features: feature ? [feature] : [],
+    };
+  }, [clustersGeojson, selectedClusterId]);
+
+  // ---- handlers -----------------------------------------------------------
+  const handleLocatePress = async () => {
+    if (locating) return;
+    setLocating(true);
+    try {
+      let lat = userLocation.latitude;
+      let lng = userLocation.longitude;
+
+      if (lat == null || lng == null) {
+        const locationData = await Location.getCurrentPositionAsync();
+        lat = locationData.coords.latitude;
+        lng = locationData.coords.longitude;
+        setUserLocation({ latitude: lat, longitude: lng });
+      }
+
+      cameraRef.current?.flyTo({
+        center: [lng, lat],
+        zoom: LOCATE_ZOOM,
+        duration: LOCATE_FLY_DURATION_MS,
+      });
+    } catch (e) {
+      console.log('Failed to locate user', e);
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  // ---- cluster expand / collapse -----------------------------------------
+  const collapseCluster = useCallback(() => {
+    setSelectedClusterId(null);
+    setSelectedCluster(null);
+    setClusterReports([]);
+    setReportsLoading(false);
+    setActiveClusterId(null);
+  }, [setActiveClusterId]);
+
+  const handleClusterPress = useCallback(
+    async (event) => {
+      // keep Map's onPress from also firing on empty map
+      event.stopPropagation();
+
+      const feature = event.nativeEvent?.features?.find(
+        (f) => f.properties?.cluster_id != null
+      );
+      if (!feature) return;
+
+      const clusterId = feature.properties.cluster_id;
+
+      // tapping the expanded cluster collapses it again
+      if (clusterId === selectedClusterId) {
+        collapseCluster();
+        return;
+      }
+
+      setSelectedClusterId(clusterId);
+      setSelectedCluster(
+        clusters.find((c) => c.cluster_id === clusterId) ?? null
+      );
+      setClusterReports([]);
+      setReportsLoading(true);
+      setActiveClusterId(clusterId);
+
+      const target = clusters.find((c) => c.cluster_id === clusterId);
+      if (
+        target &&
+        typeof target.latitude === 'number' &&
+        typeof target.longitude === 'number'
+      ) {
+        cameraRef.current?.flyTo({
+          center: [target.longitude, target.latitude],
+          zoom: CLUSTER_FOCUS_ZOOM,
+          duration: CLUSTER_FOCUS_DURATION_MS,
+          padding: CLUSTER_FOCUS_PADDING,
+        });
+      }
+
+      try {
+        const { data } = await fetchClusterReports(clusterId);
+        setSelectedCluster(data?.cluster ?? null);
+        setClusterReports(data?.reports ?? []);
+      } catch (e) {
+        console.log('failed to fetch cluster reports', e);
+      } finally {
+        setReportsLoading(false);
+      }
+    },
+    [selectedClusterId, clusters, collapseCluster, setActiveClusterId]
+  );
+
+  // ---------------------------------------------------------------------
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar style="dark" />
-      <View style={styles.container}>
-        <Text style={styles.pageLabel}>Map</Text>
-        <View style={styles.placeholderCard}>
-          <View style={styles.iconWrap}>
-            <Ionicons name="map" size={32} color={colors.primary} />
-          </View>
-          <Text style={styles.title}>This is the Map page</Text>
-          <Text style={styles.copy}>
-            The live dispatch map will appear here.
-          </Text>
-        </View>
-      </View>
-    </SafeAreaView>
+    <View style={styles.container}>
+      <Map
+        style={styles.map}
+        mapStyle={MAP_STYLE_URL}
+        logoEnabled={false}
+        attributionEnabled={false}
+        compassEnabled={true}
+        compassViewPosition={3}
+        rotateEnabled={true}
+        pitchEnabled={true}
+        onDidFinishLoadingMap={() => setMapReady(true)}
+      >
+        <Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: PH_CENTER,
+            zoomLevel: 6,
+          }}
+          maxBounds={PH_BOUNDS}
+          minZoom={6}
+          maxZoom={20}
+          trackUserLocation={locationGranted ? "default" : undefined}
+        />
+
+        {mapReady && (
+          <GeoJSONSource
+            id="clustersSource"
+            data={clustersGeojson}
+            hitbox={{ top: 16, right: 16, bottom: 16, left: 16 }}
+            onPress={handleClusterPress}
+          >
+            <Layer
+              type="circle"
+              id="clustersLayer"
+              paint={{
+                'circle-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  5, 4,
+                  10, 8,
+                  16, 14,
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.85,
+              }}
+            />
+          </GeoJSONSource>
+        )}
+
+        {/* selection glow around the expanded cluster — empty data hides it */}
+        {mapReady && (
+          <GeoJSONSource id="selectedClusterSource" data={selectedClusterGeojson}>
+            <Layer
+              type="circle"
+              id="selectedClusterHalo"
+              paint={{
+                'circle-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-opacity': 0.15,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  5, 10,
+                  10, 18,
+                  16, 30,
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-stroke-opacity': 0.9,
+              }}
+            />
+          </GeoJSONSource>
+        )}
+
+        {/* individual reports inside the expanded cluster — empty data hides them */}
+        {mapReady && (
+          <GeoJSONSource id="clusterReportsSource" data={reportsGeojson}>
+            <Layer
+              type="circle"
+              id="clusterReportsLayer"
+              paint={{
+                'circle-color': REPORT_COLOR,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  8, 4,
+                  12, 6,
+                  16, 9,
+                  20, 12,
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.95,
+              }}
+            />
+          </GeoJSONSource>
+        )}
+
+        {locationGranted && (
+          <NativeUserLocation androidRenderMode="gps" />
+        )}
+      </Map>
+
+      <TouchableOpacity
+        style={[
+          styles.locateButton,
+          selectedCluster != null && styles.locateButtonRaised,
+        ]}
+        onPress={handleLocatePress}
+        activeOpacity={0.7}
+        disabled={locating}
+      >
+        {locating ? (
+          <ActivityIndicator size="small" color="#4287f5" />
+        ) : (
+          <Ionicons name="locate" size={24} color="#4287f5" />
+        )}
+      </TouchableOpacity>
+
+      {selectedCluster && (
+        <ClusterDetailsWindow
+          cluster={selectedCluster}
+          reports={clusterReports}
+          loading={reportsLoading}
+          onClose={collapseCluster}
+          onAssignTeam={() => setAssignOpen(true)}
+        />
+      )}
+
+      <AssignTeamModal
+        visible={assignOpen}
+        clusterId={selectedCluster?.cluster_id}
+        clusterName={selectedCluster?.city}
+        onClose={() => setAssignOpen(false)}
+        onAssigned={() => refreshClusters()}
+      />
+    </View>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
   },
-  pageLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    color: colors.muted,
-    marginBottom: 12,
+  map: { flex: 1 },
+  locateButton: {
+    position: 'absolute',
+    bottom: 32,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  placeholderCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 6,
-  },
-  copy: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.muted,
-    textAlign: "center",
+  // keeps the button above the expanded cluster window
+  locateButtonRaised: {
+    bottom: 372,
   },
 });
