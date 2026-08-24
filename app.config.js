@@ -1,7 +1,8 @@
 export default {
   "expo": {
-    "name": "agap_ai",
-    "slug": "agap_ai",
+    "owner": "airiquos-team",
+    "name": "agapai-mobile",
+    "slug": "agapai-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -59,7 +60,7 @@ export default {
     },
     "extra": {
       "eas": {
-        "projectId": "23fbd442-43d6-44ea-8749-3a7ffcc06c90"
+        projectId: "dde62e9a-1fdb-4ad5-bc72-a21e850a6221"
       }
     }
   }
