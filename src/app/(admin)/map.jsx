@@ -1,10 +1,10 @@
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import * as Location from 'expo-location';
-import { useEffect, useRef, useState } from "react";
-import { Map, Camera, NativeUserLocation } from '@maplibre/maplibre-react-native';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Map, Camera, NativeUserLocation, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// services 
+// adjust this import to wherever fetchClustersWithinLocation actually lives
 import { fetchClustersWithinLocation } from '../../services/dispatcher/clusterServ.js';
 
 // ---------------------------------------------------------------------------
@@ -17,6 +17,16 @@ const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MA
 
 const LOCATE_ZOOM = 15;
 const LOCATE_FLY_DURATION_MS = 1000;
+const CLUSTERS_FETCH_INTERVAL_MS = 1000 * 60; // 1 min
+
+const CLUSTER_PRIORITY_COLOR_EXPR = [
+  'match',
+  ['get', 'priority'],
+  'high', '#ef4444',
+  'medium', '#eab308',
+  'low', '#22c55e',
+  '#a9a9a9', // fallback for unknown priority
+];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -30,6 +40,11 @@ export default function Index() {
   });
   const [locating, setLocating] = useState(false);
 
+  // cluster markers state
+  const [clusters, setClusters] = useState([]);
+
+  // map lifecycle state
+  const [mapReady, setMapReady] = useState(false);
   const cameraRef = useRef(null);
 
   // ---- permissions -----------------------------------------------------
@@ -41,18 +56,51 @@ export default function Index() {
     })();
   }, []);
 
-  useEffect(() => {
-    async function getClusters(){
-      try{ 
-        const res = await fetchClustersWithinLocation();
-        console.log(res);
-      } catch(e){
-        console.log('error fetching', e);
-      }
+  // ---- clusters fetch loop -----------------------------------------------
+  const refreshClusters = useCallback(async () => {
+    try {
+      const { data } = await fetchClustersWithinLocation();
+      setClusters(data ?? []);
+    } catch (e) {
+      console.log('failed to fetch clusters', e);
     }
-
-    getClusters();
   }, []);
+
+  useEffect(() => {
+    refreshClusters();
+    const interval = setInterval(refreshClusters, CLUSTERS_FETCH_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [refreshClusters]);
+
+  // ---- derived geojson for cluster markers --------------------------------
+  const clustersGeojson = {
+    type: 'FeatureCollection',
+    features: clusters
+      .filter(
+        (c) =>
+          typeof c.latitude === 'number' &&
+          typeof c.longitude === 'number' &&
+          !Number.isNaN(c.latitude) &&
+          !Number.isNaN(c.longitude)
+      )
+      .map((cluster, index) => ({
+        type: 'Feature',
+        id: `cluster-${cluster.city}-${index}`,
+        geometry: {
+          type: 'Point',
+          coordinates: [cluster.longitude, cluster.latitude],
+        },
+        properties: {
+          city: cluster.city,
+          priority: cluster.priority,
+          status: cluster.status,
+          report_count: cluster.report_count,
+          people_affected: cluster.people_affected,
+          ai_summary: cluster.ai_summary,
+          action_plan: cluster.action_plan,
+        },
+      })),
+  };
 
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
@@ -93,6 +141,7 @@ export default function Index() {
         compassViewPosition={3}
         rotateEnabled={true}
         pitchEnabled={true}
+        onDidFinishLoadingMap={() => setMapReady(true)}
       >
         <Camera
           ref={cameraRef}
@@ -105,6 +154,27 @@ export default function Index() {
           maxZoom={20}
           trackUserLocation={locationGranted ? "default" : undefined}
         />
+
+        {mapReady && (
+          <GeoJSONSource id="clustersSource" data={clustersGeojson}>
+            <Layer
+              type="circle"
+              id="clustersLayer"
+              paint={{
+                'circle-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  5, 4,
+                  10, 8,
+                  16, 14,
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.85,
+              }}
+            />
+          </GeoJSONSource>
+        )}
 
         {locationGranted && (
           <NativeUserLocation androidRenderMode="gps" />
