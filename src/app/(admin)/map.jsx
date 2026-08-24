@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 // adjust this import to wherever fetchClustersWithinLocation actually lives
 import { fetchClustersWithinLocation, fetchClusterReports } from '../../services/dispatcher/clusterServ.js';
+import { getTeams } from '../../services/teamService';
 import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
 import AssignTeamModal from '../../components/dispatcher/AssignTeamModal';
@@ -48,6 +49,15 @@ const REPORT_STATUS_COLOR_EXPR = [
   '#a9a9a9', // fallback for unknown status
 ];
 
+// teams, green while available and orange once dispatched (busy)
+const TEAM_STATUS_COLOR_EXPR = [
+  'match',
+  ['get', 'status'],
+  'available', '#22c55e',
+  'busy', '#f97316',
+  '#a9a9a9', // fallback for offline/unknown
+];
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -58,6 +68,9 @@ export default function Index() {
 
   // cluster markers state
   const [clusters, setClusters] = useState([]);
+
+  // team markers state
+  const [teams, setTeams] = useState([]);
 
   // expanded cluster state (reports shown on map + details window)
   const [selectedClusterId, setSelectedClusterId] = useState(null);
@@ -75,11 +88,15 @@ export default function Index() {
   // explicit focus requests coming from the Reports tab
   const { activeClusterId, setActiveClusterId, focusNonce } = useCluster();
 
-  // ---- clusters fetch loop -----------------------------------------------
+  // ---- clusters + teams fetch loop ---------------------------------------
   const refreshClusters = useCallback(async () => {
     try {
-      const { data } = await fetchClustersWithinLocation();
+      const [{ data }, teamList] = await Promise.all([
+        fetchClustersWithinLocation(),
+        getTeams(),
+      ]);
       setClusters(data ?? []);
+      setTeams(teamList ?? []);
     } catch (e) {
       console.log('failed to fetch clusters', e);
     }
@@ -118,6 +135,31 @@ export default function Index() {
           people_affected: cluster.people_affected,
           ai_summary: cluster.ai_summary,
           action_plan: cluster.action_plan,
+        },
+      })),
+  };
+
+  const teamsGeojson = {
+    type: 'FeatureCollection',
+    features: teams
+      .filter(
+        (t) =>
+          typeof t.lat === 'number' &&
+          typeof t.lng === 'number' &&
+          !Number.isNaN(t.lat) &&
+          !Number.isNaN(t.lng)
+      )
+      .map((team, index) => ({
+        type: 'Feature',
+        id: `team-${team.team_id ?? index}`,
+        geometry: {
+          type: 'Point',
+          coordinates: [team.lng, team.lat],
+        },
+        properties: {
+          team_id: team.team_id,
+          name: team.name,
+          status: team.status,
         },
       })),
   };
@@ -360,6 +402,29 @@ export default function Index() {
                   20, 6,
                 ],
                 'circle-stroke-width': 1.5,
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.95,
+              }}
+            />
+          </GeoJSONSource>
+        )}
+
+        {/* teams — green when available, orange once dispatched (busy) */}
+        {mapReady && (
+          <GeoJSONSource id="teamsSource" data={teamsGeojson}>
+            <Layer
+              type="circle"
+              id="teamsLayer"
+              paint={{
+                'circle-color': TEAM_STATUS_COLOR_EXPR,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  8, 3.5,
+                  12, 5,
+                  16, 7,
+                  20, 9,
+                ],
+                'circle-stroke-width': 2,
                 'circle-stroke-color': '#ffffff',
                 'circle-opacity': 0.95,
               }}
