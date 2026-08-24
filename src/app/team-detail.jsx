@@ -13,6 +13,7 @@ import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import StatusBadge from "@/components/ui/StatusBadge";
+import PriorityChip from "@/components/ui/PriorityChip";
 import {
   ASSIGNMENT_STATUSES,
   getAssignmentForTeam,
@@ -21,23 +22,6 @@ import {
   assignTeamToCluster,
   updateAssignmentStatus,
 } from "@/services/teamService";
-
-const PRIORITY_STYLES = {
-  high: { bg: "#FDECEC", fg: colors.primary },
-  medium: { bg: "#FFF3E0", fg: "#B26A00" },
-  low: { bg: "#E6F4EA", fg: "#2E7D32" },
-};
-
-function PriorityChip({ priority }) {
-  const style = PRIORITY_STYLES[priority] ?? PRIORITY_STYLES.low;
-  return (
-    <View style={[styles.chip, { backgroundColor: style.bg }]}>
-      <Text style={[styles.chipText, { color: style.fg }]}>
-        {(priority ?? "").toUpperCase()}
-      </Text>
-    </View>
-  );
-}
 
 function Stepper({ status }) {
   const current = ASSIGNMENT_STATUSES.indexOf(status);
@@ -452,15 +436,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexWrap: "wrap",
     gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  chipText: {
-    fontSize: 11,
-    fontWeight: "800",
   },
   clusterMeta: {
     fontSize: 12,
