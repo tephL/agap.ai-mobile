@@ -15,6 +15,7 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
   Map as MapLibreMap,
   Camera,
+  NativeUserLocation,
   GeoJSONSource,
   Layer,
 } from "@maplibre/maplibre-react-native";
@@ -37,7 +38,7 @@ const USER_FLY_DURATION_MS = 1000;
 
 export default function CreateTeamScreen() {
   const router = useRouter();
-  const { getCachedCoords, resolveCoords } = useLiveLocation();
+  const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
 
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
@@ -55,7 +56,7 @@ export default function CreateTeamScreen() {
       const coords = getCachedCoords() ?? (await resolveCoords());
       if (cancelled || !coords || !mapReady) return;
       cameraRef.current?.flyTo({
-        centerCoordinate: [coords.longitude, coords.latitude],
+        center: [coords.longitude, coords.latitude],
         zoom: USER_ZOOM,
         duration: USER_FLY_DURATION_MS,
       });
@@ -73,7 +74,7 @@ export default function CreateTeamScreen() {
       const coords = await resolveCoords();
       if (!coords) return;
       cameraRef.current?.flyTo({
-        centerCoordinate: [coords.longitude, coords.latitude],
+        center: [coords.longitude, coords.latitude],
         zoom: USER_ZOOM,
         duration: USER_FLY_DURATION_MS,
       });
@@ -241,6 +242,7 @@ export default function CreateTeamScreen() {
                 maxBounds={PH_BOUNDS}
                 minZoom={6}
                 maxZoom={20}
+                trackUserLocation={locationGranted ? "default" : undefined}
               />
               {mapReady ? (
                 <GeoJSONSource id="teamLocationSource" data={pinGeojson}>
@@ -264,6 +266,9 @@ export default function CreateTeamScreen() {
                     }}
                   />
                 </GeoJSONSource>
+              ) : null}
+              {locationGranted ? (
+                <NativeUserLocation androidRenderMode="gps" />
               ) : null}
             </MapLibreMap>
 
