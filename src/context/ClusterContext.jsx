@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 /**
  * Shared "which cluster is selected" state for the dispatcher tabs.
@@ -8,19 +8,31 @@ import { createContext, useContext, useMemo, useState } from "react";
  * survives switching between tabs (unlike navigation params).
  *
  * Usage:
- *   const { activeClusterId, setActiveClusterId } = useCluster();
+ *   const { activeClusterId, setActiveClusterId, focusNonce, focusCluster } =
+ *     useCluster();
+ *
+ * focusCluster(id) additionally bumps focusNonce so screens can react
+ * to a cluster being re-selected even when its id didn't change.
  */
 const ClusterContext = createContext({
   activeClusterId: null,
   setActiveClusterId: () => {},
+  focusNonce: 0,
+  focusCluster: () => {},
 });
 
 export function ClusterProvider({ children }) {
   const [activeClusterId, setActiveClusterId] = useState(null);
+  const [focusNonce, setFocusNonce] = useState(0);
+
+  const focusCluster = useCallback((clusterId) => {
+    setActiveClusterId(clusterId);
+    setFocusNonce((n) => n + 1);
+  }, []);
 
   const value = useMemo(
-    () => ({ activeClusterId, setActiveClusterId }),
-    [activeClusterId]
+    () => ({ activeClusterId, setActiveClusterId, focusNonce, focusCluster }),
+    [activeClusterId, focusNonce, focusCluster]
   );
 
   return (
