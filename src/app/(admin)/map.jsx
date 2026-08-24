@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+// services 
+import { fetchClustersWithinLocation } from '../../services/dispatcher/clusterServ.js';
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -36,6 +39,19 @@ export default function Index() {
       setLocationGranted(status === "granted");
       if (status !== "granted") console.log('permission denied');
     })();
+  }, []);
+
+  useEffect(() => {
+    async function getClusters(){
+      try{ 
+        const res = await fetchClustersWithinLocation();
+        console.log(res);
+      } catch(e){
+        console.log('error fetching', e);
+      }
+    }
+
+    getClusters();
   }, []);
 
   // ---- handlers -----------------------------------------------------------
