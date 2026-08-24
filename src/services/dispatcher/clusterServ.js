@@ -8,3 +8,12 @@ export async function fetchClustersWithinLocation(){
     console.log(e);
   }
 }
+
+export async function fetchClusterReports(clusterId){
+  try{
+    const res = await api.get(`/api/${clusterId}/clusters`);
+    return res;
+  } catch(e){
+    console.log(e);
+  }
+}

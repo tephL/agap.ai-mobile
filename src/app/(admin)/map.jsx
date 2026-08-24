@@ -1,11 +1,13 @@
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import * as Location from 'expo-location';
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // adjust this import to wherever fetchClustersWithinLocation actually lives
-import { fetchClustersWithinLocation } from '../../services/dispatcher/clusterServ.js';
+import { fetchClustersWithinLocation, fetchClusterReports } from '../../services/dispatcher/clusterServ.js';
+import { useCluster } from '../../context/ClusterContext';
+import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -28,6 +30,9 @@ const CLUSTER_PRIORITY_COLOR_EXPR = [
   '#a9a9a9', // fallback for unknown priority
 ];
 
+// individual reports inside an expanded cluster
+const REPORT_COLOR = '#2563eb';
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -43,9 +48,18 @@ export default function Index() {
   // cluster markers state
   const [clusters, setClusters] = useState([]);
 
+  // expanded cluster state (reports shown on map + details window)
+  const [selectedClusterId, setSelectedClusterId] = useState(null);
+  const [selectedCluster, setSelectedCluster] = useState(null);
+  const [clusterReports, setClusterReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
   const cameraRef = useRef(null);
+
+  // team.jsx reads the selected cluster across tabs
+  const { setActiveClusterId } = useCluster();
 
   // ---- permissions -----------------------------------------------------
   useEffect(() => {
@@ -91,6 +105,7 @@ export default function Index() {
           coordinates: [cluster.longitude, cluster.latitude],
         },
         properties: {
+          cluster_id: cluster.cluster_id,
           city: cluster.city,
           priority: cluster.priority_level,
           status: cluster.status,
@@ -101,6 +116,33 @@ export default function Index() {
         },
       })),
   };
+
+  // reports inside the expanded cluster, as map markers
+  const reportsGeojson = useMemo(() => {
+    return {
+      type: 'FeatureCollection',
+      features: (selectedClusterId != null ? clusterReports : [])
+        .filter(
+          (r) =>
+            typeof r.latitude === 'number' &&
+            typeof r.longitude === 'number' &&
+            !Number.isNaN(r.latitude) &&
+            !Number.isNaN(r.longitude)
+        )
+        .map((report) => ({
+          type: 'Feature',
+          id: `report-${report.report_id}`,
+          geometry: {
+            type: 'Point',
+            coordinates: [report.longitude, report.latitude],
+          },
+          properties: {
+            report_id: report.report_id,
+            status: report.status,
+          },
+        })),
+    };
+  }, [clusterReports, selectedClusterId]);
 
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
@@ -129,6 +171,54 @@ export default function Index() {
     }
   };
 
+  // ---- cluster expand / collapse -----------------------------------------
+  const collapseCluster = useCallback(() => {
+    setSelectedClusterId(null);
+    setSelectedCluster(null);
+    setClusterReports([]);
+    setReportsLoading(false);
+    setActiveClusterId(null);
+  }, [setActiveClusterId]);
+
+  const handleClusterPress = useCallback(
+    async (event) => {
+      // keep Map's onPress from also firing on empty map
+      event.stopPropagation();
+
+      const feature = event.nativeEvent?.features?.find(
+        (f) => f.properties?.cluster_id != null
+      );
+      if (!feature) return;
+
+      const clusterId = feature.properties.cluster_id;
+
+      // tapping the expanded cluster collapses it again
+      if (clusterId === selectedClusterId) {
+        collapseCluster();
+        return;
+      }
+
+      setSelectedClusterId(clusterId);
+      setSelectedCluster(
+        clusters.find((c) => c.cluster_id === clusterId) ?? null
+      );
+      setClusterReports([]);
+      setReportsLoading(true);
+      setActiveClusterId(clusterId);
+
+      try {
+        const { data } = await fetchClusterReports(clusterId);
+        setSelectedCluster(data?.cluster ?? null);
+        setClusterReports(data?.reports ?? []);
+      } catch (e) {
+        console.log('failed to fetch cluster reports', e);
+      } finally {
+        setReportsLoading(false);
+      }
+    },
+    [selectedClusterId, clusters, collapseCluster, setActiveClusterId]
+  );
+
   // ---------------------------------------------------------------------
   return (
     <View style={styles.container}>
@@ -156,7 +246,12 @@ export default function Index() {
         />
 
         {mapReady && (
-          <GeoJSONSource id="clustersSource" data={clustersGeojson}>
+          <GeoJSONSource
+            id="clustersSource"
+            data={clustersGeojson}
+            hitbox={{ top: 16, right: 16, bottom: 16, left: 16 }}
+            onPress={handleClusterPress}
+          >
             <Layer
               type="circle"
               id="clustersLayer"
@@ -173,6 +268,46 @@ export default function Index() {
                 'circle-opacity': 0.85,
               }}
             />
+            {selectedClusterId != null && (
+              <Layer
+                type="circle"
+                id="selectedClusterHalo"
+                filter={['==', ['get', 'cluster_id'], selectedClusterId]}
+                paint={{
+                  'circle-color': 'transparent',
+                  'circle-radius': [
+                    'interpolate', ['linear'], ['zoom'],
+                    5, 9,
+                    10, 15,
+                    16, 24,
+                  ],
+                  'circle-stroke-width': 2.5,
+                  'circle-stroke-color': '#182033',
+                  'circle-opacity': 0.4,
+                }}
+              />
+            )}
+          </GeoJSONSource>
+        )}
+
+        {mapReady && selectedClusterId != null && (
+          <GeoJSONSource id="clusterReportsSource" data={reportsGeojson}>
+            <Layer
+              type="circle"
+              id="clusterReportsLayer"
+              paint={{
+                'circle-color': REPORT_COLOR,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  10, 5,
+                  14, 7,
+                  18, 10,
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.95,
+              }}
+            />
           </GeoJSONSource>
         )}
 
@@ -182,7 +317,10 @@ export default function Index() {
       </Map>
 
       <TouchableOpacity
-        style={styles.locateButton}
+        style={[
+          styles.locateButton,
+          selectedCluster != null && styles.locateButtonRaised,
+        ]}
         onPress={handleLocatePress}
         activeOpacity={0.7}
         disabled={locating}
@@ -193,6 +331,15 @@ export default function Index() {
           <Ionicons name="locate" size={24} color="#4287f5" />
         )}
       </TouchableOpacity>
+
+      {selectedCluster && (
+        <ClusterDetailsWindow
+          cluster={selectedCluster}
+          reports={clusterReports}
+          loading={reportsLoading}
+          onClose={collapseCluster}
+        />
+      )}
     </View>
   );
 }
@@ -220,5 +367,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
+  },
+  // keeps the button above the expanded cluster window
+  locateButtonRaised: {
+    bottom: 372,
   },
 });
