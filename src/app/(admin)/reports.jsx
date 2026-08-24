@@ -1,42 +1,152 @@
-import { StyleSheet, Text, View, Clickable, Pressable } from "react-native";
+import { useCallback, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
-import * as SecureStore from 'expo-secure-store';
-import { useRouter } from "expo-router";
+import PriorityChip from "../../components/ui/PriorityChip";
+import { getCityClusters } from "../../services/clusterService";
+import { useCluster } from "../../context/ClusterContext";
 
 export default function ReportsScreen() {
   const router = useRouter();
-  async function handleLogout() {
-    // Wipe this user's offline snapshots before the token is gone, so a
-    // different account can never see stale cached family/profile data.
-    try {
-      await Promise.all([clearForUser(), clearProfileForUser()]);
-    } catch {}
+  const { setActiveClusterId } = useCluster();
 
-    await SecureStore.deleteItemAsync("token");
-    await SecureStore.deleteItemAsync("user_id");
-    router.replace("/login");
+  const [clusters, setClusters] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errored, setErrored] = useState(false);
+
+  const loadData = useCallback(async ({ refreshing = false } = {}) => {
+    if (refreshing) setRefreshing(true);
+    try {
+      const rows = await getCityClusters();
+      setClusters(rows);
+      setErrored(false);
+    } catch {
+      setErrored(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  // PM: cluster cards are clickable — selecting one carries over to
+  // the Map tab through ClusterContext (which survives tab switches).
+  const openOnMap = (cluster) => {
+    setActiveClusterId(cluster.id);
+    router.navigate("/(admin)/map");
+  };
+
+  const renderItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.7}
+      onPress={() => openOnMap(item)}
+    >
+      <View style={styles.cardTopRow}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <PriorityChip priority={item.priority} showDot />
+      </View>
+      <View style={styles.cardBottomRow}>
+        <Text style={styles.cardMeta}>
+          {item.reportCount} {item.reportCount === 1 ? "report" : "reports"} ·{" "}
+          {item.peopleAffected} people affected
+        </Text>
+        <View style={styles.goToWrap}>
+          <MaterialIcons name="near-me" size={12} color={colors.primary} />
+          <Text style={styles.goToText}>Go to location</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <StatusBar style="dark" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <StatusBar style="dark" />
       <View style={styles.container}>
-        <Text style={styles.pageLabel}>Reports</Text>
-        <View style={styles.placeholderCard}>
-          <View style={styles.iconWrap}>
-            <Ionicons name="document-text" size={32} color={colors.primary} />
-          </View>
-          <Text style={styles.title}>This is the Reports page</Text>
-          <Text style={styles.copy}>
-            Incoming emergency reports will appear here.
-          </Text>
-          <Pressable onPress={() => handleLogout()}>
-            <Text>Logout</Text>
-          </Pressable>
+        <View style={styles.header}>
+          <Text style={styles.pageLabel}>Report Clusters</Text>
         </View>
+
+        <FlatList
+          data={clusters}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadData({ refreshing: true })}
+              tintColor={colors.primary}
+            />
+          }
+          renderItem={renderItem}
+          ListEmptyComponent={
+            errored ? (
+              <View style={styles.emptyCard}>
+                <Ionicons
+                  name="cloud-offline-outline"
+                  size={32}
+                  color={colors.primary}
+                />
+                <Text style={styles.emptyTitle}>Unable to load clusters</Text>
+                <Text style={styles.emptyCopy}>
+                  Something went wrong reaching the server. Pull to refresh to
+                  try again.
+                </Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  activeOpacity={0.8}
+                  onPress={() => loadData()}
+                >
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.emptyCard}>
+                <Ionicons
+                  name="layers-outline"
+                  size={32}
+                  color={colors.primary}
+                />
+                <Text style={styles.emptyTitle}>No clusters yet</Text>
+                <Text style={styles.emptyCopy}>
+                  Citizen reports that pile up in your area will be grouped
+                  into clusters here for dispatch.
+                </Text>
+              </View>
+            )
+          }
+        />
       </View>
     </SafeAreaView>
   );
@@ -52,42 +162,98 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
   },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  header: {
+    marginBottom: 14,
+  },
   pageLabel: {
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
     color: colors.muted,
-    marginBottom: 12,
   },
-  placeholderCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
+  listContent: {
+    paddingBottom: 28,
+  },
+  card: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    gap: 8,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  cardTitle: {
+    flexShrink: 1,
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  cardBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  cardMeta: {
+    flexShrink: 1,
+    fontSize: 12,
+    color: colors.muted,
+  },
+  goToWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  goToText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  emptyCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    marginBottom: 24,
+    marginTop: 12,
   },
-  iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 18,
+  emptyTitle: {
+    fontSize: 17,
     fontWeight: "700",
     color: colors.text,
+    marginTop: 12,
     marginBottom: 6,
   },
-  copy: {
-    fontSize: 14,
-    lineHeight: 20,
+  emptyCopy: {
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.muted,
     textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 14,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.white,
   },
 });
