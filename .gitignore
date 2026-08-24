@@ -43,8 +43,5 @@ example
 /android
 
 .env
-<<<<<<< Updated upstream
 opencode.jsonc
-=======
-opencode.jsonc 
->>>>>>> Stashed changes
+AGENTS.md
