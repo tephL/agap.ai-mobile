@@ -21,10 +21,15 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import colors from "../../constants/colors";
+import useNetworkStatus from "../../hooks/useNetworkStatus";
 import {
   uploadReportPhoto,
   attachReportDescription,
   requestReportLocation,
+  getDeviceLocation,
+  sendOfflineReportSms,
+  getOfflineDescriptionLimit,
+  OFFLINE_DESCRIPTION_MAX,
 } from "../../services/reportService";
 import {
   cameraStore,
@@ -110,14 +115,47 @@ export default function ReportScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { photos, sentAt, locationStatus, locationError } = useCameraStore();
+  const { isOnline } = useNetworkStatus();
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [galleryOffset, setGalleryOffset] = useState(0);
+  // Starts at the flat OFFLINE_DESCRIPTION_MAX and gets tightened once we
+  // know the actual coordinates (see handleOfflineSubmit / the effect
+  // below), since the SMS's fixed "SOS <lon> | <lat>" prefix eats into the
+  // 160-char budget by a few characters depending on the digits involved.
+  const [offlineDescLimit, setOfflineDescLimit] = useState(OFFLINE_DESCRIPTION_MAX);
+  const [offlineCoords, setOfflineCoords] = useState(null);
 
   useEffect(() => {
     setNotes("");
     setGalleryOffset(0);
+    setOfflineCoords(null);
+    setOfflineDescLimit(OFFLINE_DESCRIPTION_MAX);
   }, [sentAt]);
+
+  // Offline mode has no photo/network round trip to kick off location
+  // fetching, so grab it as soon as the screen mounts offline purely to
+  // give the description counter an accurate limit. The actual SMS send
+  // re-fetches location fresh at submit time regardless.
+  useEffect(() => {
+    if (isOnline || offlineCoords) return;
+    let cancelled = false;
+    getDeviceLocation()
+      .then((coords) => {
+        if (cancelled) return;
+        setOfflineCoords(coords);
+        setOfflineDescLimit(getOfflineDescriptionLimit(coords));
+      })
+      .catch(() => {
+        // Swallow here — the same lookup runs again (with proper error
+        // handling / Settings prompts) when the user actually submits.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, offlineCoords]);
+
+  const descriptionMax = isOnline ? NOTES_MAX : offlineDescLimit;
 
   const atLimit = photos.length >= MAX_PHOTOS;
 
@@ -290,16 +328,87 @@ export default function ReportScreen() {
     }
   };
 
+  // Offline mode: no backend to reach, so instead of uploading we build the
+  // SMS body ourselves and hand it to the native composer. The user still
+  // has to tap Send there — expo-sms (like any cross-platform SMS API)
+  // can't send silently on iOS/Android.
+  const handleOfflineSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const { latitude, longitude } = await getDeviceLocation();
+      const { sent } = await sendOfflineReportSms({
+        latitude,
+        longitude,
+        description: notes.trim(),
+      });
+
+      if (!sent) {
+        Alert.alert(
+          "Message not sent",
+          "The text message was closed before it was sent. Try again when you're ready."
+        );
+        return;
+      }
+
+      closeForm();
+    } catch (err) {
+      if (err?.code === "SERVICES_DISABLED") {
+        Alert.alert(
+          "Turn on Location Services",
+          "Your device's location services are off, so we can't include it in the text. Turn them on, then try again.",
+          [
+            { text: "Not now", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+            { text: "Retry", onPress: handleOfflineSubmit },
+          ]
+        );
+      } else if (err?.code === "PERMISSION_DENIED") {
+        Alert.alert(
+          "Location Permission Needed",
+          "Allow location access so we can include it in the text.",
+          [
+            { text: "Not now", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+            { text: "Retry", onPress: handleOfflineSubmit },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Couldn't prepare message",
+          err?.message || "Something went wrong preparing your report text.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Retry", onPress: handleOfflineSubmit },
+          ]
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const confirmSubmit = () => {
     if (submitting) return;
-    Alert.alert(
-      "Submit details?",
-      "Are you sure you want to submit your current details?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Confirm", onPress: handleSubmit },
-      ]
-    );
+    if (isOnline) {
+      Alert.alert(
+        "Submit details?",
+        "Are you sure you want to submit your current details?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Confirm", onPress: handleSubmit },
+        ]
+      );
+    } else {
+      Alert.alert(
+        "Send text message?",
+        "This opens your messaging app with your location pre-filled. You'll still need to tap Send there.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Confirm", onPress: handleOfflineSubmit },
+        ]
+      );
+    }
   };
 
   return (
@@ -325,21 +434,37 @@ export default function ReportScreen() {
             help us help you. Add critical details.
           </Text>
 
+          {!isOnline && (
+            <View style={styles.offlineNotice}>
+              <Ionicons name="cloud-offline-outline" size={16} color={colors.text} />
+              <Text style={styles.offlineNoticeText}>
+                You're offline. We'll open a text message with your location
+                instead — photos aren't available right now.
+              </Text>
+            </View>
+          )}
+
           <TextInput
             style={styles.notes}
             value={notes}
-            onChangeText={(value) => setNotes(value.slice(0, NOTES_MAX))}
-            placeholder="describe your situation in detail (e.g. number of people involved, specific injuries and any hazards) this information is crucial for first responders..."
+            onChangeText={(value) => setNotes(value.slice(0, descriptionMax))}
+            placeholder={
+              isOnline
+                ? "describe your situation in detail (e.g. number of people involved, specific injuries and any hazards) this information is crucial for first responders..."
+                : "add a short description to include in the text (optional)"
+            }
             placeholderTextColor={colors.placeholder}
             multiline
             textAlignVertical="top"
-            maxLength={NOTES_MAX}
+            maxLength={descriptionMax}
             editable={!submitting}
           />
           <Text style={styles.counter}>
-            {notes.length}/{NOTES_MAX}
+            {notes.length}/{descriptionMax}
           </Text>
 
+          {isOnline && (
+          <>
           <View style={styles.galleryBox}>
             <ScrollView
               horizontal
@@ -425,6 +550,8 @@ export default function ReportScreen() {
           </View>
 
           <Text style={styles.caption}>attach up to {MAX_PHOTOS} images only</Text>
+          </>
+          )}
 
           <TouchableOpacity
             style={styles.submit}
@@ -435,7 +562,9 @@ export default function ReportScreen() {
             {submitting ? (
               <ActivityIndicator color={colors.text} />
             ) : (
-              <Text style={styles.submitText}>SUBMIT DETAILS</Text>
+              <Text style={styles.submitText}>
+                {isOnline ? "SUBMIT DETAILS" : "SEND TEXT MESSAGE"}
+              </Text>
             )}
           </TouchableOpacity>
 
@@ -507,6 +636,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
     textAlign: "center",
+  },
+  offlineNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    width: "100%",
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  offlineNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.text,
   },
   notes: {
     width: "100%",

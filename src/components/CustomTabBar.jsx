@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import colors from "../constants/colors";
 import { cameraStore, useCameraStore } from "../store/cameraStore";
 import { requestReportLocation } from "../services/reportService";
+import useNetworkStatus from "../hooks/useNetworkStatus";
 import ReportHoldButton from "./ReportHoldButton";
 
 const ICONS = {
@@ -20,6 +21,7 @@ const primaryColor = colors.primary;
 export default function CustomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
   const { reportExpiresAt } = useCameraStore();
+  const { isOnline } = useNetworkStatus();
 
   const centerIndex = state.routes.findIndex((r) => r.name === "report");
   const centerRoute = centerIndex !== -1 ? state.routes[centerIndex] : null;
@@ -50,7 +52,14 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
     // ReportScreen awaits this (via cameraStore.waitForLocation()) before
     // it uploads any photos or a description, so nothing can race ahead
     // of the report actually existing.
-    cameraStore.setLocationRequest(requestReportLocation());
+    //
+    // Skipped entirely when offline: there's no backend to reach, and
+    // calling it anyway would just sit there until it times out. The
+    // report screen fetches location on its own (device-only, no network)
+    // when it builds the offline SMS instead.
+    if (isOnline) {
+      cameraStore.setLocationRequest(requestReportLocation());
+    }
     navigation.navigate("report");
   };
 
@@ -105,6 +114,15 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
         })}
       </View>
 
+      {centerRoute && !isOnline && (
+        <View style={styles.offlineBadge} pointerEvents="none">
+          <Ionicons name="cloud-offline-outline" size={12} color={colors.white} />
+          <Text style={styles.offlineBadgeText} numberOfLines={1}>
+            Offline — reports still send via text
+          </Text>
+        </View>
+      )}
+
       {centerRoute && <ReportHoldButton onComplete={onHoldComplete} />}
     </View>
   );
@@ -125,6 +143,25 @@ const styles = StyleSheet.create({
   },
   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 11, marginTop: 2, fontWeight: '500' },
+  offlineBadge: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: -80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    maxWidth: 230,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: colors.text,
+    zIndex: 21,
+  },
+  offlineBadgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: '600',
+  },
   centerButton: {
     position: 'absolute',
     alignSelf: 'center',

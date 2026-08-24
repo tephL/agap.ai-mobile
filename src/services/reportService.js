@@ -1,7 +1,22 @@
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Location from "expo-location";
+import * as SMS from "expo-sms";
 import { api } from "./api";
 import { cameraStore } from "../store/cameraStore";
+
+// Recipient for the offline fallback report SMS.
+// TODO: move to an env var / config if this ever needs to differ per build.
+const OFFLINE_SMS_RECIPIENT = "09927394544";
+
+// Cap on the free-text description in offline mode. Kept short (vs the
+// 500-char NOTES_MAX used online) because it has to ride inside a single
+// SMS segment alongside the coordinates — see buildOfflineReportSms().
+export const OFFLINE_DESCRIPTION_MAX = 100;
+
+// Standard single-segment GSM SMS length. Staying under this avoids the
+// message getting split across multiple segments, which is slower and
+// less reliable to deliver on a weak/offline-adjacent carrier connection.
+const SMS_SEGMENT_LIMIT = 160;
 
 function guessMimeType(filename) {
   const match = /\.(\w+)$/.exec(filename ?? "");
@@ -116,4 +131,115 @@ export async function requestReportLocation() {
     cameraStore.setLocationStatus("error", err);
     throw err;
   }
+}
+
+// --- Offline fallback (no backend reachable) ---
+
+/**
+ * Gets the device's raw GPS position WITHOUT calling the backend — used
+ * only when the device is offline, so /api/reports/location isn't
+ * reachable anyway. Same permission/services checks as
+ * requestReportLocation(), reusing the same `code`s so the report screen's
+ * existing error handling (open Settings / retry copy) still applies.
+ */
+export async function getDeviceLocation() {
+  const servicesEnabled = await Location.hasServicesEnabledAsync();
+  if (!servicesEnabled) {
+    throw locationError(
+      "SERVICES_DISABLED",
+      "Location services are turned off on this device."
+    );
+  }
+
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== "granted") {
+    throw locationError("PERMISSION_DENIED", "Location permission was denied.");
+  }
+
+  const position = await Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.Balanced,
+  });
+
+  return {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+  };
+}
+
+/**
+ * Builds the offline report SMS body as "<longitude> | <latitude>" plus an
+ * optional description, trimmed so the whole thing fits in one 160-char
+ * SMS segment. The description's effective limit is whichever is smaller:
+ * OFFLINE_DESCRIPTION_MAX, or whatever room is left after the coordinates.
+ */
+export function buildOfflineReportSms({ latitude, longitude, description }) {
+  const coords = `${longitude.toFixed(5)} | ${latitude.toFixed(5)}`;
+  let body = `${coords}`;
+
+  const trimmedDescription = (description ?? "").trim();
+  const separator = " | ";
+  const availableForDescription = Math.max(
+    0,
+    Math.min(
+      OFFLINE_DESCRIPTION_MAX,
+      SMS_SEGMENT_LIMIT - body.length - separator.length
+    )
+  );
+
+  if (trimmedDescription && availableForDescription > 0) {
+    body += `${separator}${trimmedDescription.slice(0, availableForDescription)}`;
+  }
+
+  return body;
+}
+
+/**
+ * Returns how many description characters currently fit, given the fixed
+ * coordinate prefix. Lets the UI show an accurate live counter instead of
+ * a flat 100 that could quietly get truncated at send time.
+ */
+export function getOfflineDescriptionLimit({ latitude, longitude }) {
+  if (latitude == null || longitude == null) return OFFLINE_DESCRIPTION_MAX;
+  const coords = `${longitude.toFixed(5)} | ${latitude.toFixed(5)}`;
+  const body = `${coords}`;
+  const separator = " | ";
+  return Math.max(
+    0,
+    Math.min(OFFLINE_DESCRIPTION_MAX, SMS_SEGMENT_LIMIT - body.length - separator.length)
+  );
+}
+
+/**
+ * Opens the native SMS composer, pre-filled and addressed to
+ * OFFLINE_SMS_RECIPIENT. expo-sms (like every cross-platform SMS API) can
+ * only hand off to the OS composer — iOS/Android don't let third-party
+ * apps send SMS silently in the background — so the user still has to tap
+ * Send themselves once the composer opens.
+ *
+ * Logs the prepared message (and the composer's result) to the console so
+ * you can confirm exactly what was sent while testing with
+ * `npx expo start` / `npm run dev`.
+ */
+export async function sendOfflineReportSms({ latitude, longitude, description }) {
+  const body = buildOfflineReportSms({ latitude, longitude, description });
+
+  console.log("[offline-report] SMS prepared ->", {
+    to: OFFLINE_SMS_RECIPIENT,
+    body,
+    length: body.length,
+  });
+
+  const isAvailable = await SMS.isAvailableAsync();
+  if (!isAvailable) {
+    throw new Error("SMS is not available on this device.");
+  }
+
+  const { result } = await SMS.sendSMSAsync([OFFLINE_SMS_RECIPIENT], body);
+
+  console.log("[offline-report] SMS composer result ->", result);
+
+  // Android's composer almost always resolves "unknown" (no delivery
+  // callback available), so treat "sent" AND "unknown" as success —
+  // only "cancelled" means the user actually backed out.
+  return { sent: result !== "cancelled", result, body };
 }
