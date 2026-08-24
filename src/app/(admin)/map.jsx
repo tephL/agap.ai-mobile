@@ -38,8 +38,15 @@ const CLUSTER_PRIORITY_COLOR_EXPR = [
   '#a9a9a9', // fallback for unknown priority
 ];
 
-// individual reports inside an expanded cluster
-const REPORT_COLOR = '#2563eb';
+// individual reports inside an expanded cluster, colored by status
+const REPORT_STATUS_COLOR_EXPR = [
+  'match',
+  ['get', 'status'],
+  'open', '#ef4444',
+  'saved', '#eab308',
+  'resolved', '#22c55e',
+  '#a9a9a9', // fallback for unknown status
+];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -344,15 +351,15 @@ export default function Index() {
               type="circle"
               id="clusterReportsLayer"
               paint={{
-                'circle-color': REPORT_COLOR,
+                'circle-color': REPORT_STATUS_COLOR_EXPR,
                 'circle-radius': [
                   'interpolate', ['linear'], ['zoom'],
-                  8, 4,
-                  12, 6,
-                  16, 9,
-                  20, 12,
+                  8, 2.5,
+                  12, 3.5,
+                  16, 4.5,
+                  20, 6,
                 ],
-                'circle-stroke-width': 2,
+                'circle-stroke-width': 1.5,
                 'circle-stroke-color': '#ffffff',
                 'circle-opacity': 0.95,
               }}
