@@ -19,7 +19,7 @@ import { useCluster } from "../../context/ClusterContext";
 
 export default function ReportsScreen() {
   const router = useRouter();
-  const { setActiveClusterId } = useCluster();
+  const { focusCluster } = useCluster();
 
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,10 +46,11 @@ export default function ReportsScreen() {
     }, [loadData])
   );
 
-  // PM: cluster cards are clickable — selecting one carries over to
-  // the Map tab through ClusterContext (which survives tab switches).
+  // PM: cluster cards are clickable — selecting one opens it on the
+  // Map tab through ClusterContext (which survives tab switches); the
+  // map expands and centers it exactly like a direct marker tap.
   const openOnMap = (cluster) => {
-    setActiveClusterId(cluster.id);
+    focusCluster(cluster.id);
     router.navigate("/(admin)/map");
   };
 

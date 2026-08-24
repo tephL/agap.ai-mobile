@@ -66,9 +66,11 @@ export default function Index() {
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
   const cameraRef = useRef(null);
+  const handledFocusRef = useRef(0);
 
-  // team.jsx reads the selected cluster across tabs
-  const { setActiveClusterId } = useCluster();
+  // team.jsx reads the selected cluster across tabs; focusNonce marks
+  // explicit focus requests coming from the Reports tab
+  const { activeClusterId, setActiveClusterId, focusNonce } = useCluster();
 
   // ---- permissions -----------------------------------------------------
   useEffect(() => {
@@ -204,24 +206,8 @@ export default function Index() {
     setActiveClusterId(null);
   }, [setActiveClusterId]);
 
-  const handleClusterPress = useCallback(
-    async (event) => {
-      // keep Map's onPress from also firing on empty map
-      event.stopPropagation();
-
-      const feature = event.nativeEvent?.features?.find(
-        (f) => f.properties?.cluster_id != null
-      );
-      if (!feature) return;
-
-      const clusterId = feature.properties.cluster_id;
-
-      // tapping the expanded cluster collapses it again
-      if (clusterId === selectedClusterId) {
-        collapseCluster();
-        return;
-      }
-
+  const expandCluster = useCallback(
+    async (clusterId) => {
       setSelectedClusterId(clusterId);
       setSelectedCluster(
         clusters.find((c) => c.cluster_id === clusterId) ?? null
@@ -254,8 +240,47 @@ export default function Index() {
         setReportsLoading(false);
       }
     },
-    [selectedClusterId, clusters, collapseCluster, setActiveClusterId]
+    [clusters, setActiveClusterId]
   );
+
+  const handleClusterPress = useCallback(
+    async (event) => {
+      // keep Map's onPress from also firing on empty map
+      event.stopPropagation();
+
+      const feature = event.nativeEvent?.features?.find(
+        (f) => f.properties?.cluster_id != null
+      );
+      if (!feature) return;
+
+      const clusterId = feature.properties.cluster_id;
+
+      // tapping the expanded cluster collapses it again
+      if (clusterId === selectedClusterId) {
+        collapseCluster();
+        return;
+      }
+
+      await expandCluster(clusterId);
+    },
+    [selectedClusterId, collapseCluster, expandCluster]
+  );
+
+  // opens a cluster picked from another tab with the same expand and
+  // center behavior as tapping its marker here; waits for the map to
+  // load and for clusters data before flying the camera
+  useEffect(() => {
+    if (
+      focusNonce === handledFocusRef.current ||
+      activeClusterId == null ||
+      !mapReady ||
+      clusters.length === 0
+    ) {
+      return;
+    }
+    handledFocusRef.current = focusNonce;
+    expandCluster(activeClusterId);
+  }, [focusNonce, activeClusterId, mapReady, clusters, expandCluster]);
 
   // ---------------------------------------------------------------------
   return (
