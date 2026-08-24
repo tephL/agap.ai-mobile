@@ -2,11 +2,14 @@ import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-nat
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 // adjust this import to wherever fetchClustersWithinLocation actually lives
 import { fetchClustersWithinLocation, fetchClusterReports } from '../../services/dispatcher/clusterServ.js';
+import { getTeams } from '../../services/teamService';
 import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
+import TeamDetailsWindow from '../../components/dispatcher/TeamDetailsWindow';
 import AssignTeamModal from '../../components/dispatcher/AssignTeamModal';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 
@@ -48,16 +51,31 @@ const REPORT_STATUS_COLOR_EXPR = [
   '#a9a9a9', // fallback for unknown status
 ];
 
+// teams, light blue while available and orange once dispatched (busy)
+const TEAM_STATUS_COLOR_EXPR = [
+  'match',
+  ['get', 'status'],
+  'available', '#60a5fa',
+  'busy', '#f97316',
+  '#a9a9a9', // fallback for offline/unknown
+];
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 export default function Index() {
+  const router = useRouter();
+
   // location / permissions
   const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
 
   // cluster markers state
   const [clusters, setClusters] = useState([]);
+
+  // team markers state
+  const [teams, setTeams] = useState([]);
+  const [selectedTeamId, setSelectedTeamId] = useState(null);
 
   // expanded cluster state (reports shown on map + details window)
   const [selectedClusterId, setSelectedClusterId] = useState(null);
@@ -75,11 +93,15 @@ export default function Index() {
   // explicit focus requests coming from the Reports tab
   const { activeClusterId, setActiveClusterId, focusNonce } = useCluster();
 
-  // ---- clusters fetch loop -----------------------------------------------
+  // ---- clusters + teams fetch loop ---------------------------------------
   const refreshClusters = useCallback(async () => {
     try {
-      const { data } = await fetchClustersWithinLocation();
+      const [{ data }, teamList] = await Promise.all([
+        fetchClustersWithinLocation(),
+        getTeams(),
+      ]);
       setClusters(data ?? []);
+      setTeams(teamList ?? []);
     } catch (e) {
       console.log('failed to fetch clusters', e);
     }
@@ -118,6 +140,31 @@ export default function Index() {
           people_affected: cluster.people_affected,
           ai_summary: cluster.ai_summary,
           action_plan: cluster.action_plan,
+        },
+      })),
+  };
+
+  const teamsGeojson = {
+    type: 'FeatureCollection',
+    features: teams
+      .filter(
+        (t) =>
+          typeof t.lat === 'number' &&
+          typeof t.lng === 'number' &&
+          !Number.isNaN(t.lat) &&
+          !Number.isNaN(t.lng)
+      )
+      .map((team, index) => ({
+        type: 'Feature',
+        id: `team-${team.team_id ?? index}`,
+        geometry: {
+          type: 'Point',
+          coordinates: [team.lng, team.lat],
+        },
+        properties: {
+          team_id: team.team_id,
+          name: team.name,
+          status: team.status,
         },
       })),
   };
@@ -195,6 +242,7 @@ export default function Index() {
 
   const expandCluster = useCallback(
     async (clusterId) => {
+      setSelectedTeamId(null);
       setSelectedClusterId(clusterId);
       setSelectedCluster(
         clusters.find((c) => c.cluster_id === clusterId) ?? null
@@ -240,6 +288,9 @@ export default function Index() {
       );
       if (!feature) return;
 
+      // tapping a team pin while a cluster is open swaps to the team
+      setSelectedTeamId(null);
+
       const clusterId = feature.properties.cluster_id;
 
       // tapping the expanded cluster collapses it again
@@ -252,6 +303,58 @@ export default function Index() {
     },
     [selectedClusterId, collapseCluster, expandCluster]
   );
+
+  const selectedTeam = useMemo(
+    () =>
+      selectedTeamId != null
+        ? teams.find((t) => t.team_id === selectedTeamId) ?? null
+        : null,
+    [teams, selectedTeamId]
+  );
+
+  const collapseTeam = useCallback(() => setSelectedTeamId(null), []);
+
+  const handleTeamPress = useCallback(
+    (event) => {
+      event.stopPropagation();
+
+      const feature = event.nativeEvent?.features?.find(
+        (f) => f.properties?.team_id != null
+      );
+      if (!feature) return;
+
+      const teamId = feature.properties.team_id;
+      if (teamId === selectedTeamId) {
+        collapseTeam();
+        return;
+      }
+
+      setSelectedTeamId(teamId);
+      collapseCluster();
+
+      const team = teams.find((t) => t.team_id === teamId);
+      if (
+        team &&
+        typeof team.lat === 'number' &&
+        typeof team.lng === 'number'
+      ) {
+        cameraRef.current?.flyTo({
+          center: [team.lng, team.lat],
+          zoom: CLUSTER_FOCUS_ZOOM,
+          duration: CLUSTER_FOCUS_DURATION_MS,
+        });
+      }
+    },
+    [selectedTeamId, teams, collapseTeam, collapseCluster]
+  );
+
+  const openTeamDetail = useCallback(() => {
+    if (selectedTeam == null) return;
+    router.push({
+      pathname: '/team-detail',
+      params: { teamId: String(selectedTeam.team_id) },
+    });
+  }, [router, selectedTeam]);
 
   // opens a cluster picked from another tab with the same expand and
   // center behavior as tapping its marker here; waits for the map to
@@ -367,6 +470,34 @@ export default function Index() {
           </GeoJSONSource>
         )}
 
+        {/* teams — light blue when available, orange once dispatched (busy) */}
+        {mapReady && (
+          <GeoJSONSource
+            id="teamsSource"
+            data={teamsGeojson}
+            hitbox={{ top: 16, right: 16, bottom: 16, left: 16 }}
+            onPress={handleTeamPress}
+          >
+            <Layer
+              type="circle"
+              id="teamsLayer"
+              paint={{
+                'circle-color': TEAM_STATUS_COLOR_EXPR,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  8, 3.5,
+                  12, 5,
+                  16, 7,
+                  20, 9,
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff',
+                'circle-opacity': 0.95,
+              }}
+            />
+          </GeoJSONSource>
+        )}
+
         {locationGranted && (
           <NativeUserLocation androidRenderMode="gps" />
         )}
@@ -375,7 +506,8 @@ export default function Index() {
       <TouchableOpacity
         style={[
           styles.locateButton,
-          selectedCluster != null && styles.locateButtonRaised,
+          (selectedCluster != null || selectedTeam != null) &&
+            styles.locateButtonRaised,
         ]}
         onPress={handleLocatePress}
         activeOpacity={0.7}
@@ -395,6 +527,14 @@ export default function Index() {
           loading={reportsLoading}
           onClose={collapseCluster}
           onAssignTeam={() => setAssignOpen(true)}
+        />
+      )}
+
+      {selectedTeam && (
+        <TeamDetailsWindow
+          team={selectedTeam}
+          onClose={collapseTeam}
+          onSeeDetails={openTeamDetail}
         />
       )}
 

@@ -18,7 +18,6 @@ import {
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import StatusBadge from "../../components/ui/StatusBadge";
-import CreateTeamModal from "../../components/dispatcher/CreateTeamModal";
 import { getTeams, getOpenClusters } from "../../services/teamService";
 import { clearDispatcherSession } from "../../services/dispatcherService";
 import { formatDistance, haversineMeters } from "../../utils/haversine";
@@ -46,7 +45,6 @@ export default function TeamScreen() {
   const [activeCluster, setActiveCluster] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const loadData = useCallback(
@@ -98,10 +96,6 @@ export default function TeamScreen() {
           : {}),
       },
     });
-  };
-
-  const handleCreated = (team) => {
-    setTeams((prev) => [team, ...prev]);
   };
 
   const handleLogout = async () => {
@@ -180,7 +174,7 @@ export default function TeamScreen() {
               style={[styles.createButton, loggingOut && styles.buttonDisabled]}
               activeOpacity={0.8}
               disabled={loggingOut}
-              onPress={() => setCreateOpen(true)}
+              onPress={() => router.push("/create-team")}
             >
               <MaterialIcons name="add" size={18} color={colors.white} />
               <Text style={styles.createButtonText}>Create Team</Text>
@@ -236,12 +230,6 @@ export default function TeamScreen() {
           }
         />
       </View>
-
-      <CreateTeamModal
-        visible={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={handleCreated}
-      />
     </SafeAreaView>
   );
 }
