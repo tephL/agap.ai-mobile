@@ -49,6 +49,7 @@ export default function ClusterDetailsWindow({
   reports,
   loading,
   onClose,
+  onAssignTeam,
 }) {
   const [activeTab, setActiveTab] = useState("plan");
 
@@ -109,56 +110,68 @@ export default function ClusterDetailsWindow({
 
       {/* Body */}
       {activeTab === "plan" ? (
-        <ScrollView
-          style={styles.bodyScroll}
-          contentContainerStyle={styles.bodyContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.infoRowWrap}>
-            <View style={[styles.infoStat, styles.infoStatGap]}>
-              <Ionicons name="documents-outline" size={16} color={colors.muted} />
-              <Text style={styles.infoStatLabel}>Reports</Text>
-              <Text style={styles.infoStatValue}>{cluster.report_count ?? 0}</Text>
-            </View>
-            <View style={styles.infoStat}>
-              <Ionicons name="people-outline" size={16} color={colors.muted} />
-              <Text style={styles.infoStatLabel}>Affected</Text>
-              <Text style={styles.infoStatValue}>{cluster.people_affected ?? 0}</Text>
-            </View>
-          </View>
-
-          {cluster.ai_summary ? (
-            <View style={styles.summaryCard}>
-              <View style={styles.sectionTitleRow}>
-                <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
-                <Text style={styles.sectionTitle}>AI Summary</Text>
+        <View style={styles.planBody}>
+          <ScrollView
+            style={styles.bodyScroll}
+            contentContainerStyle={styles.bodyContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.infoRowWrap}>
+              <View style={[styles.infoStat, styles.infoStatGap]}>
+                <Ionicons name="documents-outline" size={16} color={colors.muted} />
+                <Text style={styles.infoStatLabel}>Reports</Text>
+                <Text style={styles.infoStatValue}>{cluster.report_count ?? 0}</Text>
               </View>
-              <Text style={styles.summaryText}>{cluster.ai_summary}</Text>
+              <View style={styles.infoStat}>
+                <Ionicons name="people-outline" size={16} color={colors.muted} />
+                <Text style={styles.infoStatLabel}>Affected</Text>
+                <Text style={styles.infoStatValue}>{cluster.people_affected ?? 0}</Text>
+              </View>
             </View>
-          ) : null}
 
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="list-outline" size={16} color={colors.muted} />
-            <Text style={styles.sectionTitle}>Action Plan</Text>
-          </View>
-
-          {actionPlan.length > 0 ? (
-            actionPlan.map((step, index) => (
-              <View key={`${index}-${step}`} style={styles.planStep}>
-                <View style={styles.stepNumberWrap}>
-                  <Text style={styles.stepNumber}>{index + 1}</Text>
+            {cluster.ai_summary ? (
+              <View style={styles.summaryCard}>
+                <View style={styles.sectionTitleRow}>
+                  <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>AI Summary</Text>
                 </View>
-                <Text style={styles.stepText}>{step}</Text>
+                <Text style={styles.summaryText}>{cluster.ai_summary}</Text>
               </View>
-            ))
-          ) : (
-            <Text style={styles.emptyText}>No action plan yet.</Text>
-          )}
+            ) : null}
 
-          <Text style={styles.updatedText}>
-            Updated {formatDate(cluster.updated_at)}
-          </Text>
-        </ScrollView>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="list-outline" size={16} color={colors.muted} />
+              <Text style={styles.sectionTitle}>Action Plan</Text>
+            </View>
+
+            {actionPlan.length > 0 ? (
+              actionPlan.map((step, index) => (
+                <View key={`${index}-${step}`} style={styles.planStep}>
+                  <View style={styles.stepNumberWrap}>
+                    <Text style={styles.stepNumber}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.stepText}>{step}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No action plan yet.</Text>
+            )}
+
+            <Text style={styles.updatedText}>
+              Updated {formatDate(cluster.updated_at)}
+            </Text>
+          </ScrollView>
+
+          {/* Pinned below the scroll area so it stays visible while scrolling. */}
+          <TouchableOpacity
+            style={styles.assignButton}
+            activeOpacity={0.8}
+            onPress={onAssignTeam}
+          >
+            <Ionicons name="people-circle-outline" size={18} color={colors.white} />
+            <Text style={styles.assignButtonText}>Assign a Team</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <ScrollView
           style={styles.bodyScroll}
@@ -193,7 +206,7 @@ export default function ClusterDetailsWindow({
                     {person.name ?? "Unknown"}
                   </Text>
                   <Text style={styles.personUsername} numberOfLines={1}>
-                    @{person.username} · {person.reports.length}{" "}
+                    {person.reports.length}{" "}
                     {person.reports.length === 1 ? "report" : "reports"}
                   </Text>
                 </View>
@@ -281,6 +294,11 @@ const styles = StyleSheet.create({
   },
   bodyScroll: {
     flexGrow: 0,
+    flexShrink: 1,
+  },
+  planBody: {
+    flexShrink: 1,
+    gap: 10,
   },
   bodyContent: {
     paddingBottom: 4,
@@ -367,6 +385,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.placeholder,
     marginTop: 4,
+  },
+  assignButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  assignButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.white,
   },
   loader: {
     marginVertical: 16,
