@@ -64,6 +64,7 @@ export default function HazardTabs({
   dams,
   userLocation,
   nearestSlug,
+  influencingSlugs = [],
   onSelectDam,
 }) {
   const active = TABS.find((tab) => tab.key === activeTab);
@@ -106,6 +107,7 @@ export default function HazardTabs({
             dams={dams}
             userLocation={userLocation}
             nearestSlug={nearestSlug}
+            influencingSlugs={influencingSlugs}
             onSelect={onSelectDam}
           />
         ) : (

@@ -1,12 +1,18 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { haversineMeters, formatDistance } from "../../utils/haversine";
-import { parseDamObservationMs, damFreshnessColor } from "./damStatus";
+import { resolveDamSeverity } from "./damSeverity";
 
 const EXPECTED_DAM_COUNT = 9;
 const NEAREST_TINT = "rgba(66, 135, 245, ";
 
-export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
+export default function DamsTab({
+  dams,
+  userLocation,
+  nearestSlug,
+  influencingSlugs = [],
+  onSelect,
+}) {
   const rows = useMemo(() => {
     const hasOrigin =
       userLocation?.latitude != null && userLocation?.longitude != null;
@@ -28,11 +34,9 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
       });
   }, [dams, userLocation]);
 
-  // The nearest slug comes from the map (nearestDamSlug); fall back to the
-  // closest row so the highlight still works before the first map render.
+  // Fallback for the Closest chip before the map computes its own nearest.
   const nearest = nearestSlug ?? rows[0]?.dam.slug ?? null;
-  const incomplete =
-    rows.length > 0 && rows.length < EXPECTED_DAM_COUNT;
+  const incomplete = rows.length > 0 && rows.length < EXPECTED_DAM_COUNT;
 
   return (
     <View style={styles.wrap}>
@@ -51,14 +55,10 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
         </View>
       ) : (
         rows.map(({ dam, distanceMeters }) => {
-          const observationMs = parseDamObservationMs(
-            dam.observationDate,
-            dam.observationTime
-          );
-          const dotColor =
-            observationMs != null ? damFreshnessColor(observationMs) : "#a9a9a9";
+          const severity = resolveDamSeverity(dam);
           const dev = dam.deviationFromNHWL;
           const isNearest = dam.slug === nearest;
+          const isInfluencing = influencingSlugs.includes(dam.slug);
 
           return (
             <TouchableOpacity
@@ -67,7 +67,7 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
               onPress={() => onSelect(dam)}
               activeOpacity={0.7}
             >
-              <View style={[styles.dot, { backgroundColor: dotColor }]} />
+              <View style={[styles.dot, { backgroundColor: severity.color }]} />
               <View style={styles.main}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name}>{dam.name}</Text>
@@ -76,6 +76,28 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
                       <Text style={styles.chipText}>Closest</Text>
                     </View>
                   )}
+                  {!isNearest && isInfluencing && (
+                    <View style={[styles.chip, styles.chipRange]}>
+                      <Text style={[styles.chipText, styles.chipTextRange]}>
+                        In range
+                      </Text>
+                    </View>
+                  )}
+                  <View
+                    style={[
+                      styles.severityChip,
+                      { backgroundColor: `${severity.color}1A` },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.severityChipText,
+                        { color: severity.color },
+                      ]}
+                    >
+                      {severity.label}
+                    </Text>
+                  </View>
                   {distanceMeters != null && (
                     <Text style={styles.distance}>
                       {formatDistance(distanceMeters)}
@@ -85,7 +107,7 @@ export default function DamsTab({ dams, userLocation, nearestSlug, onSelect }) {
                 <Text style={styles.caption}>
                   {dev != null
                     ? `${dev > 0 ? "+" : ""}${dev} m vs NHWL`
-                    : "No NHWL reference"}
+                    : severity.title}
                 </Text>
               </View>
               <Text style={styles.rwl}>
@@ -170,7 +192,7 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
     flexWrap: "wrap",
   },
   name: {
@@ -188,6 +210,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     color: "#4287f5",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  chipRange: {
+    backgroundColor: "rgba(115, 123, 140, 0.12)",
+  },
+  chipTextRange: {
+    color: "#737B8C",
+  },
+  severityChip: {
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  severityChipText: {
+    fontSize: 10,
+    fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },

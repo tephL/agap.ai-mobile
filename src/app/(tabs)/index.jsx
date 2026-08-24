@@ -11,7 +11,8 @@ import { uploadUserLocation } from '../../services/usersService.js';
 import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
 import { getMyFamily } from '../../services/familyService.js';
 import { getDamStatuses } from '../../services/hazardService.js';
-import { haversineMeters } from '../../utils/haversine.js';
+import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/damSeverity';
+import { getInfluencingDams } from '@/components/hazards/damInfluence';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
@@ -37,6 +38,8 @@ const STALE_GRAY_THRESHOLD_MS = 30 * 60 * 1000;   // 30 min
 const OFFLINE_PACK_NAME = 'current-area-offline';
 const OFFLINE_PACK_RADIUS_KM = 5;
 const SELECTED_PERSON_FLY_ZOOM = 15;
+// Zoomed out just enough that the full 1.5 km halo ring stays on-screen.
+const DAM_FLY_ZOOM = 13.5;
 const SELECTED_PERSON_FLY_DURATION_MS = 1000;
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PERSON_CARD_HEIGHT_ESTIMATE = SCREEN_HEIGHT * 0.4;
@@ -44,6 +47,12 @@ const DAM_SHEET_COLLAPSED_ESTIMATE = SCREEN_HEIGHT * 0.45;
 const DAM_MARKER_COLOR = '#4287f5';
 const DAM_HALO_RADIUS_M = 1500;
 const HALO_SEGMENTS = 64;
+// Pulse cycle lengths per severity — the closer to spilling, the faster
+// the marker ring throbs.
+const DAM_PULSE_PERIODS = { normal: 3500, caution: 2000, danger: 1100 };
+const ROUTE_FIT_PADDING = { top: 120, right: 80, bottom: 320, left: 80 };
+// Stable empty array so prop identity stays consistent across renders.
+const EMPTY_SLUGS = [];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -155,6 +164,7 @@ export default function Index() {
 
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
+  const [damPulse, setDamPulse] = useState({ normal: 0, caution: 0, danger: 0 });
 
   // staleness re-check clock
   const [now, setNow] = useState(Date.now());
@@ -321,23 +331,22 @@ export default function Index() {
     })),
   };
 
-  // ---- derived geojson for dam markers + nearest-dam highlight -----------
-  const nearestDamSlug = useMemo(() => {
-    if (userLocation.latitude == null || userLocation.longitude == null) return null;
-    const origin = { lat: userLocation.latitude, lng: userLocation.longitude };
-    let best = null;
-    let bestDistance = null;
-    for (const dam of dams) {
-      if (!dam.coordinates) continue;
-      const distance = haversineMeters(origin, dam.coordinates);
-      if (distance == null) continue;
-      if (bestDistance == null || distance < bestDistance) {
-        bestDistance = distance;
-        best = dam.slug;
-      }
-    }
-    return best;
-  }, [dams, userLocation.latitude, userLocation.longitude]);
+  // ---- derived geojson for dam markers + influencing-dam highlight -------
+  // Dams whose severity lets them reach the user (severity-weighted radius),
+  // nearest first. All of them get the emphasized ring, a dashed route line,
+  // and a tappable route.
+  const influencingDams = useMemo(
+    () => getInfluencingDams(dams, userLocation),
+    [dams, userLocation]
+  );
+
+  const nearestDamSlug = influencingDams[0]?.dam.slug ?? null;
+
+  const influencingBySlug = useMemo(() => {
+    const bySlug = {};
+    for (const entry of influencingDams) bySlug[entry.dam.slug] = entry;
+    return bySlug;
+  }, [influencingDams]);
 
   const damsGeojson = useMemo(() => ({
     type: 'FeatureCollection',
@@ -355,6 +364,7 @@ export default function Index() {
           name: dam.name,
           reservoirWaterLevel: dam.reservoirWaterLevel,
           deviationFromNHWL: dam.deviationFromNHWL,
+          severity: resolveDamSeverity(dam).level,
         },
       })),
   }), [dams]);
@@ -376,38 +386,39 @@ export default function Index() {
         },
         properties: {
           slug: dam.slug,
-          isNearest: nearestDamSlug === dam.slug,
+          isInfluencing: influencingBySlug[dam.slug] != null,
+          severity: resolveDamSeverity(dam).level,
         },
       })),
-  }), [dams, nearestDamSlug]);
+  }), [dams, influencingBySlug]);
 
-  // Broken line from the user to the closest dam.
+  // Broken lines from the user to each influencing dam.
   const nearestRouteGeojson = useMemo(() => {
     if (
-      nearestDamSlug == null ||
+      influencingDams.length === 0 ||
       userLocation.latitude == null ||
       userLocation.longitude == null
     ) {
       return { type: 'FeatureCollection', features: [] };
     }
-    const target = dams.find((dam) => dam.slug === nearestDamSlug);
-    if (!target?.coordinates) return { type: 'FeatureCollection', features: [] };
     return {
       type: 'FeatureCollection',
-      features: [{
-        type: 'Feature',
-        id: 'nearest-dam-route',
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [userLocation.longitude, userLocation.latitude],
-            [target.coordinates.lng, target.coordinates.lat],
-          ],
-        },
-        properties: {},
-      }],
+      features: influencingDams
+        .filter(({ dam }) => dam.coordinates)
+        .map(({ dam, distanceMeters }, index) => ({
+          type: 'Feature',
+          id: `dam-route-${dam.slug}`,
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [userLocation.longitude, userLocation.latitude],
+              [dam.coordinates.lng, dam.coordinates.lat],
+            ],
+          },
+          properties: { slug: dam.slug, distanceMeters, index },
+        })),
     };
-  }, [dams, nearestDamSlug, userLocation.latitude, userLocation.longitude]);
+  }, [influencingDams, userLocation.latitude, userLocation.longitude]);
 
   // ---- pulsing "dih" effect ----------------------------------------------
   useEffect(() => {
@@ -415,8 +426,13 @@ export default function Index() {
     const start = Date.now();
 
     const tick = () => {
-      const elapsed = (Date.now() - start) % PULSE_DURATION_MS;
-      setPulse(elapsed / PULSE_DURATION_MS); // 0 to 1
+      setPulse((Date.now() - start) % PULSE_DURATION_MS / PULSE_DURATION_MS); // 0 to 1
+      // Dam rings pulse at their own per-severity cadence.
+      setDamPulse({
+        normal: (Date.now() - start) % DAM_PULSE_PERIODS.normal / DAM_PULSE_PERIODS.normal,
+        caution: (Date.now() - start) % DAM_PULSE_PERIODS.caution / DAM_PULSE_PERIODS.caution,
+        danger: (Date.now() - start) % DAM_PULSE_PERIODS.danger / DAM_PULSE_PERIODS.danger,
+      });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -431,6 +447,23 @@ export default function Index() {
   }, []);
 
   const ageMs = ['-', now, ['get', 'last_seen']];
+
+  // Dam severity color shared by markers, halos, and pulse rings.
+  const damSeverityColorExpr = [
+    'match', ['get', 'severity'],
+    'danger', SEVERITY_LEVELS.danger.color,
+    'caution', SEVERITY_LEVELS.caution.color,
+    SEVERITY_LEVELS.normal.color,
+  ];
+
+  // Stop value for the pulse radius: severity picks the phase, so only ONE
+  // zoom-based interpolate exists in the whole expression (style-spec rule).
+  const damPulseStop = (base, amp) => [
+    'match', ['get', 'severity'],
+    'danger', base + damPulse.danger * amp,
+    'caution', base + damPulse.caution * amp,
+    base + damPulse.normal * amp,
+  ];
 
   const staleColorExpr = [
     'case',
@@ -472,7 +505,7 @@ export default function Index() {
   const flyToDam = (lng, lat) => {
     cameraRef.current?.flyTo({
       center: [lng, lat],
-      zoom: SELECTED_PERSON_FLY_ZOOM,
+      zoom: DAM_FLY_ZOOM,
       duration: SELECTED_PERSON_FLY_DURATION_MS,
       padding: {
         top: 0,
@@ -513,6 +546,35 @@ export default function Index() {
     if (dam.coordinates) {
       flyToDam(dam.coordinates.lng, dam.coordinates.lat);
     }
+  };
+
+  // Tapping a dashed route frames that dam's route and brings up the
+  // drawer pre-loaded with its card.
+  const handleRoutePress = (event) => {
+    const slug = event?.nativeEvent?.features?.[0]?.properties?.slug;
+    if (slug == null || influencingBySlug[slug] == null) return;
+    const target = dams.find((dam) => dam.slug === slug);
+    if (!target?.coordinates || userLocation.latitude == null) return;
+
+    const lngs = [userLocation.longitude, target.coordinates.lng];
+    const lats = [userLocation.latitude, target.coordinates.lat];
+    cameraRef.current?.fitBounds(
+      [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
+      {
+        padding: ROUTE_FIT_PADDING,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+      },
+    );
+
+    setSelectedDam({
+      slug: target.slug,
+      name: target.name,
+      reservoirWaterLevel: target.reservoirWaterLevel,
+      deviationFromNHWL: target.deviationFromNHWL,
+    });
+    setHazardsOpen(true);
+    setSheetExpanded(false);
+    refreshDams();
   };
 
   const handleHazardsPress = () => {
@@ -640,9 +702,9 @@ export default function Index() {
                     type="fill"
                     id="damHaloFillLayer"
                     paint={{
-                      'fill-color': DAM_MARKER_COLOR,
+                      'fill-color': damSeverityColorExpr,
                       'fill-opacity': [
-                        'case', ['get', 'isNearest'], 0.12, 0.05,
+                        'case', ['get', 'isInfluencing'], 0.12, 0.05,
                       ],
                     }}
                   />
@@ -650,15 +712,15 @@ export default function Index() {
                     type="line"
                     id="damHaloBorderLayer"
                     paint={{
-                      'line-color': DAM_MARKER_COLOR,
-                      'line-width': ['case', ['get', 'isNearest'], 3.5, 2],
-                      'line-opacity': ['case', ['get', 'isNearest'], 1, 0.75],
+                      'line-color': damSeverityColorExpr,
+                      'line-width': ['case', ['get', 'isInfluencing'], 3.5, 2],
+                      'line-opacity': ['case', ['get', 'isInfluencing'], 1, 0.75],
                       'line-dasharray': [2, 1.5],
                     }}
                   />
                 </GeoJSONSource>
 
-                <GeoJSONSource id="nearestRouteSource" data={nearestRouteGeojson}>
+                <GeoJSONSource id="nearestRouteSource" data={nearestRouteGeojson} onPress={handleRoutePress}>
                   <Layer
                     type="line"
                     id="nearestRouteLayer"
@@ -671,12 +733,36 @@ export default function Index() {
                   />
                 </GeoJSONSource>
 
+                {/* Expanding ring per dam; cycle speed scales with severity */}
+                <GeoJSONSource id="damsPulseSource" data={damsGeojson}>
+                  <Layer
+                    type="circle"
+                    id="damsPulseLayer"
+                    paint={{
+                      'circle-color': damSeverityColorExpr,
+                      'circle-radius': [
+                        'interpolate', ['linear'], ['zoom'],
+                        5, damPulseStop(2.5, 14),
+                        10, damPulseStop(4, 20),
+                        16, damPulseStop(5, 24),
+                      ],
+                      'circle-opacity': [
+                        'match', ['get', 'severity'],
+                        'danger', Math.max(0.45 - damPulse.danger * 0.45, 0),
+                        'caution', Math.max(0.45 - damPulse.caution * 0.45, 0),
+                        Math.max(0.45 - damPulse.normal * 0.45, 0),
+                      ],
+                      'circle-stroke-width': 0,
+                    }}
+                  />
+                </GeoJSONSource>
+
                 <GeoJSONSource id="damsSource" data={damsGeojson} onPress={handleDamPress}>
                   <Layer
                     type="circle"
                     id="damsLayer"
                     paint={{
-                      'circle-color': DAM_MARKER_COLOR,
+                      'circle-color': damSeverityColorExpr,
                       'circle-radius': [
                         'interpolate', ['linear'], ['zoom'],
                         5, 2.5,
@@ -755,6 +841,12 @@ export default function Index() {
           key={selectedDam?.slug ?? 'drawer'}
           dams={dams}
           userLocation={userLocation}
+          nearestSlug={nearestDamSlug}
+          influencingSlugs={
+            Object.keys(influencingBySlug).length > 0
+              ? Object.keys(influencingBySlug)
+              : EMPTY_SLUGS
+          }
           dam={selectedDam}
           expanded={sheetExpanded}
           onExpandedChange={setSheetExpanded}

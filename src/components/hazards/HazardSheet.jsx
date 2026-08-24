@@ -19,6 +19,7 @@ import {
   formatObservationAge,
 } from "./damStatus";
 import HazardTabs from "./HazardTabs";
+import { resolveDamSeverity, describeDamStatus } from "./damSeverity";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -44,6 +45,7 @@ export default function HazardSheet({
   dams = [],
   userLocation,
   nearestSlug,
+  influencingSlugs = [],
   dam,
   expanded,
   onExpandedChange,
@@ -127,6 +129,8 @@ export default function HazardSheet({
     : null;
   const freshnessColor =
     observationMs != null ? damFreshnessColor(observationMs, now) : "#a9a9a9";
+
+  const severity = shownDam ? resolveDamSeverity(shownDam) : null;
 
   const handleClose = () => {
     Animated.timing(translateY, {
@@ -217,6 +221,24 @@ export default function HazardSheet({
 
         {shownDam && !detailLoading && (
           <View style={styles.summary}>
+            {severity && (
+              <View
+                style={[styles.severityCard, { backgroundColor: `${severity.color}1A`, borderColor: `${severity.color}59` }]}
+              >
+                <View style={styles.severityHead}>
+                  <Ionicons name={severity.icon} size={20} color={severity.color} />
+                  <View style={[styles.severityChip, { backgroundColor: severity.color }]}>
+                    <Text style={styles.severityChipText}>{severity.label}</Text>
+                  </View>
+                </View>
+                <Text style={[styles.severityTitle, { color: severity.color }]}>
+                  {severity.title}
+                </Text>
+                <Text style={styles.severityBody}>{describeDamStatus(shownDam, severity)}</Text>
+                <Text style={styles.severityAdvice}>{severity.advice}</Text>
+              </View>
+            )}
+
             {showStaleBanner && (
               <View style={styles.staleBanner}>
                 <Ionicons name="warning-outline" size={14} color="#E32F31" />
@@ -278,6 +300,7 @@ export default function HazardSheet({
             dams={dams}
             userLocation={userLocation}
             nearestSlug={nearestSlug}
+            influencingSlugs={influencingSlugs}
             onSelectDam={(selected) => onSelectDam?.(selected)}
           />
         </View>
@@ -380,6 +403,46 @@ const styles = StyleSheet.create({
   },
   summary: {
     paddingHorizontal: 20,
+  },
+  severityCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 12,
+  },
+  severityHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  severityChip: {
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  severityChipText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#ffffff",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  severityTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  severityBody: {
+    fontSize: 13,
+    color: "#182033",
+    lineHeight: 18,
+  },
+  severityAdvice: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#737B8C",
+    lineHeight: 17,
   },
   staleBanner: {
     flexDirection: "row",
