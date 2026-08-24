@@ -11,7 +11,7 @@ export async function fetchClustersWithinLocation(){
 
 export async function fetchClusterReports(clusterId){
   try{
-    const res = await api.get(`/api/${clusterId}/clusters`);
+    const res = await api.get(`/api/clusters/${clusterId}/reports`);
     return res;
   } catch(e){
     console.log(e);

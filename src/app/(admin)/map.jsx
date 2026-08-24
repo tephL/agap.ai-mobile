@@ -21,6 +21,13 @@ const LOCATE_ZOOM = 15;
 const LOCATE_FLY_DURATION_MS = 1000;
 const CLUSTERS_FETCH_INTERVAL_MS = 1000 * 60; // 1 min
 
+// where the camera settles when a cluster is expanded
+const CLUSTER_FOCUS_ZOOM = 15;
+const CLUSTER_FOCUS_DURATION_MS = 800;
+// pushes the visual center upward so the cluster sits in the
+// upper-middle of the screen instead of behind the details window
+const CLUSTER_FOCUS_PADDING = { top: 80, right: 0, bottom: 400, left: 0 };
+
 const CLUSTER_PRIORITY_COLOR_EXPR = [
   'match',
   ['get', 'priority'],
@@ -144,6 +151,21 @@ export default function Index() {
     };
   }, [clusterReports, selectedClusterId]);
 
+  // the selected cluster re-emitted on its own source, so the halo can
+  // inherit its priority color without a filter expression
+  const selectedClusterGeojson = useMemo(() => {
+    const feature =
+      selectedClusterId != null
+        ? clustersGeojson.features.find(
+            (f) => f.properties.cluster_id === selectedClusterId
+          )
+        : null;
+    return {
+      type: 'FeatureCollection',
+      features: feature ? [feature] : [],
+    };
+  }, [clustersGeojson, selectedClusterId]);
+
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
     if (locating) return;
@@ -205,6 +227,20 @@ export default function Index() {
       setClusterReports([]);
       setReportsLoading(true);
       setActiveClusterId(clusterId);
+
+      const target = clusters.find((c) => c.cluster_id === clusterId);
+      if (
+        target &&
+        typeof target.latitude === 'number' &&
+        typeof target.longitude === 'number'
+      ) {
+        cameraRef.current?.flyTo({
+          center: [target.longitude, target.latitude],
+          zoom: CLUSTER_FOCUS_ZOOM,
+          duration: CLUSTER_FOCUS_DURATION_MS,
+          padding: CLUSTER_FOCUS_PADDING,
+        });
+      }
 
       try {
         const { data } = await fetchClusterReports(clusterId);
@@ -268,29 +304,34 @@ export default function Index() {
                 'circle-opacity': 0.85,
               }}
             />
-            {selectedClusterId != null && (
-              <Layer
-                type="circle"
-                id="selectedClusterHalo"
-                filter={['==', ['get', 'cluster_id'], selectedClusterId]}
-                paint={{
-                  'circle-color': 'transparent',
-                  'circle-radius': [
-                    'interpolate', ['linear'], ['zoom'],
-                    5, 9,
-                    10, 15,
-                    16, 24,
-                  ],
-                  'circle-stroke-width': 2.5,
-                  'circle-stroke-color': '#182033',
-                  'circle-opacity': 0.4,
-                }}
-              />
-            )}
           </GeoJSONSource>
         )}
 
-        {mapReady && selectedClusterId != null && (
+        {/* selection glow around the expanded cluster — empty data hides it */}
+        {mapReady && (
+          <GeoJSONSource id="selectedClusterSource" data={selectedClusterGeojson}>
+            <Layer
+              type="circle"
+              id="selectedClusterHalo"
+              paint={{
+                'circle-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-opacity': 0.15,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  5, 10,
+                  10, 18,
+                  16, 30,
+                ],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-stroke-opacity': 0.9,
+              }}
+            />
+          </GeoJSONSource>
+        )}
+
+        {/* individual reports inside the expanded cluster — empty data hides them */}
+        {mapReady && (
           <GeoJSONSource id="clusterReportsSource" data={reportsGeojson}>
             <Layer
               type="circle"
@@ -299,9 +340,10 @@ export default function Index() {
                 'circle-color': REPORT_COLOR,
                 'circle-radius': [
                   'interpolate', ['linear'], ['zoom'],
-                  10, 5,
-                  14, 7,
-                  18, 10,
+                  8, 4,
+                  12, 6,
+                  16, 9,
+                  20, 12,
                 ],
                 'circle-stroke-width': 2,
                 'circle-stroke-color': '#ffffff',
