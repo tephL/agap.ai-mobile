@@ -1,75 +1,138 @@
-import { StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
-import colors from "../../constants/colors";
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import * as Location from 'expo-location';
+import { useEffect, useRef, useState } from "react";
+import { Map, Camera, NativeUserLocation } from '@maplibre/maplibre-react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function MapScreen() {
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const MAPTILER_API_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
+const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
+const PH_CENTER = [121.7740, 12.8797];
+const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_API_KEY}`;
+
+const LOCATE_ZOOM = 15;
+const LOCATE_FLY_DURATION_MS = 1000;
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+export default function Index() {
+  // location / permissions state
+  const [locationGranted, setLocationGranted] = useState(false);
+  const [userLocation, setUserLocation] = useState({
+    latitude: null,
+    longitude: null,
+  });
+  const [locating, setLocating] = useState(false);
+
+  const cameraRef = useRef(null);
+
+  // ---- permissions -----------------------------------------------------
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationGranted(status === "granted");
+      if (status !== "granted") console.log('permission denied');
+    })();
+  }, []);
+
+  // ---- handlers -----------------------------------------------------------
+  const handleLocatePress = async () => {
+    if (locating) return;
+    setLocating(true);
+    try {
+      let lat = userLocation.latitude;
+      let lng = userLocation.longitude;
+
+      if (lat == null || lng == null) {
+        const locationData = await Location.getCurrentPositionAsync();
+        lat = locationData.coords.latitude;
+        lng = locationData.coords.longitude;
+        setUserLocation({ latitude: lat, longitude: lng });
+      }
+
+      cameraRef.current?.flyTo({
+        center: [lng, lat],
+        zoom: LOCATE_ZOOM,
+        duration: LOCATE_FLY_DURATION_MS,
+      });
+    } catch (e) {
+      console.log('Failed to locate user', e);
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar style="dark" />
-      <View style={styles.container}>
-        <Text style={styles.pageLabel}>Map</Text>
-        <View style={styles.placeholderCard}>
-          <View style={styles.iconWrap}>
-            <Ionicons name="map" size={32} color={colors.primary} />
-          </View>
-          <Text style={styles.title}>This is the Map page</Text>
-          <Text style={styles.copy}>
-            The live dispatch map will appear here.
-          </Text>
-        </View>
-      </View>
-    </SafeAreaView>
+    <View style={styles.container}>
+      <Map
+        style={styles.map}
+        mapStyle={MAP_STYLE_URL}
+        logoEnabled={false}
+        attributionEnabled={false}
+        compassEnabled={true}
+        compassViewPosition={3}
+        rotateEnabled={true}
+        pitchEnabled={true}
+      >
+        <Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: PH_CENTER,
+            zoomLevel: 6,
+          }}
+          maxBounds={PH_BOUNDS}
+          minZoom={6}
+          maxZoom={20}
+          trackUserLocation={locationGranted ? "default" : undefined}
+        />
+
+        {locationGranted && (
+          <NativeUserLocation androidRenderMode="gps" />
+        )}
+      </Map>
+
+      <TouchableOpacity
+        style={styles.locateButton}
+        onPress={handleLocatePress}
+        activeOpacity={0.7}
+        disabled={locating}
+      >
+        {locating ? (
+          <ActivityIndicator size="small" color="#4287f5" />
+        ) : (
+          <Ionicons name="locate" size={24} color="#4287f5" />
+        )}
+      </TouchableOpacity>
+    </View>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
   },
-  pageLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    color: colors.muted,
-    marginBottom: 12,
-  },
-  placeholderCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 6,
-  },
-  copy: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.muted,
-    textAlign: "center",
+  map: { flex: 1 },
+  locateButton: {
+    position: 'absolute',
+    bottom: 32,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
