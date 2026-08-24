@@ -205,9 +205,8 @@ export default function ClusterDetailsWindow({
                   <Text style={styles.personName} numberOfLines={1}>
                     {person.name ?? "Unknown"}
                   </Text>
-                  <Text style={styles.personUsername} numberOfLines={1}>
-                    {person.reports.length}{" "}
-                    {person.reports.length === 1 ? "report" : "reports"}
+                  <Text style={styles.personSummary} numberOfLines={2}>
+                    {cluster.ai_summary ?? "No summary yet."}
                   </Text>
                 </View>
                 <Ionicons
@@ -433,8 +432,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
   },
-  personUsername: {
+  personSummary: {
     fontSize: 12,
+    lineHeight: 16,
     color: colors.muted,
   },
   emptyText: {
