@@ -1,6 +1,5 @@
 import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer } from '@maplibre/maplibre-react-native';
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -18,6 +17,7 @@ import { useHazardElevation } from '../../hooks/useHazardElevation';
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import { PersonCard } from '@/components/PersonCard';
+import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import LayersControl from '@/components/hazards/LayersControl';
 import { HAZARD_LAYERS } from '@/components/hazards/layerRegistry';
@@ -135,12 +135,8 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
 export default function Index() {
   const { selectedUserId } = useLocalSearchParams();
 
-  // location / permissions state
-  const [locationGranted, setLocationGranted] = useState(false);
-  const [userLocation, setUserLocation] = useState({
-    latitude: null,
-    longitude: null,
-  });
+  // location / permissions
+  const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
 
   // family markers state
@@ -169,15 +165,6 @@ export default function Index() {
 
   // staleness re-check clock
   const [now, setNow] = useState(Date.now());
-
-  // ---- permissions -----------------------------------------------------
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationGranted(status === "granted");
-      if (status !== "granted") console.log('permission denied');
-    })();
-  }, []);
 
   // ---- location sending + family fetch loop (runs while screen focused) ---
   const refreshFamilyLocations = useCallback(async () => {
@@ -225,21 +212,16 @@ export default function Index() {
       const sendLocation = async () => {
         if (cancelled) return;
         let offlineDownloadStarted = false;
-        const locationData = await Location.getCurrentPositionAsync();
-        const { coords: { latitude, longitude } } = locationData;
-
-        setUserLocation({
-          latitude: latitude,
-          longitude: longitude,
-        });
+        const coords = await resolveCoords();
+        if (!coords) return;
 
         if (!offlineDownloadStarted) {
           offlineDownloadStarted = true;
-          downloadOfflineMapForCurrentArea({ latitude, longitude });
+          downloadOfflineMapForCurrentArea(coords);
         }
 
         try {
-          const logLocation = await uploadUserLocation({ latitude, longitude });
+          await uploadUserLocation(coords);
           console.log('sent location');
         } catch (e) {
           console.error(e.response?.data);
@@ -261,7 +243,7 @@ export default function Index() {
         clearInterval(sendInterval);
         clearInterval(familyFetchInterval);
       }
-    }, [refreshFamilyLocations, refreshDams])
+    }, [refreshFamilyLocations, resolveCoords, refreshDams])
   );
 
   // ---- honor a selectedUserId passed in from FamilyScreen -----------------
@@ -606,25 +588,18 @@ export default function Index() {
 
   const handleLocatePress = async () => {
     if (locating) return;
-    setLocating(true);
+    if (!getCachedCoords()) setLocating(true);
     try {
-      let lat = userLocation.latitude;
-      let lng = userLocation.longitude;
-
-      if (lat == null || lng == null) {
-        const locationData = await Location.getCurrentPositionAsync();
-        lat = locationData.coords.latitude;
-        lng = locationData.coords.longitude;
-        setUserLocation({ latitude: lat, longitude: lng });
-      }
+      const coords = await resolveCoords();
+      if (!coords) return;
 
       cameraRef.current?.flyTo({
-        center: [lng, lat],
+        center: [coords.longitude, coords.latitude],
         zoom: SELECTED_PERSON_FLY_ZOOM,
         duration: SELECTED_PERSON_FLY_DURATION_MS,
       });
 
-      await refreshFamilyLocations();
+      refreshFamilyLocations();
     } catch (e) {
       console.log('Failed to locate user', e);
     } finally {
