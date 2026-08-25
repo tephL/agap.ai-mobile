@@ -27,6 +27,7 @@ import {
   attachReportDescription,
   requestReportLocation,
   getDeviceLocation,
+  getCachedLocation,
   sendOfflineReportSms,
   getOfflineDescriptionLimit,
   OFFLINE_DESCRIPTION_MAX,
@@ -135,10 +136,19 @@ export default function ReportScreen() {
 
   // Offline mode has no photo/network round trip to kick off location
   // fetching, so grab it as soon as the screen mounts offline purely to
-  // give the description counter an accurate limit. The actual SMS send
-  // re-fetches location fresh at submit time regardless.
+  // give the description counter an accurate limit.  If a fresh cached
+  // location already exists (from a prior call within the same session)
+  // use it immediately — otherwise fetch and cache it.
   useEffect(() => {
     if (isOnline || offlineCoords) return;
+
+    const cached = getCachedLocation();
+    if (cached) {
+      setOfflineCoords(cached);
+      setOfflineDescLimit(getOfflineDescriptionLimit(cached));
+      return;
+    }
+
     let cancelled = false;
     getDeviceLocation()
       .then((coords) => {
