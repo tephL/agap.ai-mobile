@@ -95,6 +95,7 @@ export default function Index() {
   const [mapReady, setMapReady] = useState(false);
   const cameraRef = useRef(null);
   const handledFocusRef = useRef(0);
+  const handledTeamFocusRef = useRef(0);
 
   // drives the expanding halo ring around every cluster; a single phase
   // value is baked into the pulse layer's paint each tick
@@ -110,8 +111,16 @@ export default function Index() {
 
   // team.jsx reads the selected cluster across tabs; focusNonce marks
   // explicit focus requests coming from the Reports tab, clustersNonce
-  // marks cluster mutations (resolve/assign) done in other tabs
-  const { activeClusterId, setActiveClusterId, focusNonce, clustersNonce } = useCluster();
+  // marks cluster mutations (resolve/assign) done in other tabs,
+  // focusTeamNonce marks "go to this team" requests (Teams tab)
+  const {
+    activeClusterId,
+    setActiveClusterId,
+    focusNonce,
+    clustersNonce,
+    focusTeamId,
+    focusTeamNonce,
+  } = useCluster();
 
   // ---- clusters + teams fetch loop ---------------------------------------
   const refreshClusters = useCallback(async () => {
@@ -429,6 +438,40 @@ export default function Index() {
     handledFocusRef.current = focusNonce;
     expandCluster(activeClusterId);
   }, [focusNonce, activeClusterId, mapReady, clusters, expandCluster]);
+
+  // "go to this team" from the Team detail screen: select the team's pin
+  // (which drops any expanded cluster, same as tapping the pin) and fly
+  // the camera to its position; waits for map + teams data like above
+  useEffect(() => {
+    if (
+      focusTeamNonce === handledTeamFocusRef.current ||
+      focusTeamId == null ||
+      !mapReady ||
+      teams.length === 0
+    ) {
+      return;
+    }
+    handledTeamFocusRef.current = focusTeamNonce;
+
+    const team = teams.find((t) => t.team_id === focusTeamId);
+    if (!team) return;
+
+    setSelectedTeamId(team.team_id);
+    collapseCluster();
+
+    if (
+      typeof team.lat === "number" &&
+      typeof team.lng === "number" &&
+      !Number.isNaN(team.lat) &&
+      !Number.isNaN(team.lng)
+    ) {
+      cameraRef.current?.flyTo({
+        center: [team.lng, team.lat],
+        zoom: CLUSTER_FOCUS_ZOOM,
+        duration: CLUSTER_FOCUS_DURATION_MS,
+      });
+    }
+  }, [focusTeamNonce, focusTeamId, mapReady, teams, collapseCluster]);
 
   // ---------------------------------------------------------------------
   return (

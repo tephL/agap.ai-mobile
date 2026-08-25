@@ -9,7 +9,11 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -62,8 +66,9 @@ function Stepper({ status }) {
 
 export default function TeamDetailScreen() {
   const params = useLocalSearchParams();
+  const router = useRouter();
   const teamId = Number(params.teamId);
-  const { invalidateClusters } = useCluster();
+  const { invalidateClusters, focusTeam } = useCluster();
   // Preselected when arriving via "Assign a Team" on a cluster.
   const preselectClusterId = params.assignClusterId
     ? Number(params.assignClusterId)
@@ -183,6 +188,19 @@ export default function TeamDetailScreen() {
     Linking.openURL(`tel:${team.contact_number.replace(/\s+/g, "")}`);
   };
 
+  const hasCoords =
+    Boolean(team) &&
+    typeof team.lat === "number" &&
+    typeof team.lng === "number";
+
+  // Hand off to the Map tab: it selects the team's pin and flies the
+  // camera to its position (see the focusTeam effect in map.jsx).
+  const handleGoToMap = () => {
+    if (!hasCoords) return;
+    focusTeam(team.team_id);
+    router.navigate("/(admin)/map");
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -237,6 +255,16 @@ export default function TeamDetailScreen() {
             <MaterialIcons name="call" size={15} color={colors.muted} />
             <Text style={styles.contactText}>{team.contact_number}</Text>
           </View>
+          {hasCoords ? (
+            <TouchableOpacity
+              style={styles.mapButton}
+              activeOpacity={0.8}
+              onPress={handleGoToMap}
+            >
+              <MaterialIcons name="near-me" size={15} color={colors.primary} />
+              <Text style={styles.mapButtonText}>Go to location on map</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Assignment */}
@@ -431,6 +459,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.text,
+  },
+  mapButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 9,
+  },
+  mapButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
   },
   sectionCard: {
     borderWidth: 1,
