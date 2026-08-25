@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import PriorityChip from "../ui/PriorityChip";
+import StatusBadge from "../ui/StatusBadge";
 
 const TABS = [
   { key: "plan", label: "Action Plan" },
@@ -38,7 +39,8 @@ export default function ClusterDetailsWindow({
   cluster,
   reports,
   loading,
-  teamAssigned = false,
+  assignedTeam = null,
+  assignedExtraCount = 0,
   onClose,
   onAssignTeam,
 }) {
@@ -73,6 +75,18 @@ export default function ClusterDetailsWindow({
           <Ionicons name="close" size={22} color={colors.text} />
         </TouchableOpacity>
       </View>
+
+      {/* Team currently dispatched to this cluster */}
+      {assignedTeam ? (
+        <View style={styles.assignedBanner}>
+          <Ionicons name="people-circle-outline" size={18} color={colors.primary} />
+          <Text style={styles.assignedText} numberOfLines={1}>
+            {assignedTeam.name}
+            {assignedExtraCount > 0 ? ` +${assignedExtraCount}` : ""}
+          </Text>
+          <StatusBadge status={assignedTeam.status} />
+        </View>
+      ) : null}
 
       {/* Tab toggle */}
       <View style={styles.tabTrack}>
@@ -165,8 +179,8 @@ export default function ClusterDetailsWindow({
           </ScrollView>
 
           {/* Pinned below the scroll area so it stays visible while scrolling.
-              Hidden once a team is already dispatched to this cluster. */}
-          {!teamAssigned ? (
+              Hidden while a team is dispatched to this cluster. */}
+          {!assignedTeam ? (
             <TouchableOpacity
               style={styles.assignButton}
               activeOpacity={0.8}
@@ -307,6 +321,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.muted,
     textTransform: "capitalize",
+  },
+  assignedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  assignedText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.text,
   },
   tabTrack: {
     flexDirection: "row",

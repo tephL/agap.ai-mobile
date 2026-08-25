@@ -226,12 +226,14 @@ export default function Index() {
     };
   }, [clustersGeojson, selectedClusterId]);
 
-  // the expanded cluster already has a team on it (its assignment is still
-  // active), so the details window must not offer "Assign a Team" again
-  const selectedClusterAssigned = useMemo(() => {
-    if (selectedCluster == null) return false;
+  // team(s) currently dispatched to the expanded cluster — shown in the
+  // details window banner in place of the "Assign a Team" button
+  const selectedAssignedTeam = useMemo(() => {
+    if (selectedCluster == null) return null;
     const clusterId = Number(selectedCluster.cluster_id);
-    return teams.some((t) => Number(t.assigned_to) === clusterId);
+    const assigned = teams.filter((t) => Number(t.assigned_to) === clusterId);
+    if (assigned.length === 0) return null;
+    return { team: assigned[0], extraCount: assigned.length - 1 };
   }, [teams, selectedCluster]);
 
   // ---- handlers -----------------------------------------------------------
@@ -560,7 +562,8 @@ export default function Index() {
           cluster={selectedCluster}
           reports={clusterReports}
           loading={reportsLoading}
-          teamAssigned={selectedClusterAssigned}
+          assignedTeam={selectedAssignedTeam?.team ?? null}
+          assignedExtraCount={selectedAssignedTeam?.extraCount ?? 0}
           onClose={collapseCluster}
           onAssignTeam={() => setAssignOpen(true)}
         />
