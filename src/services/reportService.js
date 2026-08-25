@@ -18,6 +18,20 @@ export const OFFLINE_DESCRIPTION_MAX = 100;
 // less reliable to deliver on a weak/offline-adjacent carrier connection.
 const SMS_SEGMENT_LIMIT = 160;
 
+// --- Location cache ---
+// In-memory cache so the offline SMS flow doesn't pay for two full GPS fixes
+// (once for the character counter on mount, again at submit time).  The first
+// getDeviceLocation() call warms the cache; subsequent calls within the TTL
+// return instantly without touching the GPS hardware or re-checking permissions.
+let _cachedLocation = null;    // { latitude, longitude }
+let _cachedTimestamp = 0;      // Date.now() when _cachedLocation was set
+const LOCATION_CACHE_TTL_MS = 30_000; // 30 seconds — fresh enough for an SOS
+
+// Permission / services status cached after the first successful check so
+// subsequent calls within the same session skip the async checks entirely.
+let _servicesEnabled = false;
+let _permissionGranted = false;
+
 function guessMimeType(filename) {
   const match = /\.(\w+)$/.exec(filename ?? "");
   const ext = match ? match[1].toLowerCase() : "jpg";
@@ -141,29 +155,73 @@ export async function requestReportLocation() {
  * reachable anyway. Same permission/services checks as
  * requestReportLocation(), reusing the same `code`s so the report screen's
  * existing error handling (open Settings / retry copy) still applies.
+ *
+ * Results are cached for LOCATION_CACHE_TTL_MS so the offline SMS flow
+ * (character counter on mount → actual send on submit) doesn't pay for
+ * two full GPS fixes.
  */
 export async function getDeviceLocation() {
-  const servicesEnabled = await Location.hasServicesEnabledAsync();
-  if (!servicesEnabled) {
-    throw locationError(
-      "SERVICES_DISABLED",
-      "Location services are turned off on this device."
-    );
+  // Return cached location instantly when still fresh — no GPS hardware
+  // access, no permission checks, no async overhead.
+  if (
+    _cachedLocation &&
+    Date.now() - _cachedTimestamp < LOCATION_CACHE_TTL_MS
+  ) {
+    return _cachedLocation;
   }
 
-  const { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== "granted") {
-    throw locationError("PERMISSION_DENIED", "Location permission was denied.");
+  // Permission/services checks are cached after the first success so
+  // we don't re-query them on every call within the same session.
+  if (!_servicesEnabled) {
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    if (!servicesEnabled) {
+      throw locationError(
+        "SERVICES_DISABLED",
+        "Location services are turned off on this device."
+      );
+    }
+    _servicesEnabled = true;
+  }
+
+  if (!_permissionGranted) {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      _permissionGranted = false;
+      throw locationError(
+        "PERMISSION_DENIED",
+        "Location permission was denied."
+      );
+    }
+    _permissionGranted = true;
   }
 
   const position = await Location.getCurrentPositionAsync({
     accuracy: Location.Accuracy.Balanced,
   });
 
-  return {
+  _cachedLocation = {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
   };
+  _cachedTimestamp = Date.now();
+
+  return _cachedLocation;
+}
+
+/**
+ * Returns the most recently cached location synchronously, or null if
+ * nothing has been fetched yet or the cache has expired.  Useful for UI
+ * components (e.g. the SMS character counter) that need coordinates
+ * immediately on mount without triggering an async location lookup.
+ */
+export function getCachedLocation() {
+  if (
+    _cachedLocation &&
+    Date.now() - _cachedTimestamp < LOCATION_CACHE_TTL_MS
+  ) {
+    return _cachedLocation;
+  }
+  return null;
 }
 
 /**
