@@ -28,6 +28,17 @@ interface LayerRowProps {
   onSelect: () => void;
 }
 
+const LAYER_DESCRIPTIONS: Record<string, string> = {
+  flood_5yr:
+    "Areas likely to flood in a common 5-year storm event",
+  flood_25yr:
+    "Areas likely to flood in a 1-in-25 year storm event",
+  flood_100yr:
+    "Areas likely to flood in a 1-in-100 year extreme storm event",
+  landslide:
+    "Zones prone to landslides based on slope, soil, and rainfall",
+};
+
 function LayerRow({ config, active, onSelect }: LayerRowProps) {
   const { status, progress, download, remove } =
     useOfflinePMTilesLayer(config.id);
@@ -62,19 +73,12 @@ function LayerRow({ config, active, onSelect }: LayerRowProps) {
             <Text style={[styles.label, !active && styles.labelDisabled]}>
               {config.label}
             </Text>
-            {config.recommended ? (
-              <View style={[styles.badge, active && styles.badgeActive]}>
-                <Text
-                  style={[
-                    styles.badgeText,
-                    active && styles.badgeTextActive,
-                  ]}
-                >
-                  Recommended
-                </Text>
-              </View>
-            ) : null}
           </View>
+          {LAYER_DESCRIPTIONS[config.id] ? (
+            <Text style={styles.description}>
+              {LAYER_DESCRIPTIONS[config.id]}
+            </Text>
+          ) : null}
           <Text style={styles.meta}>{metaText}</Text>
           {status === "downloading" ? (
             <View style={styles.track}>
@@ -132,14 +136,14 @@ export default function HazardLayersPanel({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>Map layers</Text>
+            <Text style={styles.title}>Hazard Map Layers</Text>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
           </View>
           <Text style={styles.subtitle}>
-            Show one hazard map on the basemap at a time. Layers stream for
-            the area you are viewing — download to keep them offline.
+            Select a hazard overlay to view on the map. Only one layer can be
+            shown at a time to keep performance smooth.
           </Text>
 
           <ScrollView style={styles.list} nestedScrollEnabled>
@@ -210,6 +214,7 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 14, fontWeight: "600", color: "#111827" },
   labelDisabled: { color: "#9CA3AF" },
+  description: { fontSize: 11, color: "#6B7280", marginTop: 2 },
   badge: {
     paddingHorizontal: 6,
     paddingVertical: 1,

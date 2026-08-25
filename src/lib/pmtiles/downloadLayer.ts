@@ -28,23 +28,20 @@ export interface HazardLayerConfig {
   hazardType: HazardType;
   /** Rounded display size; also used to flag oversized downloads in UI. */
   approxSizeMB: number;
-  /** Marks the layer pre-selected on first launch (exactly one, please). */
-  recommended?: boolean;
 }
 
 export const HAZARD_LAYERS: HazardLayerConfig[] = [
   {
     id: "flood_5yr",
-    label: "Flood — 5 year return",
+    label: "Flood Risk (5-Year Return Period)",
     remoteFileName: "flood_5yr.pmtiles",
     sourceLayerId: "flood_5yr",
     hazardType: "flood",
     approxSizeMB: 486,
-    recommended: true,
   },
   {
     id: "flood_25yr",
-    label: "Flood — 25 year return",
+    label: "Flood Risk (25-Year Return Period)",
     remoteFileName: "flood_25yr.pmtiles",
     sourceLayerId: "flood_25yr",
     hazardType: "flood",
@@ -52,7 +49,7 @@ export const HAZARD_LAYERS: HazardLayerConfig[] = [
   },
   {
     id: "flood_100yr",
-    label: "Flood — 100 year return",
+    label: "Flood Risk (100-Year Return Period)",
     remoteFileName: "flood_100yr.pmtiles",
     sourceLayerId: "flood_100yr",
     hazardType: "flood",
@@ -60,60 +57,16 @@ export const HAZARD_LAYERS: HazardLayerConfig[] = [
   },
   {
     id: "landslide",
-    label: "Landslide susceptibility",
+    label: "Landslide Susceptibility",
     remoteFileName: "landslide.pmtiles",
     sourceLayerId: "landslide",
     hazardType: "landslide",
     // ~2.65GB: exceeds the ~1.8GB risk threshold documented in ExpoFileSource.
     approxSizeMB: 2713,
   },
-  {
-    id: "debris_flow",
-    label: "Debris flow",
-    remoteFileName: "debris_flow.pmtiles",
-    sourceLayerId: "debris_flow",
-    hazardType: "debris-flow",
-    approxSizeMB: 20,
-  },
-  {
-    id: "storm_surge_ssa1",
-    label: "Storm surge — SSA 1",
-    remoteFileName: "storm_surge_ssa1.pmtiles",
-    sourceLayerId: "storm_surge_ssa1",
-    hazardType: "storm-surge",
-    approxSizeMB: 59,
-  },
-  {
-    id: "storm_surge_ssa2",
-    label: "Storm surge — SSA 2",
-    remoteFileName: "storm_surge_ssa2.pmtiles",
-    sourceLayerId: "storm_surge_ssa2",
-    hazardType: "storm-surge",
-    approxSizeMB: 65,
-  },
-  {
-    id: "storm_surge_ssa3",
-    label: "Storm surge — SSA 3",
-    remoteFileName: "storm_surge_ssa3.pmtiles",
-    sourceLayerId: "storm_surge_ssa3",
-    hazardType: "storm-surge",
-    approxSizeMB: 66,
-  },
-  {
-    id: "storm_surge_ssa4",
-    label: "Storm surge — SSA 4",
-    remoteFileName: "storm_surge_ssa4.pmtiles",
-    sourceLayerId: "storm_surge_ssa4",
-    hazardType: "storm-surge",
-    approxSizeMB: 64,
-  },
 ];
 
 const LAYERS_BY_ID = new Map(HAZARD_LAYERS.map((layer) => [layer.id, layer]));
-
-/** The layer pre-selected on first launch (flood 5-year). */
-export const RECOMMENDED_LAYER_ID =
-  HAZARD_LAYERS.find((layer) => layer.recommended)?.id ?? HAZARD_LAYERS[0].id;
 
 /** Files larger than this are flagged as risky for JS-side range reads on Android. */
 export const JS_RANGE_READ_RISK_BYTES = 1.8 * 1024 * 1024 * 1024;
