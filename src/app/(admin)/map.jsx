@@ -38,6 +38,21 @@ const CLUSTER_FOCUS_DURATION_MS = 800;
 // upper-middle of the screen instead of behind the details window
 const CLUSTER_FOCUS_PADDING = { top: 80, right: 0, bottom: 400, left: 0 };
 
+// marching-ants steps for planned-route lines: cycling through these dash
+// patterns makes the dashes flow along each line's direction, i.e. from
+// the team base toward its assigned cluster; stepped off the shared
+// pulsePhase clock (~8 frames per ~1s cycle)
+const ROUTE_DASH_SEQUENCE = [
+  [0, 4, 3],
+  [0.5, 4, 2.5],
+  [1, 4, 2],
+  [1.5, 4, 1.5],
+  [2, 4, 1],
+  [2.5, 4, 0.5],
+  [3, 4, 0],
+  [0, 0.5, 3, 3.5],
+];
+
 const CLUSTER_PRIORITY_COLOR_EXPR = [
   'match',
   ['get', 'priority'],
@@ -363,6 +378,13 @@ export default function Index() {
   const pulseScale = 1 + 1.6 * pulsePhase;
   const pulseFade = 1 - pulsePhase;
 
+  // route dashes march toward the destination using the same clock
+  const routeDashArray =
+    ROUTE_DASH_SEQUENCE[
+      Math.floor(pulsePhase * ROUTE_DASH_SEQUENCE.length) %
+        ROUTE_DASH_SEQUENCE.length
+    ];
+
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
     if (locating) return;
@@ -665,7 +687,8 @@ export default function Index() {
                 'line-opacity': 0.6,
               }}
             />
-            {/* dashed orange to match the busy-team pin color */}
+            {/* dashed orange to match the busy-team pin color; dash
+                pattern cycles so the line flows toward the cluster */}
             <Layer
               type="line"
               id="routesLayer"
@@ -680,7 +703,7 @@ export default function Index() {
                   8, 2,
                   14, 4,
                 ],
-                'line-dasharray': [1.5, 2],
+                'line-dasharray': routeDashArray,
                 'line-opacity': 0.9,
               }}
             />
