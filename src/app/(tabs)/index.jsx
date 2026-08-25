@@ -17,6 +17,7 @@ import { useHazardElevation } from '../../hooks/useHazardElevation';
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import { PersonCard } from '@/components/PersonCard';
+import { AllHazardOverlays } from '@/components/HazardLayerToggle';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import LayersControl from '@/components/hazards/LayersControl';
@@ -790,6 +791,10 @@ export default function Index() {
             androidRenderMode="gps"
           />
         )}
+
+        {/* hazard overlays — stream tiles for the visible area; uses the
+            local archive automatically once a layer has been downloaded */}
+        {mapReady && <AllHazardOverlays />}
       </Map>
 
       <LayersControl
