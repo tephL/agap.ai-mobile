@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 // adjust this import to wherever fetchClustersWithinLocation actually lives
 import { fetchClustersWithinLocation, fetchClusterReports } from '../../services/dispatcher/clusterServ.js';
 import { getTeams } from '../../services/teamService';
+import { getRouteCoordinates } from '../../services/routeService';
 import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
 import TeamDetailsWindow from '../../components/dispatcher/TeamDetailsWindow';
@@ -74,6 +75,10 @@ export default function Index() {
   // location / permissions
   const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
+  // while true the camera tracks the user's position; any programmatic
+  // flight to a pin must turn it off first or tracking yanks the camera
+  // back to the user on the next GPS fix
+  const [followsUser, setFollowsUser] = useState(true);
 
   // cluster markers state
   const [clusters, setClusters] = useState([]);
@@ -81,6 +86,9 @@ export default function Index() {
   // team markers state
   const [teams, setTeams] = useState([]);
   const [selectedTeamId, setSelectedTeamId] = useState(null);
+
+  // planned routes for dispatched teams: team_id -> LineString coordinates
+  const [teamRoutes, setTeamRoutes] = useState({});
 
   // expanded cluster state (reports shown on map + details window)
   const [selectedClusterId, setSelectedClusterId] = useState(null);
@@ -152,6 +160,80 @@ export default function Index() {
     refreshClusters();
   }, [clustersNonce, refreshClusters]);
 
+  // ---- planned routes: dispatched team base -> assigned cluster ----------
+  const activeDispatches = useMemo(() => {
+    return teams
+      .filter(
+        (t) =>
+          t.assigned_to != null &&
+          typeof t.lat === 'number' &&
+          typeof t.lng === 'number' &&
+          !Number.isNaN(t.lat) &&
+          !Number.isNaN(t.lng)
+      )
+      .map((team) => {
+        const cluster = clusters.find(
+          (c) => c.cluster_id === team.assigned_to
+        );
+        if (
+          !cluster ||
+          typeof cluster.latitude !== 'number' ||
+          typeof cluster.longitude !== 'number' ||
+          Number.isNaN(cluster.latitude) ||
+          Number.isNaN(cluster.longitude)
+        ) {
+          return null;
+        }
+        return {
+          teamId: team.team_id,
+          from: [team.lng, team.lat],
+          to: [cluster.longitude, cluster.latitude],
+        };
+      })
+      .filter(Boolean);
+  }, [teams, clusters]);
+
+  // content signature so the 1-min poll doesn't refetch identical routes;
+  // includes coordinates so a moved team base re-requests its path
+  const dispatchSignature = useMemo(
+    () =>
+      activeDispatches
+        .map((d) => `${d.teamId}:${d.from.join(',')}=>${d.to.join(',')}`)
+        .sort()
+        .join('|'),
+    [activeDispatches]
+  );
+  const fetchedDispatchSigRef = useRef(null);
+
+  useEffect(() => {
+    if (dispatchSignature === fetchedDispatchSigRef.current) return;
+    fetchedDispatchSigRef.current = dispatchSignature;
+
+    let cancelled = false;
+    (async () => {
+      if (activeDispatches.length === 0) {
+        setTeamRoutes({});
+        return;
+      }
+      const entries = await Promise.all(
+        activeDispatches.map(async (d) => [
+          d.teamId,
+          await getRouteCoordinates(d.from, d.to),
+        ])
+      );
+      if (cancelled) return;
+
+      const next = {};
+      for (const [teamId, coords] of entries) {
+        if (coords) next[teamId] = coords;
+      }
+      setTeamRoutes(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatchSignature, activeDispatches]);
+
   // ---- derived geojson for cluster markers --------------------------------
   const clustersGeojson = {
     type: 'FeatureCollection',
@@ -210,6 +292,21 @@ export default function Index() {
         },
       })),
   };
+
+  // planned routes as dashed lines under the pins; routes whose team or
+  // cluster vanished (resolved/removed) drop out automatically
+  const routesGeojson = useMemo(
+    () => ({
+      type: 'FeatureCollection',
+      features: Object.entries(teamRoutes).map(([teamId, coordinates]) => ({
+        type: 'Feature',
+        id: `route-${teamId}`,
+        geometry: { type: 'LineString', coordinates },
+        properties: { team_id: Number(teamId) },
+      })),
+    }),
+    [teamRoutes]
+  );
 
   // reports inside the expanded cluster, as map markers
   const reportsGeojson = useMemo(() => {
@@ -272,6 +369,8 @@ export default function Index() {
   const handleLocatePress = async () => {
     if (locating) return;
     if (!getCachedCoords()) setLocating(true);
+    // resume tracking so the camera keeps following after recentering
+    setFollowsUser(true);
     try {
       const coords = await resolveCoords();
       if (!coords) return;
@@ -289,9 +388,16 @@ export default function Index() {
   };
 
   // ---- auto-zoom to the user once their location loads ---------------------
-  // mirrors the GPS button: flies to the current position on the first fix
+  // mirrors the GPS button: flies to the current position on the first fix;
+  // skipped when a "go to team/cluster" request is already pending so it
+  // can't override the flight that request triggers
   useEffect(() => {
     if (!locationGranted || !mapReady || hasAutoZoomedRef.current) return;
+    const teamFocusPending =
+      focusTeamId != null && focusTeamNonce !== handledTeamFocusRef.current;
+    const clusterFocusPending =
+      activeClusterId != null && focusNonce !== handledFocusRef.current;
+    if (teamFocusPending || clusterFocusPending) return;
     let cancelled = false;
     (async () => {
       const coords = await resolveCoords();
@@ -306,7 +412,15 @@ export default function Index() {
     return () => {
       cancelled = true;
     };
-  }, [locationGranted, mapReady, resolveCoords]);
+  }, [
+    locationGranted,
+    mapReady,
+    resolveCoords,
+    focusTeamId,
+    focusTeamNonce,
+    activeClusterId,
+    focusNonce,
+  ]);
 
   // ---- cluster expand / collapse -----------------------------------------
   const collapseCluster = useCallback(() => {
@@ -346,6 +460,8 @@ export default function Index() {
         typeof target.latitude === 'number' &&
         typeof target.longitude === 'number'
       ) {
+        // stop tracking the user or the flight gets overridden
+        setFollowsUser(false);
         cameraRef.current?.flyTo({
           center: [target.longitude, target.latitude],
           zoom: CLUSTER_FOCUS_ZOOM,
@@ -427,6 +543,8 @@ export default function Index() {
         typeof team.lat === 'number' &&
         typeof team.lng === 'number'
       ) {
+        // stop tracking the user or the flight gets overridden
+        setFollowsUser(false);
         cameraRef.current?.flyTo({
           center: [team.lng, team.lat],
           zoom: CLUSTER_FOCUS_ZOOM,
@@ -487,6 +605,10 @@ export default function Index() {
       !Number.isNaN(team.lat) &&
       !Number.isNaN(team.lng)
     ) {
+      // stop tracking the user or tracking yanks the camera right back
+      // to their position on the next GPS fix (reported bug: "go to
+      // location" from a team landed on the user instead of the team)
+      setFollowsUser(false);
       cameraRef.current?.flyTo({
         center: [team.lng, team.lat],
         zoom: CLUSTER_FOCUS_ZOOM,
@@ -518,8 +640,54 @@ export default function Index() {
           maxBounds={PH_BOUNDS}
           minZoom={6}
           maxZoom={20}
-          trackUserLocation={locationGranted ? "default" : undefined}
+          trackUserLocation={
+            locationGranted && followsUser ? "default" : undefined
+          }
         />
+
+        {/* planned routes for dispatched teams — drawn first so every
+            pin/halo renders on top of the lines */}
+        {mapReady && (
+          <GeoJSONSource id="routesSource" data={routesGeojson}>
+            {/* soft casing keeps the dashed line readable over roads */}
+            <Layer
+              type="line"
+              id="routesCasingLayer"
+              layout={{
+                'line-cap': 'round',
+                'line-join': 'round',
+              }}
+              paint={{
+                'line-color': '#ffffff',
+                'line-width': [
+                  'interpolate', ['linear'], ['zoom'],
+                  8, 4,
+                  14, 7,
+                ],
+                'line-opacity': 0.6,
+              }}
+            />
+            {/* dashed orange to match the busy-team pin color */}
+            <Layer
+              type="line"
+              id="routesLayer"
+              layout={{
+                'line-cap': 'round',
+                'line-join': 'round',
+              }}
+              paint={{
+                'line-color': '#f97316',
+                'line-width': [
+                  'interpolate', ['linear'], ['zoom'],
+                  8, 2,
+                  14, 4,
+                ],
+                'line-dasharray': [1.5, 2],
+                'line-opacity': 0.9,
+              }}
+            />
+          </GeoJSONSource>
+        )}
 
         {mapReady && (
           <GeoJSONSource
