@@ -198,9 +198,14 @@ export default function ReportScreen() {
     cameraStore.removePhoto(index);
   };
 
-  const closeForm = useCallback(() => {
+  const closeForm = useCallback((sosStatus) => {
     cameraStore.discardReport();
-    router.replace("/");
+    // sosStatus tells the map screen which confirmation overlay to show:
+    // "received" (online submit) | "prepared" (offline composer opened) |
+    // "active" (skipped the details form).
+    router.replace(
+      sosStatus ? { pathname: "/", params: { sosStatus } } : "/"
+    );
   }, [router]);
 
   useFocusEffect(
@@ -233,7 +238,7 @@ export default function ReportScreen() {
       "None of these details will be sent, and they won't be saved.",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Confirm", style: "destructive", onPress: closeForm },
+        { text: "Confirm", style: "destructive", onPress: () => closeForm("active") },
       ]
     );
   };
@@ -325,7 +330,7 @@ export default function ReportScreen() {
         await attachReportDescription(description);
       }
 
-      closeForm();
+      closeForm("received");
     } catch (err) {
       const message = err?.response
         ? err?.response?.data?.message ||
@@ -361,7 +366,7 @@ export default function ReportScreen() {
         return;
       }
 
-      closeForm();
+      closeForm("prepared");
     } catch (err) {
       if (err?.code === "SERVICES_DISABLED") {
         Alert.alert(
@@ -439,9 +444,11 @@ export default function ReportScreen() {
 
           <PingingCheckmark />
 
-          <Text style={styles.title}>SOS SENT</Text>
+          <Text style={styles.title}>{isOnline ? "SOS SENT" : "SOS PENDING"}</Text>
           <Text style={styles.subtitle}>
-            help us help you. Add critical details.
+            {isOnline
+              ? "help us help you. Add critical details."
+              : "press submit details so we can receive your sos report."}
           </Text>
 
           {!isOnline && (

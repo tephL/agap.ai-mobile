@@ -10,8 +10,6 @@ import { uploadUserLocation } from '../../services/usersService.js';
 import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
 import { getMyFamily } from '../../services/familyService.js';
 import { getDamStatuses } from '../../services/hazardService.js';
-import { haversineMeters } from '../../utils/haversine.js';
-import { getDamStatuses } from '../../services/hazardService.js';
 import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/damSeverity';
 import { getInfluencingDams } from '@/components/hazards/damInfluence';
 import { useHazardElevation } from '../../hooks/useHazardElevation';
@@ -28,8 +26,9 @@ import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
-import LayersControl from '@/components/hazards/LayersControl';
-import { HAZARD_LAYERS } from '@/components/hazards/layerRegistry';
+import DamMapLabel from '@/components/hazards/DamMapLabel';
+import SosReceivedOverlay from '@/components/SosReceivedOverlay';
+import { haversineMeters, formatDistance } from '../../utils/haversine.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,6 +41,7 @@ const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MA
 const FAMILY_FETCH_INTERVAL_MS = 1000 * 60;      // 1 min
 const SEND_LOCATION_INTERVAL_MS = 1000 * 30;     // 30 sec
 const PULSE_DURATION_MS = 3500;                  // ms per pulse cycle
+const PULSE_TICK_MS = 100;                       // 10 Hz pulse updates (60fps rAF froze low-end devices)
 const NOW_TICK_INTERVAL_MS = 5000;               // staleness re-check
 const STALE_YELLOW_THRESHOLD_MS = 5 * 60 * 1000;  // 5 min
 const STALE_GRAY_THRESHOLD_MS = 30 * 60 * 1000;   // 30 min
@@ -142,11 +142,29 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
 // Component
 // ---------------------------------------------------------------------------
 export default function Index() {
-  const { selectedUserId } = useLocalSearchParams();
+  const { selectedUserId, sosStatus } = useLocalSearchParams();
 
   // location / permissions
-  const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
+  const { locationGranted, coords, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
+
+  // Stable null-safe shape so hazard memos/handlers can read .latitude/.longitude
+  // unconditionally before the first GPS fix arrives.
+  const userLocation = useMemo(
+    () => coords ?? { latitude: null, longitude: null },
+    [coords]
+  );
+
+  // ~110 m grid snap (same cell size useHazardElevation uses): influence,
+  // halos and route lines only rebuild when the user crosses a cell, so GPS
+  // jitter no longer churns GeoJSON on every watch tick.
+  const coarseUserLocation = useMemo(() => {
+    const round = (v) => (v == null ? null : Math.round(v * 1000) / 1000);
+    return {
+      latitude: round(userLocation.latitude),
+      longitude: round(userLocation.longitude),
+    };
+  }, [userLocation]);
 
   // family markers state
   const [familyMembers, setFamilyMembers] = useState([]);
@@ -374,8 +392,8 @@ export default function Index() {
 
   // Ground elevation for the hydrology risk factor (graceful when unknown).
   const { elevation: userElevation } = useHazardElevation(
-    userLocation.latitude,
-    userLocation.longitude
+    coarseUserLocation.latitude,
+    coarseUserLocation.longitude
   );
 
   // ---- derived geojson for dam markers + influencing-dam highlight -------
@@ -383,8 +401,8 @@ export default function Index() {
   // first; see data/hydrology.js), nearest first. All of them get the
   // emphasized ring, a dashed route line, and a tappable route.
   const influencingDams = useMemo(
-    () => getInfluencingDams(dams, userLocation, { userElevation }),
-    [dams, userLocation, userElevation]
+    () => getInfluencingDams(dams, coarseUserLocation, { userElevation }),
+    [dams, coarseUserLocation, userElevation]
   );
 
   const nearestDamSlug = influencingDams[0]?.dam.slug ?? null;
@@ -394,6 +412,54 @@ export default function Index() {
     for (const entry of influencingDams) bySlug[entry.dam.slug] = entry;
     return bySlug;
   }, [influencingDams]);
+
+  // Stable array identity for the drawer's memoized rows.
+  const influencingSlugs = useMemo(
+    () => Object.keys(influencingBySlug),
+    [influencingBySlug]
+  );
+
+  // Full data for the tapped dam — drives the floating map label.
+  const selectedDamData = useMemo(
+    () =>
+      selectedDam
+        ? dams.find((dam) => dam.slug === selectedDam.slug) ?? null
+        : null,
+    [dams, selectedDam]
+  );
+
+  const selectedDamDistanceText = useMemo(() => {
+    if (!selectedDam) return null;
+    const fromInfluence = influencingBySlug[selectedDam.slug]?.distanceMeters;
+    if (fromInfluence != null) return formatDistance(fromInfluence);
+    if (!selectedDamData?.coordinates || userLocation.latitude == null) {
+      return null;
+    }
+    return formatDistance(
+      haversineMeters(
+        { lat: userLocation.latitude, lng: userLocation.longitude },
+        {
+          lat: selectedDamData.coordinates.lat,
+          lng: selectedDamData.coordinates.lng,
+        }
+      )
+    );
+  }, [selectedDam, influencingBySlug, selectedDamData, userLocation]);
+
+  // "Report received" overlay shown once after returning from the report
+  // form (ref-guarded so re-visiting the tab doesn't replay it).
+  const [sosReceivedVariant, setSosReceivedVariant] = useState(null);
+  const handledSosStatusRef = useRef(null);
+  useEffect(() => {
+    if (
+      typeof sosStatus === "string" &&
+      ["received", "prepared", "active"].includes(sosStatus) &&
+      handledSosStatusRef.current !== sosStatus
+    ) {
+      handledSosStatusRef.current = sosStatus;
+      setSosReceivedVariant(sosStatus);
+    }
+  }, [sosStatus]);
 
   const damsGeojson = useMemo(() => ({
     type: 'FeatureCollection',
@@ -439,12 +505,13 @@ export default function Index() {
       })),
   }), [dams, influencingBySlug]);
 
-  // Broken lines from the user to each influencing dam.
+  // Broken lines from the user to each influencing dam. Uses the coarse
+  // location so the dashed corridors don't rebuild on every GPS tick.
   const nearestRouteGeojson = useMemo(() => {
     if (
       influencingDams.length === 0 ||
-      userLocation.latitude == null ||
-      userLocation.longitude == null
+      coarseUserLocation.latitude == null ||
+      coarseUserLocation.longitude == null
     ) {
       return { type: 'FeatureCollection', features: [] };
     }
@@ -458,34 +525,35 @@ export default function Index() {
           geometry: {
             type: 'LineString',
             coordinates: [
-              [userLocation.longitude, userLocation.latitude],
+              [coarseUserLocation.longitude, coarseUserLocation.latitude],
               [dam.coordinates.lng, dam.coordinates.lat],
             ],
           },
           properties: { slug: dam.slug, distanceMeters, index },
         })),
     };
-  }, [influencingDams, userLocation.latitude, userLocation.longitude]);
+  }, [influencingDams, coarseUserLocation.latitude, coarseUserLocation.longitude]);
 
   // ---- pulsing "dih" effect ----------------------------------------------
+  // 10 Hz interval instead of requestAnimationFrame: the old 60fps loop
+  // re-rendered this whole screen every frame and starved MapLibre's tile
+  // callbacks (ANR on low-end devices). Rings still animate smoothly.
   useEffect(() => {
-    let raf;
     const start = Date.now();
-
-    const tick = () => {
-      setPulse((Date.now() - start) % PULSE_DURATION_MS / PULSE_DURATION_MS); // 0 to 1
-      // Dam rings pulse at their own per-severity cadence.
-      setDamPulse({
-        normal: (Date.now() - start) % DAM_PULSE_PERIODS.normal / DAM_PULSE_PERIODS.normal,
-        caution: (Date.now() - start) % DAM_PULSE_PERIODS.caution / DAM_PULSE_PERIODS.caution,
-        danger: (Date.now() - start) % DAM_PULSE_PERIODS.danger / DAM_PULSE_PERIODS.danger,
-      });
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    const damsVisible = visibleLayers.dams;
+    const id = setInterval(() => {
+      const elapsed = Date.now() - start;
+      setPulse((elapsed % PULSE_DURATION_MS) / PULSE_DURATION_MS);
+      if (damsVisible) {
+        setDamPulse({
+          normal: elapsed % DAM_PULSE_PERIODS.normal / DAM_PULSE_PERIODS.normal,
+          caution: elapsed % DAM_PULSE_PERIODS.caution / DAM_PULSE_PERIODS.caution,
+          danger: elapsed % DAM_PULSE_PERIODS.danger / DAM_PULSE_PERIODS.danger,
+        });
+      }
+    }, PULSE_TICK_MS);
+    return () => clearInterval(id);
+  }, [visibleLayers.dams]);
 
   // ---- color staleness ----------------------------------------------------
   useEffect(() => {
@@ -549,7 +617,7 @@ export default function Index() {
   };
 
   // ---- hazards handlers ----------------------------------------------------
-  const flyToDam = (lng, lat) => {
+  const flyToDam = useCallback((lng, lat) => {
     cameraRef.current?.flyTo({
       center: [lng, lat],
       zoom: DAM_FLY_ZOOM,
@@ -561,7 +629,7 @@ export default function Index() {
         right: 0,
       },
     });
-  };
+  }, []);
 
   const handleDamPress = (event) => {
     const feature = event?.nativeEvent?.features?.[0];
@@ -580,7 +648,7 @@ export default function Index() {
     }
   };
 
-  const handleSelectDamFromList = (dam) => {
+  const handleSelectDamFromList = useCallback((dam) => {
     if (!dam?.slug) return;
     setSelectedDam({
       slug: dam.slug,
@@ -593,7 +661,7 @@ export default function Index() {
     if (dam.coordinates) {
       flyToDam(dam.coordinates.lng, dam.coordinates.lat);
     }
-  };
+  }, [flyToDam]);
 
   // Tapping a dashed route frames that dam's route and brings up the
   // drawer pre-loaded with its card.
@@ -635,10 +703,10 @@ export default function Index() {
     setVisibleLayers((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  const handleCloseHazards = () => {
+  const handleCloseHazards = useCallback(() => {
     setSelectedDam(null);
     setHazardsOpen(false);
-  };
+  }, []);
 
   const handleCallPerson = (phone_number, user_id) => {
     // TODO: implement (e.g. Linking.openURL(`tel:${phone_number}`))
@@ -687,7 +755,7 @@ export default function Index() {
             zoomLevel: 6,
           }}
           maxBounds={PH_BOUNDS}
-          minZoom={activeId ? 15 : 6}
+          minZoom={activeId ? DAM_FLY_ZOOM : 6}
           maxZoom={20}
           trackUserLocation={locationGranted ? "default" : undefined}
         />
@@ -835,17 +903,8 @@ export default function Index() {
         )}
       </Map>
 
-      <LayersControl
-        layers={HAZARD_LAYERS}
-        visibleLayers={visibleLayers}
-        onToggle={handleToggleLayer}
-      />
-
       <TouchableOpacity
-        style={[
-          styles.hazardsButton,
-          { left: 16, bottom: 34 },
-        ]}
+        style={styles.hazardsButton}
         onPress={handleHazardsPress}
         activeOpacity={0.7}
         accessibilityRole="button"
@@ -879,12 +938,24 @@ export default function Index() {
         {activeId && <View style={styles.layersDot} />}
       </View>
 
+      {/* Floating name tag for the tapped dam (marker or route tap). */}
+      {selectedDamData && (
+        <DamMapLabel
+          name={selectedDamData.name}
+          severityColor={resolveDamSeverity(selectedDamData).color}
+          distanceText={selectedDamDistanceText}
+          onClose={handleCloseHazards}
+        />
+      )}
+
 
       <HazardLayersPanel
         visible={layersOpen}
         onClose={() => setLayersOpen(false)}
         activeId={activeId}
         onSelect={selectHazardLayer}
+        visibleLayers={visibleLayers}
+        onToggleLayer={handleToggleLayer}
       />
 
       {selectedPerson && (
@@ -910,9 +981,7 @@ export default function Index() {
           userLocation={userLocation}
           nearestSlug={nearestDamSlug}
           influencingSlugs={
-            Object.keys(influencingBySlug).length > 0
-              ? Object.keys(influencingBySlug)
-              : EMPTY_SLUGS
+            influencingSlugs.length > 0 ? influencingSlugs : EMPTY_SLUGS
           }
           userElevation={userElevation}
           dam={selectedDam}
@@ -920,6 +989,13 @@ export default function Index() {
           onExpandedChange={setSheetExpanded}
           onSelectDam={handleSelectDamFromList}
           onClose={handleCloseHazards}
+        />
+      )}
+
+      {sosReceivedVariant && (
+        <SosReceivedOverlay
+          variant={sosReceivedVariant}
+          onDone={() => setSosReceivedVariant(null)}
         />
       )}
     </View>
@@ -1010,6 +1086,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#208AEF',
     borderWidth: 2,
     borderColor: '#ffffff',
+  },
+  // Red pill, bottom-left — opens the hazards drawer (dam statuses).
+  hazardsButton: {
+    position: 'absolute',
+    left: 16,
+    bottom: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 48,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
   hazardsButtonText: {
     fontSize: 14,
     fontWeight: '700',

@@ -3,10 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
-<<<<<<< HEAD
   Pressable,
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
   ScrollView,
   StyleSheet,
   Text,
@@ -23,8 +20,6 @@ import {
   formatObservationAge,
 } from "./damStatus";
 import HazardTabs from "./HazardTabs";
-<<<<<<< HEAD
-<<<<<<< HEAD
 import HazardDisclaimer from "./HazardDisclaimer";
 import ImpactZoneDetail from "./ImpactZoneDetail";
 import { resolveDamSeverity, describeDamStatus } from "./damSeverity";
@@ -33,11 +28,6 @@ import {
   CREST_ELEVATIONS,
   getImpactTier,
 } from "../../data/hydrology";
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
-=======
-import { resolveDamSeverity, describeDamStatus } from "./damSeverity";
->>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -59,19 +49,12 @@ function InfoRow({ label, value, valueColor }) {
   );
 }
 
-export default function HazardSheet({
+function HazardSheetInner({
   dams = [],
   userLocation,
   nearestSlug,
-<<<<<<< HEAD
-<<<<<<< HEAD
   influencingSlugs = [],
   userElevation = null,
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
-=======
-  influencingSlugs = [],
->>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   dam,
   expanded,
   onExpandedChange,
@@ -82,10 +65,7 @@ export default function HazardSheet({
   const [activeTab, setActiveTab] = useState("dams");
   const [now, setNow] = useState(0);
   const [fetchState, setFetchState] = useState({ slug: null, data: null, error: null });
-<<<<<<< HEAD
   const [impactDetailVisible, setImpactDetailVisible] = useState(false);
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
 
   const slug = dam?.slug ?? null;
 
@@ -160,8 +140,6 @@ export default function HazardSheet({
   const freshnessColor =
     observationMs != null ? damFreshnessColor(observationMs, now) : "#a9a9a9";
 
-<<<<<<< HEAD
-<<<<<<< HEAD
   const severity = shownDam ? resolveDamSeverity(shownDam) : null;
 
   // Hydrology impact context for the shown dam (tier, corridor note, minor).
@@ -183,12 +161,6 @@ export default function HazardSheet({
     ? getImpactTier(impactContext.impact.key) ?? null
     : null;
 
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
-=======
-  const severity = shownDam ? resolveDamSeverity(shownDam) : null;
-
->>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   const handleClose = () => {
     Animated.timing(translateY, {
       toValue: HIDDEN_Y,
@@ -278,10 +250,6 @@ export default function HazardSheet({
 
         {shownDam && !detailLoading && (
           <View style={styles.summary}>
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
             {severity && (
               <View
                 style={[styles.severityCard, { backgroundColor: `${severity.color}1A`, borderColor: `${severity.color}59` }]}
@@ -300,7 +268,6 @@ export default function HazardSheet({
               </View>
             )}
 
-<<<<<<< HEAD
             {impactContext && (
               <Pressable
                 style={({ pressed }) => [
@@ -355,10 +322,6 @@ export default function HazardSheet({
               </Pressable>
             )}
 
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
-=======
->>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
             {showStaleBanner && (
               <View style={styles.staleBanner}>
                 <Ionicons name="warning-outline" size={14} color="#E32F31" />
@@ -420,19 +383,11 @@ export default function HazardSheet({
             dams={dams}
             userLocation={userLocation}
             nearestSlug={nearestSlug}
-<<<<<<< HEAD
-<<<<<<< HEAD
             influencingSlugs={influencingSlugs}
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
-=======
-            influencingSlugs={influencingSlugs}
->>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
             onSelectDam={(selected) => onSelectDam?.(selected)}
           />
         </View>
       </ScrollView>
-<<<<<<< HEAD
 
       {impactContext && (
         <ImpactZoneDetail
@@ -446,8 +401,6 @@ export default function HazardSheet({
           }
         />
       )}
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
     </Animated.View>
   );
 }
@@ -547,10 +500,6 @@ const styles = StyleSheet.create({
   summary: {
     paddingHorizontal: 20,
   },
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   severityCard: {
     borderRadius: 14,
     borderWidth: 1,
@@ -591,7 +540,6 @@ const styles = StyleSheet.create({
     color: "#737B8C",
     lineHeight: 17,
   },
-<<<<<<< HEAD
   impactCard: {
     backgroundColor: "#F6F7FA",
     borderColor: "#E0E2E7",
@@ -644,10 +592,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: "#5A6273",
   },
-=======
->>>>>>> fd7be6e (feat(monitoring) working frotnend for dams dev build jp)
-=======
->>>>>>> 28cac84 (feature(monitoring) added elevation hook not yet integrated |  working build)
   staleBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -730,3 +674,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
+
+// Memoized so the map screen's 10 Hz pulse ticks do not re-render the drawer.
+export default React.memo(HazardSheetInner);
