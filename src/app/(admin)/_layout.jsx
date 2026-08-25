@@ -4,7 +4,6 @@ import { Tabs, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import { getDispatcherSession } from "../../services/dispatcherService";
-import { ClusterProvider } from "../../context/ClusterContext";
 
 const TAB_ICONS = {
   reports: "document-text",
@@ -47,43 +46,41 @@ export default function AdminLayout() {
   }
 
   return (
-    <ClusterProvider>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.placeholder,
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.placeholder,
+      }}
+    >
+      <Tabs.Screen
+        name="reports"
+        options={{
+          title: "Reports",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={TAB_ICONS.reports} size={size} color={color} />
+          ),
         }}
-      >
-        <Tabs.Screen
-          name="reports"
-          options={{
-            title: "Reports",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name={TAB_ICONS.reports} size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="map"
-          options={{
-            title: "Map",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name={TAB_ICONS.map} size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="team"
-          options={{
-            title: "Team",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name={TAB_ICONS.team} size={size} color={color} />
-            ),
-          }}
-        />
-      </Tabs>
-    </ClusterProvider>
+      />
+      <Tabs.Screen
+        name="map"
+        options={{
+          title: "Map",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={TAB_ICONS.map} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="team"
+        options={{
+          title: "Team",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={TAB_ICONS.team} size={size} color={color} />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
 

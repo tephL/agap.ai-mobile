@@ -1,8 +1,10 @@
 import { Stack } from "expo-router";
+import { ClusterProvider } from "../context/ClusterContext";
 
 export default function RootLayout() {
   return (
-    <Stack>
+    <ClusterProvider>
+      <Stack>
       {/* Main tabs (Home, Family, About) */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
@@ -77,6 +79,7 @@ export default function RootLayout() {
           name="camera-preview"
           options={{ headerShown: false, presentation: "fullScreenModal", animation: "slide_from_bottom" }}
       />
-    </Stack>
+      </Stack>
+    </ClusterProvider>
   );
 }

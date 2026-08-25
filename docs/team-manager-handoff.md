@@ -28,7 +28,11 @@ POST  /api/dispatcher/assignments               → team_id, cluster_id
 PATCH /api/dispatcher/assignments/:id/status    → id, status          (pending|dispatched|resolved)
 ```
 
-- Validation failures return **422** with `{ errors: [...] }`.
+- Validation failures return **422** with `{ errors: [...] }`. Other
+  failures return `{ error: "..." }` — read it via
+  `assignmentError(err, fallback)` from `teamService.js` instead of
+  `err.message`, which only yields axios generics like
+  "Request failed with status code 409".
 - Everything under `/api/dispatcher` is scoped to the dispatcher's own
   city (resolved server-side via users → people → cities). Teams and
   clusters from other cities are never returned, and cross-city
@@ -81,14 +85,36 @@ Shared so all three tabs agree on which cluster is selected:
 const ClusterContext = createContext({ activeClusterId: null, setActiveClusterId: () => {} });
 ```
 
-- Provider mounts in `src/app/(admin)/_layout.jsx`.
+- Provider mounts in `src/app/_layout.jsx` (root), so stack screens
+  outside the tabs (e.g. `team-detail`) share the same state.
 - Reports tab sets `activeClusterId` when a cluster is tapped.
 - Map tab reads it to center the map; Action Plan reads it for `clusterId`.
-- Team Manager currently receives cluster via URL param (`assignClusterId`)
-  and will migrate to context when the provider lands.
+- `focusTeam(teamId)` (from the Team detail screen) asks the Map tab to
+  select the team's pin and fly the camera to its position.
+- Team Manager receives cluster via URL param (`assignClusterId`) or
+  context (`activeClusterId`).
 
 ## Status enums (API rejects anything else)
 
 - Team: `available | busy | offline`
 - Cluster: `open | saved | resolved`
-- Assignment: `pending → dispatched → resolved`
+- Assignment: `pending → dispatched → resolved` (forward-only; the API
+  answers **409** on any regression, e.g. `resolved → dispatched`)
+
+## Assignment lifecycle rules (server-enforced)
+
+- A team can hold only one active (`pending`/`dispatched`) assignment at
+  a time; a second `POST /assignments` fails with **409**.
+- Resolving an assignment frees the team (`assigned_to` cleared) once it
+  has no other active assignment, and **deletes the cluster** when no
+  other active assignment references it — resolved clusters disappear
+  from `/api/clusters`, `/api/dispatcher/clusters`, and the map. Citizen
+  reports themselves are kept; only the cluster and its report links go.
+- Marking a cluster `resolved` via `PATCH /clusters/:id/status` also
+  resolves its active assignments, frees the responding teams, and
+  removes the cluster entirely — teams never stay busy against a
+  resolved cluster.
+- Teams carry `assigned_to` (the cluster id they are dispatched to), so
+  callers can tell which clusters already have a team.
+- Deleting empty clusters (server cleanup job) cascades their
+  assignments away, so affected teams become `available`.

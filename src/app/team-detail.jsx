@@ -9,7 +9,11 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -20,8 +24,10 @@ import {
   getOpenClusters,
   getTeams,
   assignTeamToCluster,
+  assignmentError,
   updateAssignmentStatus,
 } from "@/services/teamService";
+import { useCluster } from "@/context/ClusterContext";
 
 function Stepper({ status }) {
   const current = ASSIGNMENT_STATUSES.indexOf(status);
@@ -60,7 +66,9 @@ function Stepper({ status }) {
 
 export default function TeamDetailScreen() {
   const params = useLocalSearchParams();
+  const router = useRouter();
   const teamId = Number(params.teamId);
+  const { invalidateClusters, focusTeam } = useCluster();
   // Preselected when arriving via "Assign a Team" on a cluster.
   const preselectClusterId = params.assignClusterId
     ? Number(params.assignClusterId)
@@ -90,6 +98,13 @@ export default function TeamDetailScreen() {
           setTeam(teamList.find((t) => t.team_id === teamId) ?? null);
           setAssignment(assignment);
           setClusters(clusterList);
+          // Drop a preselected cluster that is no longer open (resolved by
+          // someone else, cleaned up, ...) so Assign can't hit a 404.
+          setSelectedClusterId((prev) =>
+            prev != null && clusterList.some((c) => c.cluster_id === prev)
+              ? prev
+              : null
+          );
         } catch (err) {
           console.log("team-detail load error:", err?.message || err);
           if (active) setError("Something went wrong loading this team.");
@@ -105,16 +120,19 @@ export default function TeamDetailScreen() {
     }, [teamId])
   );
 
+  // Server-derived truth: team status comes from the teams endpoint
+  // (busy while an active assignment exists), never guessed locally.
   const refresh = useCallback(async () => {
-    const [assignment, clusterList] = await Promise.all([
+    const [teamList, assignment, clusterList] = await Promise.all([
+      getTeams(),
       getAssignmentForTeam(teamId),
       getOpenClusters(),
     ]);
+    setTeam((prev) =>
+      prev ? (teamList.find((t) => t.team_id === prev.team_id) ?? prev) : null
+    );
     setAssignment(assignment);
     setClusters(clusterList);
-    setTeam((prev) =>
-      prev ? { ...prev, status: assignment?.status === "resolved" ? "available" : prev.status } : prev
-    );
   }, [teamId]);
 
   const handleAssign = async () => {
@@ -128,8 +146,12 @@ export default function TeamDetailScreen() {
       setClusters((prev) =>
         prev.filter((c) => c.cluster_id !== selectedClusterId)
       );
+      invalidateClusters();
     } catch (err) {
-      setError(err?.message ?? "Failed to assign team.");
+      setError(assignmentError(err, "Failed to assign team."));
+      // A rejection usually means state moved elsewhere (team got assigned
+      // or the cluster closed) — resync with the server.
+      refresh().catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -149,9 +171,13 @@ export default function TeamDetailScreen() {
     setError(null);
     try {
       await updateAssignmentStatus(assignment.assignment_id, next);
+      // resolving deletes the cluster server-side; tell the Map tab so
+      // its pin disappears immediately
+      invalidateClusters();
       await refresh();
     } catch (err) {
-      setError(err?.message ?? "Failed to update status.");
+      setError(assignmentError(err, "Failed to update status."));
+      refresh().catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -160,6 +186,19 @@ export default function TeamDetailScreen() {
   const handleCall = () => {
     if (!team?.contact_number) return;
     Linking.openURL(`tel:${team.contact_number.replace(/\s+/g, "")}`);
+  };
+
+  const hasCoords =
+    Boolean(team) &&
+    typeof team.lat === "number" &&
+    typeof team.lng === "number";
+
+  // Hand off to the Map tab: it selects the team's pin and flies the
+  // camera to its position (see the focusTeam effect in map.jsx).
+  const handleGoToMap = () => {
+    if (!hasCoords) return;
+    focusTeam(team.team_id);
+    router.navigate("/(admin)/map");
   };
 
   if (loading) {
@@ -216,6 +255,16 @@ export default function TeamDetailScreen() {
             <MaterialIcons name="call" size={15} color={colors.muted} />
             <Text style={styles.contactText}>{team.contact_number}</Text>
           </View>
+          {hasCoords ? (
+            <TouchableOpacity
+              style={styles.mapButton}
+              activeOpacity={0.8}
+              onPress={handleGoToMap}
+            >
+              <MaterialIcons name="near-me" size={15} color={colors.primary} />
+              <Text style={styles.mapButtonText}>Go to location on map</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Assignment */}
@@ -410,6 +459,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.text,
+  },
+  mapButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 9,
+  },
+  mapButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
   },
   sectionCard: {
     borderWidth: 1,
