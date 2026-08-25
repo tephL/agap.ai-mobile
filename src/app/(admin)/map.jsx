@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 // adjust this import to wherever fetchClustersWithinLocation actually lives
 import { fetchClustersWithinLocation, fetchClusterReports } from '../../services/dispatcher/clusterServ.js';
 import { getTeams } from '../../services/teamService';
+import { getRouteCoordinates } from '../../services/routeService';
 import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
 import TeamDetailsWindow from '../../components/dispatcher/TeamDetailsWindow';
@@ -86,6 +87,9 @@ export default function Index() {
   const [teams, setTeams] = useState([]);
   const [selectedTeamId, setSelectedTeamId] = useState(null);
 
+  // planned routes for dispatched teams: team_id -> LineString coordinates
+  const [teamRoutes, setTeamRoutes] = useState({});
+
   // expanded cluster state (reports shown on map + details window)
   const [selectedClusterId, setSelectedClusterId] = useState(null);
   const [selectedCluster, setSelectedCluster] = useState(null);
@@ -156,6 +160,80 @@ export default function Index() {
     refreshClusters();
   }, [clustersNonce, refreshClusters]);
 
+  // ---- planned routes: dispatched team base -> assigned cluster ----------
+  const activeDispatches = useMemo(() => {
+    return teams
+      .filter(
+        (t) =>
+          t.assigned_to != null &&
+          typeof t.lat === 'number' &&
+          typeof t.lng === 'number' &&
+          !Number.isNaN(t.lat) &&
+          !Number.isNaN(t.lng)
+      )
+      .map((team) => {
+        const cluster = clusters.find(
+          (c) => c.cluster_id === team.assigned_to
+        );
+        if (
+          !cluster ||
+          typeof cluster.latitude !== 'number' ||
+          typeof cluster.longitude !== 'number' ||
+          Number.isNaN(cluster.latitude) ||
+          Number.isNaN(cluster.longitude)
+        ) {
+          return null;
+        }
+        return {
+          teamId: team.team_id,
+          from: [team.lng, team.lat],
+          to: [cluster.longitude, cluster.latitude],
+        };
+      })
+      .filter(Boolean);
+  }, [teams, clusters]);
+
+  // content signature so the 1-min poll doesn't refetch identical routes;
+  // includes coordinates so a moved team base re-requests its path
+  const dispatchSignature = useMemo(
+    () =>
+      activeDispatches
+        .map((d) => `${d.teamId}:${d.from.join(',')}=>${d.to.join(',')}`)
+        .sort()
+        .join('|'),
+    [activeDispatches]
+  );
+  const fetchedDispatchSigRef = useRef(null);
+
+  useEffect(() => {
+    if (dispatchSignature === fetchedDispatchSigRef.current) return;
+    fetchedDispatchSigRef.current = dispatchSignature;
+
+    let cancelled = false;
+    (async () => {
+      if (activeDispatches.length === 0) {
+        setTeamRoutes({});
+        return;
+      }
+      const entries = await Promise.all(
+        activeDispatches.map(async (d) => [
+          d.teamId,
+          await getRouteCoordinates(d.from, d.to),
+        ])
+      );
+      if (cancelled) return;
+
+      const next = {};
+      for (const [teamId, coords] of entries) {
+        if (coords) next[teamId] = coords;
+      }
+      setTeamRoutes(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatchSignature, activeDispatches]);
+
   // ---- derived geojson for cluster markers --------------------------------
   const clustersGeojson = {
     type: 'FeatureCollection',
@@ -214,6 +292,21 @@ export default function Index() {
         },
       })),
   };
+
+  // planned routes as dashed lines under the pins; routes whose team or
+  // cluster vanished (resolved/removed) drop out automatically
+  const routesGeojson = useMemo(
+    () => ({
+      type: 'FeatureCollection',
+      features: Object.entries(teamRoutes).map(([teamId, coordinates]) => ({
+        type: 'Feature',
+        id: `route-${teamId}`,
+        geometry: { type: 'LineString', coordinates },
+        properties: { team_id: Number(teamId) },
+      })),
+    }),
+    [teamRoutes]
+  );
 
   // reports inside the expanded cluster, as map markers
   const reportsGeojson = useMemo(() => {
@@ -551,6 +644,50 @@ export default function Index() {
             locationGranted && followsUser ? "default" : undefined
           }
         />
+
+        {/* planned routes for dispatched teams — drawn first so every
+            pin/halo renders on top of the lines */}
+        {mapReady && (
+          <GeoJSONSource id="routesSource" data={routesGeojson}>
+            {/* soft casing keeps the dashed line readable over roads */}
+            <Layer
+              type="line"
+              id="routesCasingLayer"
+              layout={{
+                'line-cap': 'round',
+                'line-join': 'round',
+              }}
+              paint={{
+                'line-color': '#ffffff',
+                'line-width': [
+                  'interpolate', ['linear'], ['zoom'],
+                  8, 4,
+                  14, 7,
+                ],
+                'line-opacity': 0.6,
+              }}
+            />
+            {/* dashed orange to match the busy-team pin color */}
+            <Layer
+              type="line"
+              id="routesLayer"
+              layout={{
+                'line-cap': 'round',
+                'line-join': 'round',
+              }}
+              paint={{
+                'line-color': '#f97316',
+                'line-width': [
+                  'interpolate', ['linear'], ['zoom'],
+                  8, 2,
+                  14, 4,
+                ],
+                'line-dasharray': [1.5, 2],
+                'line-opacity': 0.9,
+              }}
+            />
+          </GeoJSONSource>
+        )}
 
         {mapReady && (
           <GeoJSONSource
