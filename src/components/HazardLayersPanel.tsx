@@ -26,6 +26,7 @@ interface LayerRowProps {
   config: HazardLayerConfig;
   active: boolean;
   onSelect: () => void;
+  onAskAI: (layerLabel: string) => void;
 }
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
@@ -39,7 +40,7 @@ const LAYER_DESCRIPTIONS: Record<string, string> = {
     "Zones prone to landslides based on slope, soil, and rainfall",
 };
 
-function LayerRow({ config, active, onSelect }: LayerRowProps) {
+function LayerRow({ config, active, onSelect, onAskAI }: LayerRowProps) {
   const { status, progress, download, remove } =
     useOfflinePMTilesLayer(config.id);
   const palette = HAZARD_COLORS[config.hazardType];
@@ -103,6 +104,14 @@ function LayerRow({ config, active, onSelect }: LayerRowProps) {
         </View>
       </TouchableOpacity>
 
+      <TouchableOpacity
+        style={styles.helpButton}
+        onPress={() => onAskAI(config.label)}
+        hitSlop={8}
+      >
+        <Ionicons name="help" size={14} color="#6B7280" />
+      </TouchableOpacity>
+
       {status === "ready" ? (
         <TouchableOpacity style={styles.actionButton} onPress={remove}>
           <Ionicons name="trash-outline" size={16} color="#EF4444" />
@@ -130,6 +139,8 @@ interface HazardLayersPanelProps {
    * deselects it. Download state of every layer is unaffected.
    */
   onSelect: (layerId: string | null) => void;
+  /** Called with a layer label when the user taps the ? button. */
+  onAskAI: (layerLabel: string) => void;
 }
 
 export default function HazardLayersPanel({
@@ -137,6 +148,7 @@ export default function HazardLayersPanel({
   onClose,
   activeId,
   onSelect,
+  onAskAI,
 }: HazardLayersPanelProps) {
   if (!visible) return null;
 
@@ -165,6 +177,7 @@ export default function HazardLayersPanel({
                 onSelect={() =>
                   onSelect(activeId === layer.id ? null : layer.id)
                 }
+                onAskAI={onAskAI}
               />
             ))}
           </ScrollView>
@@ -249,5 +262,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F3F4F6",
+  },
+  helpButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+    marginLeft: 6,
   },
 });

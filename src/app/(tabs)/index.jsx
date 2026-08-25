@@ -2,7 +2,7 @@ import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 
 // services
@@ -105,6 +105,17 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
 // ---------------------------------------------------------------------------
 export default function Index() {
   const { selectedUserId } = useLocalSearchParams();
+  const router = useRouter();
+
+  const handleAskAI = useCallback(
+    (layerLabel) => {
+      router.push({
+        pathname: "/assistant",
+        params: { question: `What does the "${layerLabel}" hazard layer mean? Explain it in detail.` },
+      });
+    },
+    [router]
+  );
 
   // location / permissions
   const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
@@ -516,6 +527,7 @@ export default function Index() {
         onClose={() => setLayersOpen(false)}
         activeId={activeId}
         onSelect={selectHazardLayer}
+        onAskAI={handleAskAI}
       />
 
       {selectedPerson && (

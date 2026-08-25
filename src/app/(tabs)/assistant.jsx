@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLocalSearchParams } from "expo-router";
 import colors from "@/constants/colors";
 import ChatBubble, { parseSuggestions } from "@/components/ai/ChatBubble";
 import SuggestionChips from "@/components/ai/SuggestionChips";
@@ -32,6 +33,7 @@ const WELCOME_MESSAGE = {
 
 export default function Assistant() {
   const insets = useSafeAreaInsets();
+  const { question } = useLocalSearchParams();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,6 +41,16 @@ export default function Assistant() {
   const flatListRef = useRef(null);
   const inputRef = useRef(null);
   const initialized = useRef(false);
+  const pendingQuestion = useRef(null);
+
+  const loadSuggestions = useCallback(async () => {
+    try {
+      const data = await getSuggestions();
+      setSuggestions(data.suggestions || []);
+    } catch {
+      setSuggestions([]);
+    }
+  }, []);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -69,21 +81,16 @@ export default function Assistant() {
     }
   }, [loadSuggestions]);
 
-  const loadSuggestions = useCallback(async () => {
-    try {
-      const data = await getSuggestions();
-      setSuggestions(data.suggestions || []);
-    } catch {
-      setSuggestions([]);
-    }
-  }, []);
-
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    loadHistory();
+    loadHistory().then(() => {
+      if (question) {
+        pendingQuestion.current = question;
+      }
+    });
     loadSuggestions();
-  }, [loadHistory, loadSuggestions]);
+  }, [loadHistory, loadSuggestions, question]);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -128,6 +135,22 @@ export default function Assistant() {
     },
     [input, loading, scrollToBottom, loadSuggestions]
   );
+
+  useEffect(() => {
+    if (pendingQuestion.current && !loading && messages.length > 0) {
+      const q = pendingQuestion.current;
+      pendingQuestion.current = null;
+      handleSend(q);
+    }
+  }, [loading, messages.length, handleSend]);
+
+  const prevQuestion = useRef(question);
+  useEffect(() => {
+    if (question && question !== prevQuestion.current && !loading) {
+      handleSend(question);
+    }
+    prevQuestion.current = question;
+  }, [question, loading, handleSend]);
 
   const handleClearChat = useCallback(() => {
     Alert.alert(
