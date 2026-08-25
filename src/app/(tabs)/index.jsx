@@ -17,7 +17,13 @@ import { useHazardElevation } from '../../hooks/useHazardElevation';
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import { PersonCard } from '@/components/PersonCard';
-import { AllHazardOverlays } from '@/components/HazardLayerToggle';
+import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
+import HazardLayersPanel from '@/components/HazardLayersPanel';
+
+// hazard layer visibility prefs
+import { HAZARD_LAYERS } from '../../lib/pmtiles/downloadLayer';
+import { useHazardLayerVisibility } from '../../hooks/useHazardLayerVisibility';
+
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import LayersControl from '@/components/hazards/LayersControl';
@@ -166,6 +172,10 @@ export default function Index() {
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
   const [damPulse, setDamPulse] = useState({ normal: 0, caution: 0, danger: 0 });
+
+  // hazard overlay visibility (persisted) + layers sheet state
+  const { enabledIds, toggle: toggleHazardLayer } = useHazardLayerVisibility();
+  const [layersOpen, setLayersOpen] = useState(false);
 
   // staleness re-check clock
   const [now, setNow] = useState(Date.now());
@@ -792,9 +802,13 @@ export default function Index() {
           />
         )}
 
-        {/* hazard overlays — stream tiles for the visible area; uses the
-            local archive automatically once a layer has been downloaded */}
-        {mapReady && <AllHazardOverlays />}
+        {/* hazard overlays — only the layers checked in the sheet; each
+            streams tiles for the visible area, or uses its local archive
+            once downloaded */}
+        {mapReady &&
+          HAZARD_LAYERS.filter((layer) => enabledIds.has(layer.id)).map(
+            (layer) => <HazardLayerOverlay key={layer.id} layerId={layer.id} />
+          )}
       </Map>
 
       <LayersControl
@@ -829,6 +843,21 @@ export default function Index() {
           <Ionicons name="locate" size={24} color="#4287f5" />
         )}
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.layersButton}
+        onPress={() => setLayersOpen(true)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="layers" size={24} color="#4287f5" />
+      </TouchableOpacity>
+
+      <HazardLayersPanel
+        visible={layersOpen}
+        onClose={() => setLayersOpen(false)}
+        enabledIds={enabledIds}
+        onToggle={toggleHazardLayer}
+      />
 
       {selectedPerson && (
         <PersonCard
@@ -924,15 +953,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  hazardsButton: {
+  layersButton: {
     position: 'absolute',
-    height: 44,
-    borderRadius: 22,
-    paddingHorizontal: 14,
+    bottom: 32,
+    left: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#ffffff',
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
