@@ -35,6 +35,18 @@ function formatDate(value) {
   }
 }
 
+// Hard cap for report descriptions. Very long (or unbroken) descriptions
+// can defeat native line-clamping and blow up the card layout, so trim to
+// a sane length in JS first; the Text below still ellipsizes to 3 lines.
+const DESCRIPTION_MAX_LENGTH = 200;
+
+function trimDescription(text) {
+  if (!text) return "";
+  const clean = String(text);
+  if (clean.length <= DESCRIPTION_MAX_LENGTH) return clean;
+  return `${clean.slice(0, DESCRIPTION_MAX_LENGTH).trimEnd()}…`;
+}
+
 export default function ClusterDetailsWindow({
   cluster,
   reports,
@@ -263,10 +275,14 @@ export default function ClusterDetailsWindow({
                         {formatDate(report.created_at)}
                       </Text>
                     </View>
-                    <Text style={styles.reportDescription} numberOfLines={3}>
-                      {report.description ??
-                        report.ai_summary ??
-                        "No description provided."}
+                    <Text
+                      style={styles.reportDescription}
+                      numberOfLines={3}
+                      ellipsizeMode="tail"
+                    >
+                      {trimDescription(
+                        report.description ?? report.ai_summary
+                      ) || "No description provided."}
                     </Text>
                     {metaText ? (
                       <Text style={styles.reportMeta} numberOfLines={1}>
