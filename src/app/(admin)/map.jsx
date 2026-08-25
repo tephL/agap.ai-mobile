@@ -11,6 +11,7 @@ import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
 import TeamDetailsWindow from '../../components/dispatcher/TeamDetailsWindow';
 import AssignTeamModal from '../../components/dispatcher/AssignTeamModal';
+import AssignSuccessModal from '../../components/dispatcher/AssignSuccessModal';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 
 // ---------------------------------------------------------------------------
@@ -83,6 +84,8 @@ export default function Index() {
   const [clusterReports, setClusterReports] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  // populated right after a successful assign, drives the done popup
+  const [assignSuccess, setAssignSuccess] = useState(null);
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -213,6 +216,14 @@ export default function Index() {
       features: feature ? [feature] : [],
     };
   }, [clustersGeojson, selectedClusterId]);
+
+  // the expanded cluster already has a team on it (its assignment is still
+  // active), so the details window must not offer "Assign a Team" again
+  const selectedClusterAssigned = useMemo(() => {
+    if (selectedCluster == null) return false;
+    const clusterId = Number(selectedCluster.cluster_id);
+    return teams.some((t) => Number(t.assigned_to) === clusterId);
+  }, [teams, selectedCluster]);
 
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
@@ -528,6 +539,7 @@ export default function Index() {
           cluster={selectedCluster}
           reports={clusterReports}
           loading={reportsLoading}
+          teamAssigned={selectedClusterAssigned}
           onClose={collapseCluster}
           onAssignTeam={() => setAssignOpen(true)}
         />
@@ -546,7 +558,23 @@ export default function Index() {
         clusterId={selectedCluster?.cluster_id}
         clusterName={selectedCluster?.city}
         onClose={() => setAssignOpen(false)}
-        onAssigned={() => refreshClusters()}
+        onAssigned={(assignment, team) => {
+          setAssignSuccess({
+            teamName: team?.name,
+            clusterLabel:
+              selectedCluster?.city && selectedCluster?.cluster_id != null
+                ? `Cluster #${selectedCluster.cluster_id} · ${selectedCluster.city}`
+                : `Cluster #${selectedCluster?.cluster_id ?? ""}`,
+          });
+          refreshClusters();
+        }}
+      />
+
+      <AssignSuccessModal
+        visible={assignSuccess != null}
+        teamName={assignSuccess?.teamName}
+        clusterLabel={assignSuccess?.clusterLabel}
+        onClose={() => setAssignSuccess(null)}
       />
     </View>
   );

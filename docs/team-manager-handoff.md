@@ -103,9 +103,15 @@ const ClusterContext = createContext({ activeClusterId: null, setActiveClusterId
 - A team can hold only one active (`pending`/`dispatched`) assignment at
   a time; a second `POST /assignments` fails with **409**.
 - Resolving an assignment frees the team (`assigned_to` cleared) once it
-  has no other active assignment.
+  has no other active assignment, and **deletes the cluster** when no
+  other active assignment references it — resolved clusters disappear
+  from `/api/clusters`, `/api/dispatcher/clusters`, and the map. Citizen
+  reports themselves are kept; only the cluster and its report links go.
 - Marking a cluster `resolved` via `PATCH /clusters/:id/status` also
-  resolves its active assignments and frees the responding teams —
-  teams never stay busy against a resolved cluster.
+  resolves its active assignments, frees the responding teams, and
+  removes the cluster entirely — teams never stay busy against a
+  resolved cluster.
+- Teams carry `assigned_to` (the cluster id they are dispatched to), so
+  callers can tell which clusters already have a team.
 - Deleting empty clusters (server cleanup job) cascades their
   assignments away, so affected teams become `available`.
