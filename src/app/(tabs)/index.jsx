@@ -851,6 +851,7 @@ export default function Index() {
         <Ionicons name="layers" size={24} color="#4287f5" />
       </TouchableOpacity>
 
+
       <HazardLayersPanel
         visible={layersOpen}
         onClose={() => setLayersOpen(false)}
@@ -952,10 +953,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  // sits directly above the GPS/locate button, right-aligned
   layersButton: {
     position: 'absolute',
-    bottom: 32,
-    left: 16,
+    bottom: 92,
+    right: 16,
     width: 48,
     height: 48,
     borderRadius: 24,
