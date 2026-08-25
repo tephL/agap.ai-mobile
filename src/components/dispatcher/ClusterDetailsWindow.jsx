@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -12,13 +12,10 @@ import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import PriorityChip from "../ui/PriorityChip";
 import StatusBadge from "../ui/StatusBadge";
+import { reverseGeocode } from "../../services/geocodingService";
 
-const TABS = [
-  { key: "plan", label: "Action Plan" },
-  { key: "reports", label: "Reports" },
-];
+const DESCRIPTION_MAX_LENGTH = 200;
 
-// Soft badge variants matching the map's status dot colors.
 const REPORT_STATUS_STYLES = {
   open: { bg: "#FEE2E2", fg: "#B91C1C" },
   saved: { bg: "#FEF3C7", fg: "#A16207" },
@@ -34,11 +31,6 @@ function formatDate(value) {
     return value;
   }
 }
-
-// Hard cap for report descriptions. Very long (or unbroken) descriptions
-// can defeat native line-clamping and blow up the card layout, so trim to
-// a sane length in JS first; the Text below still ellipsizes to 3 lines.
-const DESCRIPTION_MAX_LENGTH = 200;
 
 function trimDescription(text) {
   if (!text) return "";
@@ -56,10 +48,27 @@ export default function ClusterDetailsWindow({
   onClose,
   onAssignTeam,
 }) {
-  const [activeTab, setActiveTab] = useState("plan");
+  const [barangay, setBarangay] = useState(null);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
-  // Rebuild only when a different set of reports arrives.
   const reportList = useMemo(() => reports ?? [], [reports]);
+
+  useEffect(() => {
+    if (!cluster?.latitude || !cluster?.longitude) return;
+    let cancelled = false;
+    setGeoLoading(true);
+    reverseGeocode(cluster.latitude, cluster.longitude)
+      .then((result) => {
+        if (!cancelled) setBarangay(result?.barangay ?? null);
+      })
+      .finally(() => {
+        if (!cancelled) setGeoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cluster?.cluster_id, cluster?.latitude, cluster?.longitude]);
 
   if (!cluster) return null;
 
@@ -67,18 +76,16 @@ export default function ClusterDetailsWindow({
     ? cluster.action_plan
     : [];
 
+  const locationLabel = barangay
+    ? `Cluster #${cluster.cluster_id} – ${barangay}, ${cluster.city}`
+    : `Cluster #${cluster.cluster_id} – ${cluster.city}`;
+
   return (
     <View style={styles.window}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>
-            Cluster #{cluster.cluster_id} · {cluster.city}
-          </Text>
-          <View style={styles.headerChips}>
-            <PriorityChip priority={cluster.priority_level} />
-            <Text style={styles.statusText}>{cluster.status}</Text>
-          </View>
+          <Text style={styles.title}>{locationLabel}</Text>
         </View>
         <TouchableOpacity
           onPress={onClose}
@@ -88,7 +95,46 @@ export default function ClusterDetailsWindow({
         </TouchableOpacity>
       </View>
 
-      {/* Team currently dispatched to this cluster */}
+      {/* Info row: priority, status, reports count */}
+      <View style={styles.infoRow}>
+        <View style={styles.infoPill}>
+          <PriorityChip priority={cluster.priority_level} />
+        </View>
+        <View style={styles.infoPill}>
+          <Text style={styles.infoPillLabel}>Status</Text>
+          <Text style={styles.infoPillValue}>
+            {cluster.status ?? "open"}
+          </Text>
+        </View>
+        <View style={styles.infoPill}>
+          <Text style={styles.infoPillLabel}>Reports</Text>
+          <Text style={styles.infoPillValue}>
+            {cluster.report_count ?? 0}
+          </Text>
+        </View>
+      </View>
+
+      {/* AI Summary */}
+      {cluster.ai_summary ? (
+        <View style={styles.summaryCard}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
+            <Text style={styles.sectionTitle}>AI Summary</Text>
+          </View>
+          <Text style={styles.summaryText}>{cluster.ai_summary}</Text>
+        </View>
+      ) : null}
+
+      {/* Affected people */}
+      <View style={styles.affectedRow}>
+        <Ionicons name="people-outline" size={16} color={colors.muted} />
+        <Text style={styles.affectedLabel}>Affected</Text>
+        <Text style={styles.affectedValue}>
+          {cluster.people_affected ?? 0}
+        </Text>
+      </View>
+
+      {/* Assigned team banner */}
       {assignedTeam ? (
         <View style={styles.assignedBanner}>
           <View style={styles.assignedIconWrap}>
@@ -105,73 +151,44 @@ export default function ClusterDetailsWindow({
         </View>
       ) : null}
 
-      {/* Tab toggle */}
-      <View style={styles.tabTrack}>
-        {TABS.map((tab) => (
+      {/* Buttons */}
+      <View style={styles.buttonRow}>
+        <TouchableOpacity
+          style={styles.seeDetailsButton}
+          activeOpacity={0.8}
+          onPress={() => setExpanded((prev) => !prev)}
+        >
+          <Ionicons
+            name={expanded ? "chevron-up" : "document-text-outline"}
+            size={18}
+            color={colors.primary}
+          />
+          <Text style={styles.seeDetailsText}>
+            {expanded ? "Hide Details" : "See Details"}
+          </Text>
+        </TouchableOpacity>
+
+        {!assignedTeam ? (
           <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            onPress={() => setActiveTab(tab.key)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === tab.key }}
+            style={styles.assignButton}
+            activeOpacity={0.8}
+            onPress={onAssignTeam}
           >
-            <View style={styles.tabInner}>
-              <Text
-                style={[
-                  styles.tabLabel,
-                  activeTab === tab.key && styles.tabLabelActive,
-                ]}
-              >
-                {tab.label}
-              </Text>
-              {tab.key === "reports" ? (
-                <View
-                  style={[
-                    styles.tabCount,
-                    activeTab === tab.key && styles.tabCountActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tabCountText,
-                      activeTab === tab.key && styles.tabCountTextActive,
-                    ]}
-                  >
-                    {cluster.report_count ?? 0}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+            <Ionicons name="people-circle-outline" size={18} color={colors.white} />
+            <Text style={styles.assignButtonText}>Assign a Team</Text>
           </TouchableOpacity>
-        ))}
+        ) : null}
       </View>
 
-      {/* Body */}
-      {activeTab === "plan" ? (
-        <View style={styles.planBody}>
+      {/* Expanded details: Action Plan + Reports */}
+      {expanded ? (
+        <View style={styles.expandedSection}>
           <ScrollView
             style={styles.bodyScroll}
             contentContainerStyle={styles.bodyContent}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.infoRowWrap}>
-              <View style={styles.infoStat}>
-                <Ionicons name="people-outline" size={16} color={colors.muted} />
-                <Text style={styles.infoStatLabel}>Affected</Text>
-                <Text style={styles.infoStatValue}>{cluster.people_affected ?? 0}</Text>
-              </View>
-            </View>
-
-            {cluster.ai_summary ? (
-              <View style={styles.summaryCard}>
-                <View style={styles.sectionTitleRow}>
-                  <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
-                  <Text style={styles.sectionTitle}>AI Summary</Text>
-                </View>
-                <Text style={styles.summaryText}>{cluster.ai_summary}</Text>
-              </View>
-            ) : null}
-
+            {/* Action Plan */}
             <View style={styles.sectionTitleRow}>
               <Ionicons name="list-outline" size={16} color={colors.muted} />
               <Text style={styles.sectionTitle}>Action Plan</Text>
@@ -193,111 +210,100 @@ export default function ClusterDetailsWindow({
             <Text style={styles.updatedText}>
               Updated {formatDate(cluster.updated_at)}
             </Text>
-          </ScrollView>
 
-          {/* Pinned below the scroll area so it stays visible while scrolling.
-              Hidden while a team is dispatched to this cluster. */}
-          {!assignedTeam ? (
-            <TouchableOpacity
-              style={styles.assignButton}
-              activeOpacity={0.8}
-              onPress={onAssignTeam}
-            >
-              <Ionicons name="people-circle-outline" size={18} color={colors.white} />
-              <Text style={styles.assignButtonText}>Assign a Team</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.bodyScroll}
-          contentContainerStyle={styles.bodyContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {loading ? (
-            <ActivityIndicator
-              size="small"
-              color={colors.primary}
-              style={styles.loader}
-            />
-          ) : reportList.length > 0 ? (
-            reportList.map((report) => {
-              const statusStyle =
-                REPORT_STATUS_STYLES[report.status] ??
-                REPORT_STATUS_STYLES.unknown;
-              const reporterLabel = report.reporter
-                ? (report.reporter.name || report.reporter.username)
-                : null;
-              const metaText = [
-                reporterLabel,
-                (report.people_affected ?? 0) > 0
-                  ? `${report.people_affected} affected`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(" · ");
-              const thumbnail = report.images?.[0];
+            {/* Reports */}
+            <View style={[styles.sectionTitleRow, { marginTop: 12 }]}>
+              <Ionicons name="document-outline" size={16} color={colors.muted} />
+              <Text style={styles.sectionTitle}>Reports</Text>
+            </View>
 
-              return (
-                <View key={report.report_id} style={styles.reportCard}>
-                  {thumbnail ? (
-                    <Image
-                      source={{ uri: thumbnail }}
-                      style={styles.reportImage}
-                    />
-                  ) : (
-                    <View style={[styles.reportImage, styles.reportImagePlaceholder]}>
-                      <Ionicons
-                        name="image-outline"
-                        size={16}
-                        color={colors.placeholder}
+            {loading ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.primary}
+                style={styles.loader}
+              />
+            ) : reportList.length > 0 ? (
+              reportList.map((report) => {
+                const statusStyle =
+                  REPORT_STATUS_STYLES[report.status] ??
+                  REPORT_STATUS_STYLES.unknown;
+                const reporterLabel = report.reporter
+                  ? report.reporter.name || report.reporter.username
+                  : null;
+                const metaText = [
+                  reporterLabel,
+                  (report.people_affected ?? 0) > 0
+                    ? `${report.people_affected} affected`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                const thumbnail = report.images?.[0];
+
+                return (
+                  <View key={report.report_id} style={styles.reportCard}>
+                    {thumbnail ? (
+                      <Image
+                        source={{ uri: thumbnail }}
+                        style={styles.reportImage}
                       />
-                    </View>
-                  )}
-                  <View style={styles.reportBody}>
-                    <View style={styles.reportTopRow}>
+                    ) : (
                       <View
-                        style={[
-                          styles.statusChip,
-                          { backgroundColor: statusStyle.bg },
-                        ]}
+                        style={[styles.reportImage, styles.reportImagePlaceholder]}
                       >
-                        <Text
+                        <Ionicons
+                          name="image-outline"
+                          size={16}
+                          color={colors.placeholder}
+                        />
+                      </View>
+                    )}
+                    <View style={styles.reportBody}>
+                      <View style={styles.reportTopRow}>
+                        <View
                           style={[
-                            styles.statusChipText,
-                            { color: statusStyle.fg },
+                            styles.statusChip,
+                            { backgroundColor: statusStyle.bg },
                           ]}
                         >
-                          {report.status}
+                          <Text
+                            style={[
+                              styles.statusChipText,
+                              { color: statusStyle.fg },
+                            ]}
+                          >
+                            {report.status}
+                          </Text>
+                        </View>
+                        <Text style={styles.reportDate} numberOfLines={1}>
+                          {formatDate(report.created_at)}
                         </Text>
                       </View>
-                      <Text style={styles.reportDate} numberOfLines={1}>
-                        {formatDate(report.created_at)}
+                      <Text
+                        style={styles.reportDescription}
+                        numberOfLines={3}
+                        ellipsizeMode="tail"
+                      >
+                        {trimDescription(
+                          report.description ?? report.ai_summary
+                        ) || "No description provided."}
                       </Text>
+                      {metaText ? (
+                        <Text style={styles.reportMeta} numberOfLines={1}>
+                          {metaText}
+                        </Text>
+                      ) : null}
                     </View>
-                    <Text
-                      style={styles.reportDescription}
-                      numberOfLines={3}
-                      ellipsizeMode="tail"
-                    >
-                      {trimDescription(
-                        report.description ?? report.ai_summary
-                      ) || "No description provided."}
-                    </Text>
-                    {metaText ? (
-                      <Text style={styles.reportMeta} numberOfLines={1}>
-                        {metaText}
-                      </Text>
-                    ) : null}
                   </View>
-                </View>
-              );
-            })
-          ) : (
-            <Text style={styles.emptyText}>No reports yet.</Text>
-          )}
-        </ScrollView>
-      )}
+                );
+              })
+            ) : (
+              <Text style={styles.emptyText}>No reports yet.</Text>
+            )}
+          </ScrollView>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -321,27 +327,86 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   headerText: {
     flex: 1,
-    gap: 6,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     color: colors.text,
   },
-  headerChips: {
+  infoRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+  },
+  infoPill: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 4,
   },
-  statusText: {
+  infoPillLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  infoPillValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.text,
+    textTransform: "capitalize",
+  },
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+    marginBottom: 10,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: colors.muted,
+  },
+  summaryText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.text,
+  },
+  affectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 6,
+    marginBottom: 10,
+  },
+  affectedLabel: {
+    flex: 1,
     fontSize: 12,
     fontWeight: "600",
     color: colors.muted,
-    textTransform: "capitalize",
+  },
+  affectedValue: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.text,
   },
   assignedBanner: {
     flexDirection: "row",
@@ -352,7 +417,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     borderRadius: 12,
     padding: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   assignedIconWrap: {
     width: 34,
@@ -378,115 +443,55 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.text,
   },
-  tabTrack: {
+  buttonRow: {
     flexDirection: "row",
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    borderRadius: 18,
-    overflow: "hidden",
-    marginBottom: 12,
+    gap: 8,
   },
-  tab: {
+  seeDetailsButton: {
     flex: 1,
-    paddingVertical: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tabActive: {
-    backgroundColor: colors.primary,
-  },
-  tabLabel: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  tabLabelActive: {
-    color: colors.white,
-  },
-  tabInner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 11,
   },
-  tabCount: {
-    minWidth: 20,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-    backgroundColor: "#FDECEC",
+  seeDetailsText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  assignButton: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 11,
   },
-  tabCountActive: {
-    backgroundColor: colors.white,
+  assignButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.white,
   },
-  tabCountText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.primary,
-  },
-  tabCountTextActive: {
-    color: colors.primary,
+  expandedSection: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 12,
   },
   bodyScroll: {
     flexGrow: 0,
     flexShrink: 1,
-  },
-  planBody: {
-    flexShrink: 1,
-    gap: 10,
+    maxHeight: 200,
   },
   bodyContent: {
     paddingBottom: 4,
     gap: 8,
-  },
-  infoRowWrap: {
-    flexDirection: "row",
-  },
-  infoStat: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 6,
-  },
-  infoStatLabel: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-  infoStatValue: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  summaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    padding: 10,
-    gap: 6,
-  },
-  sectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 2,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    color: colors.muted,
-  },
-  summaryText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.text,
   },
   planStep: {
     flexDirection: "row",
@@ -518,20 +523,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.placeholder,
     marginTop: 4,
-  },
-  assignButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 11,
-  },
-  assignButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.white,
   },
   loader: {
     marginVertical: 16,
