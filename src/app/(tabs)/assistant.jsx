@@ -161,7 +161,7 @@ export default function Assistant() {
       <View style={styles.welcomeContainer}>
         <View style={styles.logoWrap}>
           <Image
-            source={require("@/assets/icons/logo.png")}
+            source={require("../../assets/icons/logo.png")}
             style={styles.logoImage}
           />
         </View>
@@ -197,7 +197,7 @@ export default function Assistant() {
           <View style={styles.headerLeft}>
             <View style={styles.headerAvatar}>
               <Image
-                source={require("@/assets/icons/logo.png")}
+                source={require("../../assets/icons/logo.png")}
                 style={styles.headerLogo}
               />
             </View>
