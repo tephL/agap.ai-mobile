@@ -1,37 +1,66 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Layer, VectorSource } from "@maplibre/maplibre-react-native";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 import HAZARD_COLORS, {
   type HazardColorSet,
 } from "@/constants/hazardColors";
-import { HAZARD_LAYERS, getRemoteSourceUrl, type HazardLayerConfig } from "@/lib/pmtiles/downloadLayer";
+import { HAZARD_LAYERS, getRemoteSourceUrl } from "@/lib/pmtiles/downloadLayer";
 import { useOfflinePMTilesLayer } from "@/hooks/useOfflinePMTilesLayer";
 
 /**
- * Hazard layers: download manager + map overlays.
- *
- * Usage inside an existing MapView (this component does NOT own a MapView):
+ * Renders ONE hazard layer on an existing MapView (this component does NOT
+ * own a MapView):
  *
  *   <MapLibreRN.MapView ...>
- *     <HazardLayerOverlay layerId="flood_100yr" />
+ *     <HazardLayerOverlay layerId="flood_5yr" />
  *   </MapLibreRN.MapView>
  *
- * and render <HazardLayerToggle /> anywhere outside the map to let users
- * download/remove layers. Layers stream from the remote archive for the
- * visible area until a full offline copy is downloaded.
+ * Mount only one overlay at a time — every mounted layer multiplies vector
+ * tile decoding and GPU work, which is the main source of lag on phones
+ * (see HazardLayersPanel for the single-select UI).
  */
+
+/** Below this zoom hazard polygons cover whole regions; don't draw them. */
+const DEFAULT_MIN_ZOOM = 8;
 
 interface HazardLayerOverlayProps {
   layerId: string;
   /** Override default semi-transparent hazard coloring. */
   colors?: Partial<HazardColorSet>;
+  /** Don't render below this zoom level. Default 8. */
+  minZoom?: number;
+  /** Don't render above this zoom level. No upper bound by default. */
+  maxZoom?: number;
 }
 
-export function HazardLayerOverlay({ layerId, colors }: HazardLayerOverlayProps) {
+function HazardLayerOverlayInner({
+  layerId,
+  colors,
+  minZoom = DEFAULT_MIN_ZOOM,
+  maxZoom,
+}: HazardLayerOverlayProps) {
   const { status, sourceUrl } = useOfflinePMTilesLayer(layerId);
   const config = HAZARD_LAYERS.find((layer) => layer.id === layerId);
+
+  // Memoized so a parent re-render doesn't hand MapLibre freshly-created
+  // style objects, which would re-evaluate paint properties on the native
+  // side even when nothing changed.
+  const palette = useMemo(
+    () => ({
+      ...HAZARD_COLORS[config?.hazardType ?? "flood"],
+      ...colors,
+    }),
+    [config?.hazardType, colors]
+  );
+
+  const fillPaint = useMemo(
+    () => ({ "fill-color": palette.fill, "fill-opacity": palette.opacity }),
+    [palette.fill, palette.opacity]
+  );
+  const linePaint = useMemo(
+    () => ({ "line-color": palette.stroke, "line-width": 1 }),
+    [palette.stroke]
+  );
 
   if (!config) return null;
 
@@ -39,117 +68,38 @@ export function HazardLayerOverlay({ layerId, colors }: HazardLayerOverlayProps)
   // visible area straight from the remote archive via byte-range requests.
   const url =
     status === "ready" && sourceUrl ? sourceUrl : getRemoteSourceUrl(config.id);
-
-  const palette = { ...HAZARD_COLORS[config.hazardType], ...colors };
   const sourceId = `hazard-source-${config.id}`;
 
   return (
-    <VectorSource id={sourceId} url={url}>
+    // Zoom bounds live on BOTH the source (skips fetching/decoding tiles
+    // outside the range) and the layers (guarantees nothing draws outside
+    // it even if tiles were already cached at lower zooms).
+    <VectorSource id={sourceId} url={url} minzoom={minZoom} maxzoom={maxZoom}>
       {/* v11 API: one Layer component, props follow the MapLibre style spec.
           Nested layers inherit `source` from the enclosing VectorSource. */}
       <Layer
         id={`${sourceId}-fill`}
         type="fill"
         source-layer={config.sourceLayerId}
-        paint={{ "fill-color": palette.fill, "fill-opacity": palette.opacity }}
+        minzoom={minZoom}
+        maxzoom={maxZoom}
+        paint={fillPaint}
       />
       <Layer
         id={`${sourceId}-outline`}
         type="line"
         source-layer={config.sourceLayerId}
-        paint={{ "line-color": palette.stroke, "line-width": 1 }}
+        minzoom={minZoom}
+        maxzoom={maxZoom}
+        paint={linePaint}
       />
     </VectorSource>
-  );;
-}
-
-/** Convenience: every downloaded layer, ready to spread inside a MapView. */
-export function AllHazardOverlays() {
-  return (
-    <>
-      {HAZARD_LAYERS.map((layer) => (
-        <HazardLayerOverlay key={layer.id} layerId={layer.id} />
-      ))}
-    </>
   );
 }
 
-function ToggleRow({ config }: { config: HazardLayerConfig }) {
-  const { status, progress, download, remove } = useOfflinePMTilesLayer(config.id);
-
-  return (
-    <View style={styles.row}>
-      <Ionicons
-        name="alert-circle"
-        size={20}
-        color={HAZARD_COLORS[config.hazardType].stroke}
-      />
-      <View style={styles.info}>
-        <Text style={styles.label}>{config.label}</Text>
-        <Text style={styles.meta}>
-          ~{config.approxSizeMB} MB ·{" "}
-          {status === "downloading" ? `${progress}%` : status.replace("-", " ")}
-        </Text>
-        {status === "downloading" ? (
-          <View style={styles.track}>
-            <View style={[styles.fill, { width: `${Math.max(progress, 4)}%` }]} />
-          </View>
-        ) : null}
-        {status === "error" ? (
-          <Text style={styles.error}>Download failed — check connection and retry.</Text>
-        ) : null}
-      </View>
-      {status === "ready" ? (
-        <TouchableOpacity style={[styles.button, styles.removeButton]} onPress={remove}>
-          <Text style={styles.buttonText}>Remove</Text>
-        </TouchableOpacity>
-      ) : status !== "downloading" ? (
-        <TouchableOpacity style={styles.button} onPress={download}>
-          <Text style={styles.buttonText}>{status === "error" ? "Retry" : "Download"}</Text>
-        </TouchableOpacity>
-      ) : null}
-    </View>
-  );
-}
-
-export default function HazardLayerToggle() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Hazard maps</Text>
-      {HAZARD_LAYERS.map((layer) => (
-        <ToggleRow key={layer.id} config={layer} />
-      ))}
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { gap: 8 },
-  heading: { fontSize: 14, fontWeight: "700", color: "#1F2937" },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 6,
-  },
-  info: { flex: 1 },
-  label: { fontSize: 13, fontWeight: "600", color: "#111827" },
-  meta: { fontSize: 11, color: "#6B7280", marginTop: 1 },
-  error: { fontSize: 11, color: "#DC2626", marginTop: 2 },
-  track: {
-    height: 4,
-    marginTop: 6,
-    borderRadius: 2,
-    backgroundColor: "#E5E7EB",
-    overflow: "hidden",
-  },
-  fill: { height: "100%", backgroundColor: "#208AEF" },
-  button: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: "#208AEF",
-  },
-  removeButton: { backgroundColor: "#EF4444" },
-  buttonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "600" },
-});
+/**
+ * Memoized: parents re-render often (location ticks, pulse animations);
+ * none of that should reach MapLibre unless the active layer or styling
+ * actually changes.
+ */
+export const HazardLayerOverlay = React.memo(HazardLayerOverlayInner);

@@ -15,24 +15,25 @@ import { HAZARD_LAYERS, type HazardLayerConfig } from "@/lib/pmtiles/downloadLay
 import { useOfflinePMTilesLayer } from "@/hooks/useOfflinePMTilesLayer";
 
 /**
- * Bottom-sheet "layers" tab: the user checks which hazard layers to overlay
- * on the map (visibility) and can manage their offline copies (download /
- * remove). Visibility state lives in useHazardLayerVisibility so choices
- * persist across sessions.
+ * Bottom-sheet "layers" tab: the user picks which single hazard layer is
+ * overlaid on the map and can manage offline copies (download / remove).
+ * Only one layer renders at a time — picking a new one unmounts the previous
+ * overlay. Per-layer download state is independent of selection, so every
+ * row keeps working (download/resume/remove) whether selected or not.
  */
 
 interface LayerRowProps {
   config: HazardLayerConfig;
-  enabled: boolean;
-  onToggle: () => void;
+  active: boolean;
+  onSelect: () => void;
 }
 
-function LayerRow({ config, enabled, onToggle }: LayerRowProps) {
+function LayerRow({ config, active, onSelect }: LayerRowProps) {
   const { status, progress, download, remove } =
     useOfflinePMTilesLayer(config.id);
   const palette = HAZARD_COLORS[config.hazardType];
 
-  // Download status stays visible even when unchecked so an in-flight
+  // Download status stays visible even when unselected so an in-flight
   // offline copy isn't orphaned silently in the background.
   const metaText =
     status === "downloading"
@@ -47,19 +48,33 @@ function LayerRow({ config, enabled, onToggle }: LayerRowProps) {
     <View style={styles.row}>
       <TouchableOpacity
         style={styles.rowMain}
-        onPress={onToggle}
+        onPress={onSelect}
         activeOpacity={0.6}
       >
         <Ionicons
-          name={enabled ? "checkbox" : "square-outline"}
+          name={active ? "radio-button-on" : "radio-button-off"}
           size={22}
-          color={enabled ? "#208AEF" : "#9CA3AF"}
+          color={active ? "#208AEF" : "#9CA3AF"}
         />
         <View style={[styles.dot, { backgroundColor: palette.stroke }]} />
         <View style={styles.info}>
-          <Text style={[styles.label, !enabled && styles.labelDisabled]}>
-            {config.label}
-          </Text>
+          <View style={styles.labelRow}>
+            <Text style={[styles.label, !active && styles.labelDisabled]}>
+              {config.label}
+            </Text>
+            {config.recommended ? (
+              <View style={[styles.badge, active && styles.badgeActive]}>
+                <Text
+                  style={[
+                    styles.badgeText,
+                    active && styles.badgeTextActive,
+                  ]}
+                >
+                  Recommended
+                </Text>
+              </View>
+            ) : null}
+          </View>
           <Text style={styles.meta}>{metaText}</Text>
           {status === "downloading" ? (
             <View style={styles.track}>
@@ -94,17 +109,20 @@ function LayerRow({ config, enabled, onToggle }: LayerRowProps) {
 interface HazardLayersPanelProps {
   visible: boolean;
   onClose: () => void;
-  /** Ids currently overlaid on the map. */
-  enabledIds: Set<string>;
-  /** Called with the layer id when a row's checkbox is toggled. */
-  onToggle: (layerId: string) => void;
+  /** The one layer currently overlaid on the map (null = none). */
+  activeId: string | null;
+  /**
+   * Called with a layer id when a row is picked; passing that same id back
+   * deselects it. Download state of every layer is unaffected.
+   */
+  onSelect: (layerId: string | null) => void;
 }
 
 export default function HazardLayersPanel({
   visible,
   onClose,
-  enabledIds,
-  onToggle,
+  activeId,
+  onSelect,
 }: HazardLayersPanelProps) {
   if (!visible) return null;
 
@@ -120,8 +138,8 @@ export default function HazardLayersPanel({
             </TouchableOpacity>
           </View>
           <Text style={styles.subtitle}>
-            Overlay hazard maps on the basemap. Layers stream for the area you
-            are viewing — download to keep them available offline.
+            Show one hazard map on the basemap at a time. Layers stream for
+            the area you are viewing — download to keep them offline.
           </Text>
 
           <ScrollView style={styles.list} nestedScrollEnabled>
@@ -129,8 +147,10 @@ export default function HazardLayersPanel({
               <LayerRow
                 key={layer.id}
                 config={layer}
-                enabled={enabledIds.has(layer.id)}
-                onToggle={() => onToggle(layer.id)}
+                active={activeId === layer.id}
+                onSelect={() =>
+                  onSelect(activeId === layer.id ? null : layer.id)
+                }
               />
             ))}
           </ScrollView>
@@ -183,8 +203,22 @@ const styles = StyleSheet.create({
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
   info: { flex: 1 },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   label: { fontSize: 14, fontWeight: "600", color: "#111827" },
   labelDisabled: { color: "#9CA3AF" },
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: "#EFF6FF",
+  },
+  badgeActive: { backgroundColor: "#208AEF" },
+  badgeText: { fontSize: 9, fontWeight: "700", color: "#208AEF" },
+  badgeTextActive: { color: "#FFFFFF" },
   meta: { fontSize: 11, color: "#6B7280", marginTop: 1 },
   track: {
     height: 4,

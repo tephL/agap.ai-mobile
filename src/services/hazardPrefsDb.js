@@ -44,21 +44,37 @@ async function openDb() {
   return dbPromise;
 }
 
-/** Saved visibility prefs keyed by layer id; layers absent here are unset. */
-export async function getHazardLayerPrefs() {
+/**
+ * Single-select hazard layer visibility. The same hazard_layer_pref table is
+ * reused: exactly one row carries enabled = 1 — the layer currently overlaid
+ * on the map. Legacy installs that stored several enabled rows (old
+ * multi-select behavior) are collapsed on read, preferring any row that is
+ * still a known layer id.
+ */
+
+/** Saved active layer id, or null when nothing is overlaid. */
+export async function getActiveHazardLayerId(knownLayerIds) {
   const db = await openDb();
   const rows = await db.getAllAsync(
-    "SELECT layer_id, enabled FROM hazard_layer_pref;"
+    "SELECT layer_id FROM hazard_layer_pref WHERE enabled = 1 ORDER BY rowid;"
   );
-  return Object.fromEntries(
-    rows.map((row) => [row.layer_id, Number(row.enabled) === 1])
-  );
+  const enabledIds = rows.map((row) => row.layer_id);
+  if (knownLayerIds && knownLayerIds.size > 0) {
+    return enabledIds.find((id) => knownLayerIds.has(id)) ?? null;
+  }
+  return enabledIds[0] ?? null;
 }
 
-export async function setHazardLayerPref(layerId, enabled) {
+export async function setActiveHazardLayerId(layerId) {
   const db = await openDb();
-  await db.runAsync(
-    `INSERT OR REPLACE INTO hazard_layer_pref (layer_id, enabled) VALUES (?, ?);`,
-    [layerId, enabled ? 1 : 0]
-  );
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    // Single-select invariant lives here too: clear before marking.
+    await txn.runAsync("DELETE FROM hazard_layer_pref;");
+    if (layerId != null) {
+      await txn.runAsync(
+        `INSERT OR REPLACE INTO hazard_layer_pref (layer_id, enabled) VALUES (?, 1);`,
+        [layerId]
+      );
+    }
+  });
 }
