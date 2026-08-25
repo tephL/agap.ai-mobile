@@ -1,70 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import PriorityChip from "../ui/PriorityChip";
 import StatusBadge from "../ui/StatusBadge";
 import { reverseGeocode } from "../../services/geocodingService";
 
-const DESCRIPTION_MAX_LENGTH = 200;
-
-const REPORT_STATUS_STYLES = {
-  open: { bg: "#FEE2E2", fg: "#B91C1C" },
-  saved: { bg: "#FEF3C7", fg: "#A16207" },
-  resolved: { bg: "#DCFCE7", fg: "#15803D" },
-  unknown: { bg: colors.surface, fg: colors.muted },
-};
-
-function formatDate(value) {
-  if (!value) return "—";
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
-}
-
-function trimDescription(text) {
-  if (!text) return "";
-  const clean = String(text);
-  if (clean.length <= DESCRIPTION_MAX_LENGTH) return clean;
-  return `${clean.slice(0, DESCRIPTION_MAX_LENGTH).trimEnd()}…`;
-}
-
 export default function ClusterDetailsWindow({
   cluster,
-  reports,
-  loading,
   assignedTeam = null,
   assignedExtraCount = 0,
   onClose,
   onAssignTeam,
 }) {
+  const router = useRouter();
   const [barangay, setBarangay] = useState(null);
-  const [geoLoading, setGeoLoading] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-
-  const reportList = useMemo(() => reports ?? [], [reports]);
 
   useEffect(() => {
     if (!cluster?.latitude || !cluster?.longitude) return;
     let cancelled = false;
-    setGeoLoading(true);
-    reverseGeocode(cluster.latitude, cluster.longitude)
-      .then((result) => {
-        if (!cancelled) setBarangay(result?.barangay ?? null);
-      })
-      .finally(() => {
-        if (!cancelled) setGeoLoading(false);
-      });
+    reverseGeocode(cluster.latitude, cluster.longitude).then((result) => {
+      if (!cancelled) setBarangay(result?.barangay ?? null);
+    });
     return () => {
       cancelled = true;
     };
@@ -72,13 +35,23 @@ export default function ClusterDetailsWindow({
 
   if (!cluster) return null;
 
-  const actionPlan = Array.isArray(cluster.action_plan)
-    ? cluster.action_plan
-    : [];
-
   const locationLabel = barangay
     ? `Cluster #${cluster.cluster_id} – ${barangay}, ${cluster.city}`
     : `Cluster #${cluster.cluster_id} – ${cluster.city}`;
+
+  const handleSeeDetails = () => {
+    router.push({
+      pathname: "/cluster-detail",
+      params: {
+        clusterId: String(cluster.cluster_id),
+        city: cluster.city ?? "",
+        priority: cluster.priority_level ?? "low",
+        status: cluster.status ?? "open",
+        reportCount: String(cluster.report_count ?? 0),
+        peopleAffected: String(cluster.people_affected ?? 0),
+      },
+    });
+  };
 
   return (
     <View style={styles.window}>
@@ -121,7 +94,9 @@ export default function ClusterDetailsWindow({
             <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
             <Text style={styles.sectionTitle}>AI Summary</Text>
           </View>
-          <Text style={styles.summaryText}>{cluster.ai_summary}</Text>
+          <Text style={styles.summaryText} numberOfLines={3} ellipsizeMode="tail">
+            {cluster.ai_summary}
+          </Text>
         </View>
       ) : null}
 
@@ -156,16 +131,10 @@ export default function ClusterDetailsWindow({
         <TouchableOpacity
           style={styles.seeDetailsButton}
           activeOpacity={0.8}
-          onPress={() => setExpanded((prev) => !prev)}
+          onPress={handleSeeDetails}
         >
-          <Ionicons
-            name={expanded ? "chevron-up" : "document-text-outline"}
-            size={18}
-            color={colors.primary}
-          />
-          <Text style={styles.seeDetailsText}>
-            {expanded ? "Hide Details" : "See Details"}
-          </Text>
+          <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+          <Text style={styles.seeDetailsText}>See Details</Text>
         </TouchableOpacity>
 
         {!assignedTeam ? (
@@ -179,131 +148,6 @@ export default function ClusterDetailsWindow({
           </TouchableOpacity>
         ) : null}
       </View>
-
-      {/* Expanded details: Action Plan + Reports */}
-      {expanded ? (
-        <View style={styles.expandedSection}>
-          <ScrollView
-            style={styles.bodyScroll}
-            contentContainerStyle={styles.bodyContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Action Plan */}
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="list-outline" size={16} color={colors.muted} />
-              <Text style={styles.sectionTitle}>Action Plan</Text>
-            </View>
-
-            {actionPlan.length > 0 ? (
-              actionPlan.map((step, index) => (
-                <View key={`${index}-${step}`} style={styles.planStep}>
-                  <View style={styles.stepNumberWrap}>
-                    <Text style={styles.stepNumber}>{index + 1}</Text>
-                  </View>
-                  <Text style={styles.stepText}>{step}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No action plan yet.</Text>
-            )}
-
-            <Text style={styles.updatedText}>
-              Updated {formatDate(cluster.updated_at)}
-            </Text>
-
-            {/* Reports */}
-            <View style={[styles.sectionTitleRow, { marginTop: 12 }]}>
-              <Ionicons name="document-outline" size={16} color={colors.muted} />
-              <Text style={styles.sectionTitle}>Reports</Text>
-            </View>
-
-            {loading ? (
-              <ActivityIndicator
-                size="small"
-                color={colors.primary}
-                style={styles.loader}
-              />
-            ) : reportList.length > 0 ? (
-              reportList.map((report) => {
-                const statusStyle =
-                  REPORT_STATUS_STYLES[report.status] ??
-                  REPORT_STATUS_STYLES.unknown;
-                const reporterLabel = report.reporter
-                  ? report.reporter.name || report.reporter.username
-                  : null;
-                const metaText = [
-                  reporterLabel,
-                  (report.people_affected ?? 0) > 0
-                    ? `${report.people_affected} affected`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
-                const thumbnail = report.images?.[0];
-
-                return (
-                  <View key={report.report_id} style={styles.reportCard}>
-                    {thumbnail ? (
-                      <Image
-                        source={{ uri: thumbnail }}
-                        style={styles.reportImage}
-                      />
-                    ) : (
-                      <View
-                        style={[styles.reportImage, styles.reportImagePlaceholder]}
-                      >
-                        <Ionicons
-                          name="image-outline"
-                          size={16}
-                          color={colors.placeholder}
-                        />
-                      </View>
-                    )}
-                    <View style={styles.reportBody}>
-                      <View style={styles.reportTopRow}>
-                        <View
-                          style={[
-                            styles.statusChip,
-                            { backgroundColor: statusStyle.bg },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.statusChipText,
-                              { color: statusStyle.fg },
-                            ]}
-                          >
-                            {report.status}
-                          </Text>
-                        </View>
-                        <Text style={styles.reportDate} numberOfLines={1}>
-                          {formatDate(report.created_at)}
-                        </Text>
-                      </View>
-                      <Text
-                        style={styles.reportDescription}
-                        numberOfLines={3}
-                        ellipsizeMode="tail"
-                      >
-                        {trimDescription(
-                          report.description ?? report.ai_summary
-                        ) || "No description provided."}
-                      </Text>
-                      {metaText ? (
-                        <Text style={styles.reportMeta} numberOfLines={1}>
-                          {metaText}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
-                );
-              })
-            ) : (
-              <Text style={styles.emptyText}>No reports yet.</Text>
-            )}
-          </ScrollView>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -477,112 +321,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: colors.white,
-  },
-  expandedSection: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 12,
-  },
-  bodyScroll: {
-    flexGrow: 0,
-    flexShrink: 1,
-    maxHeight: 200,
-  },
-  bodyContent: {
-    paddingBottom: 4,
-    gap: 8,
-  },
-  planStep: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    paddingVertical: 4,
-  },
-  stepNumberWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 1,
-  },
-  stepNumber: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.white,
-  },
-  stepText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.text,
-  },
-  updatedText: {
-    fontSize: 11,
-    color: colors.placeholder,
-    marginTop: 4,
-  },
-  loader: {
-    marginVertical: 16,
-  },
-  reportCard: {
-    flexDirection: "row",
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 10,
-    gap: 10,
-  },
-  reportImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    backgroundColor: colors.border,
-  },
-  reportImagePlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reportBody: {
-    flex: 1,
-    gap: 4,
-  },
-  reportTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  statusChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  statusChipText: {
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "capitalize",
-  },
-  reportDate: {
-    flex: 1,
-    fontSize: 11,
-    color: colors.placeholder,
-    textAlign: "right",
-  },
-  reportDescription: {
-    fontSize: 13,
-    lineHeight: 17,
-    color: colors.text,
-  },
-  reportMeta: {
-    fontSize: 11,
-    color: colors.muted,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: colors.muted,
-    textAlign: "center",
-    paddingVertical: 16,
   },
 });

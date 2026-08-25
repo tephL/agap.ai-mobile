@@ -69,6 +69,16 @@ export default function RootLayout() {
           headerTitleStyle: { fontWeight: "700" },
         }}
       />
+      <Stack.Screen
+        name="cluster-detail"
+        options={{
+          title: "Cluster Detail",
+          headerShadowVisible: false,
+          headerTintColor: "#182033",
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTitleStyle: { fontWeight: "700" },
+        }}
+      />
       
       {/* Reporting Screens */}
       <Stack.Screen
