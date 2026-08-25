@@ -26,6 +26,10 @@ const LOCATE_ZOOM = 15;
 const LOCATE_FLY_DURATION_MS = 1000;
 const CLUSTERS_FETCH_INTERVAL_MS = 1000 * 60; // 1 min
 
+// radar-style pulse loop for cluster halos: ~18fps ticks, full cycle ~1s
+const PULSE_TICK_MS = 55;
+const PULSE_STEP = 0.06;
+
 // where the camera settles when a cluster is expanded
 const CLUSTER_FOCUS_ZOOM = 15;
 const CLUSTER_FOCUS_DURATION_MS = 800;
@@ -91,6 +95,18 @@ export default function Index() {
   const [mapReady, setMapReady] = useState(false);
   const cameraRef = useRef(null);
   const handledFocusRef = useRef(0);
+
+  // drives the expanding halo ring around every cluster; a single phase
+  // value is baked into the pulse layer's paint each tick
+  const [pulsePhase, setPulsePhase] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(
+      () => setPulsePhase((p) => (p + PULSE_STEP) % 1),
+      PULSE_TICK_MS
+    );
+    return () => clearInterval(id);
+  }, []);
 
   // team.jsx reads the selected cluster across tabs; focusNonce marks
   // explicit focus requests coming from the Reports tab, clustersNonce
@@ -235,6 +251,11 @@ export default function Index() {
     if (assigned.length === 0) return null;
     return { team: assigned[0], extraCount: assigned.length - 1 };
   }, [teams, selectedCluster]);
+
+  // radar-style ring: swells outward and fades away over each cycle,
+  // tinted per cluster via the shared priority color expression
+  const pulseScale = 1 + 1.6 * pulsePhase;
+  const pulseFade = 1 - pulsePhase;
 
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
@@ -442,6 +463,24 @@ export default function Index() {
             hitbox={{ top: 16, right: 16, bottom: 16, left: 16 }}
             onPress={handleClusterPress}
           >
+            {/* expanding priority-colored halo behind every cluster dot */}
+            <Layer
+              type="circle"
+              id="clustersPulseLayer"
+              paint={{
+                'circle-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-opacity': 0.3 * pulseFade,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  5, 4 * pulseScale,
+                  10, 8 * pulseScale,
+                  16, 14 * pulseScale,
+                ],
+                'circle-stroke-width': 1.5,
+                'circle-stroke-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-stroke-opacity': 0.55 * pulseFade,
+              }}
+            />
             <Layer
               type="circle"
               id="clustersLayer"
@@ -456,6 +495,31 @@ export default function Index() {
                 'circle-stroke-width': 2,
                 'circle-stroke-color': '#ffffff',
                 'circle-opacity': 0.85,
+              }}
+            />
+            {/* report count rendered in the middle of each cluster dot */}
+            <Layer
+              type="symbol"
+              id="clustersCountLayer"
+              layout={{
+                'text-field': ['to-string', ['get', 'report_count']],
+                'text-size': [
+                  'interpolate', ['linear'], ['zoom'],
+                  9, 10,
+                  16, 14,
+                ],
+                'text-allow-overlap': true,
+                'text-ignore-placement': true,
+              }}
+              paint={{
+                'text-color': '#ffffff',
+                'text-halo-color': 'rgba(38, 50, 56, 0.65)',
+                'text-halo-width': 1.2,
+                'text-opacity': [
+                  'interpolate', ['linear'], ['zoom'],
+                  7.5, 0,
+                  9, 1,
+                ],
               }}
             />
           </GeoJSONSource>

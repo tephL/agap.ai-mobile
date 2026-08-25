@@ -79,11 +79,16 @@ export default function ClusterDetailsWindow({
       {/* Team currently dispatched to this cluster */}
       {assignedTeam ? (
         <View style={styles.assignedBanner}>
-          <Ionicons name="people-circle-outline" size={18} color={colors.primary} />
-          <Text style={styles.assignedText} numberOfLines={1}>
-            {assignedTeam.name}
-            {assignedExtraCount > 0 ? ` +${assignedExtraCount}` : ""}
-          </Text>
+          <View style={styles.assignedIconWrap}>
+            <Ionicons name="people-circle-outline" size={18} color={colors.white} />
+          </View>
+          <View style={styles.assignedBody}>
+            <Text style={styles.assignedLabel}>Assigned Team</Text>
+            <Text style={styles.assignedName} numberOfLines={1}>
+              {assignedTeam.name}
+              {assignedExtraCount > 0 ? ` +${assignedExtraCount}` : ""}
+            </Text>
+          </View>
           <StatusBadge status={assignedTeam.status} />
         </View>
       ) : null}
@@ -325,17 +330,36 @@ const styles = StyleSheet.create({
   assignedBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    gap: 10,
+    backgroundColor: "#FDECEC",
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    padding: 10,
     marginBottom: 12,
   },
-  assignedText: {
+  assignedIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignedBody: {
     flex: 1,
-    fontSize: 13,
-    fontWeight: "700",
+    gap: 1,
+  },
+  assignedLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: colors.primary,
+  },
+  assignedName: {
+    fontSize: 14,
+    fontWeight: "800",
     color: colors.text,
   },
   tabTrack: {
