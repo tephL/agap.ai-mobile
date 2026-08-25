@@ -28,6 +28,17 @@ interface LayerRowProps {
   onSelect: () => void;
 }
 
+const LAYER_DESCRIPTIONS: Record<string, string> = {
+  flood_5yr:
+    "Areas likely to flood in a common 5-year storm event",
+  flood_25yr:
+    "Areas likely to flood in a 1-in-25 year storm event",
+  flood_100yr:
+    "Areas likely to flood in a 1-in-100 year extreme storm event",
+  landslide:
+    "Zones prone to landslides based on slope, soil, and rainfall",
+};
+
 function LayerRow({ config, active, onSelect }: LayerRowProps) {
   const { status, progress, download, remove } =
     useOfflinePMTilesLayer(config.id);
@@ -58,23 +69,26 @@ function LayerRow({ config, active, onSelect }: LayerRowProps) {
         />
         <View style={[styles.dot, { backgroundColor: palette.stroke }]} />
         <View style={styles.info}>
-          <View style={styles.labelRow}>
-            <Text style={[styles.label, !active && styles.labelDisabled]}>
-              {config.label}
+          {config.recommended ? (
+            <View style={[styles.badge, active && styles.badgeActive]}>
+              <Text
+                style={[
+                  styles.badgeText,
+                  active && styles.badgeTextActive,
+                ]}
+              >
+                Recommended
+              </Text>
+            </View>
+          ) : null}
+          <Text style={[styles.label, !active && styles.labelDisabled]}>
+            {config.label}
+          </Text>
+          {LAYER_DESCRIPTIONS[config.id] ? (
+            <Text style={styles.description}>
+              {LAYER_DESCRIPTIONS[config.id]}
             </Text>
-            {config.recommended ? (
-              <View style={[styles.badge, active && styles.badgeActive]}>
-                <Text
-                  style={[
-                    styles.badgeText,
-                    active && styles.badgeTextActive,
-                  ]}
-                >
-                  Recommended
-                </Text>
-              </View>
-            ) : null}
-          </View>
+          ) : null}
           <Text style={styles.meta}>{metaText}</Text>
           {status === "downloading" ? (
             <View style={styles.track}>
@@ -132,14 +146,14 @@ export default function HazardLayersPanel({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>Map layers</Text>
+            <Text style={styles.title}>Hazard Map Layers</Text>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
           </View>
           <Text style={styles.subtitle}>
-            Show one hazard map on the basemap at a time. Layers stream for
-            the area you are viewing — download to keep them offline.
+            Select a hazard overlay to view on the map. Only one layer can be
+            shown at a time to keep performance smooth.
           </Text>
 
           <ScrollView style={styles.list} nestedScrollEnabled>
@@ -167,13 +181,15 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    maxHeight: "65%",
+    maxHeight: "70%",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 8,
+    paddingBottom: 32,
+    flexDirection: "column",
+    overflow: "hidden",
   },
   header: {
     flexDirection: "row",
@@ -187,7 +203,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
   },
-  list: { flexGrow: 0 },
+  list: { flexGrow: 1, minHeight: 0 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -203,18 +219,16 @@ const styles = StyleSheet.create({
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
   info: { flex: 1 },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
   label: { fontSize: 14, fontWeight: "600", color: "#111827" },
   labelDisabled: { color: "#9CA3AF" },
+  description: { fontSize: 11, color: "#6B7280", marginTop: 2 },
   badge: {
+    alignSelf: "flex-start",
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 6,
     backgroundColor: "#EFF6FF",
+    marginBottom: 2,
   },
   badgeActive: { backgroundColor: "#208AEF" },
   badgeText: { fontSize: 9, fontWeight: "700", color: "#208AEF" },

@@ -81,11 +81,11 @@ function HazardLayerOverlayInner({
 
   const fillPaint = useMemo(
     () => ({
-      "fill-color": palette.fill,
+      "fill-color": palette.fillExpression ?? palette.fill,
       "fill-antialias": true,
       "fill-opacity": zoomRamp(0, palette.opacity, fadeStart, fadeEnd),
     }),
-    [palette.fill, palette.opacity, fadeStart, fadeEnd]
+    [palette.fillExpression, palette.fill, palette.opacity, fadeStart, fadeEnd]
   );
 
   // Wide, blurred, low-opacity halo — the soft glow that hides cell edges.
