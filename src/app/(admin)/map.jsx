@@ -74,6 +74,10 @@ export default function Index() {
   // location / permissions
   const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
+  // while true the camera tracks the user's position; any programmatic
+  // flight to a pin must turn it off first or tracking yanks the camera
+  // back to the user on the next GPS fix
+  const [followsUser, setFollowsUser] = useState(true);
 
   // cluster markers state
   const [clusters, setClusters] = useState([]);
@@ -272,6 +276,8 @@ export default function Index() {
   const handleLocatePress = async () => {
     if (locating) return;
     if (!getCachedCoords()) setLocating(true);
+    // resume tracking so the camera keeps following after recentering
+    setFollowsUser(true);
     try {
       const coords = await resolveCoords();
       if (!coords) return;
@@ -289,9 +295,16 @@ export default function Index() {
   };
 
   // ---- auto-zoom to the user once their location loads ---------------------
-  // mirrors the GPS button: flies to the current position on the first fix
+  // mirrors the GPS button: flies to the current position on the first fix;
+  // skipped when a "go to team/cluster" request is already pending so it
+  // can't override the flight that request triggers
   useEffect(() => {
     if (!locationGranted || !mapReady || hasAutoZoomedRef.current) return;
+    const teamFocusPending =
+      focusTeamId != null && focusTeamNonce !== handledTeamFocusRef.current;
+    const clusterFocusPending =
+      activeClusterId != null && focusNonce !== handledFocusRef.current;
+    if (teamFocusPending || clusterFocusPending) return;
     let cancelled = false;
     (async () => {
       const coords = await resolveCoords();
@@ -306,7 +319,15 @@ export default function Index() {
     return () => {
       cancelled = true;
     };
-  }, [locationGranted, mapReady, resolveCoords]);
+  }, [
+    locationGranted,
+    mapReady,
+    resolveCoords,
+    focusTeamId,
+    focusTeamNonce,
+    activeClusterId,
+    focusNonce,
+  ]);
 
   // ---- cluster expand / collapse -----------------------------------------
   const collapseCluster = useCallback(() => {
@@ -346,6 +367,8 @@ export default function Index() {
         typeof target.latitude === 'number' &&
         typeof target.longitude === 'number'
       ) {
+        // stop tracking the user or the flight gets overridden
+        setFollowsUser(false);
         cameraRef.current?.flyTo({
           center: [target.longitude, target.latitude],
           zoom: CLUSTER_FOCUS_ZOOM,
@@ -427,6 +450,8 @@ export default function Index() {
         typeof team.lat === 'number' &&
         typeof team.lng === 'number'
       ) {
+        // stop tracking the user or the flight gets overridden
+        setFollowsUser(false);
         cameraRef.current?.flyTo({
           center: [team.lng, team.lat],
           zoom: CLUSTER_FOCUS_ZOOM,
@@ -487,6 +512,10 @@ export default function Index() {
       !Number.isNaN(team.lat) &&
       !Number.isNaN(team.lng)
     ) {
+      // stop tracking the user or tracking yanks the camera right back
+      // to their position on the next GPS fix (reported bug: "go to
+      // location" from a team landed on the user instead of the team)
+      setFollowsUser(false);
       cameraRef.current?.flyTo({
         center: [team.lng, team.lat],
         zoom: CLUSTER_FOCUS_ZOOM,
@@ -518,7 +547,9 @@ export default function Index() {
           maxBounds={PH_BOUNDS}
           minZoom={6}
           maxZoom={20}
-          trackUserLocation={locationGranted ? "default" : undefined}
+          trackUserLocation={
+            locationGranted && followsUser ? "default" : undefined
+          }
         />
 
         {mapReady && (
