@@ -6,7 +6,7 @@ import { cameraStore } from "../store/cameraStore";
 
 // Recipient for the offline fallback report SMS.
 // TODO: move to an env var / config if this ever needs to differ per build.
-const OFFLINE_SMS_RECIPIENT = "09927394544";
+const OFFLINE_SMS_RECIPIENT = "09089914045";
 
 // Cap on the free-text description in offline mode. Kept short (vs the
 // 500-char NOTES_MAX used online) because it has to ride inside a single
