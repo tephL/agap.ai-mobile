@@ -685,7 +685,7 @@ export default function Index() {
             zoomLevel: 6,
           }}
           maxBounds={PH_BOUNDS}
-          minZoom={activeId ? 8 : 6}
+          minZoom={activeId ? 15 : 6}
           maxZoom={20}
           trackUserLocation={locationGranted ? "default" : undefined}
         />
