@@ -85,11 +85,14 @@ Shared so all three tabs agree on which cluster is selected:
 const ClusterContext = createContext({ activeClusterId: null, setActiveClusterId: () => {} });
 ```
 
-- Provider mounts in `src/app/(admin)/_layout.jsx`.
+- Provider mounts in `src/app/_layout.jsx` (root), so stack screens
+  outside the tabs (e.g. `team-detail`) share the same state.
 - Reports tab sets `activeClusterId` when a cluster is tapped.
 - Map tab reads it to center the map; Action Plan reads it for `clusterId`.
-- Team Manager currently receives cluster via URL param (`assignClusterId`)
-  and will migrate to context when the provider lands.
+- `focusTeam(teamId)` (from the Team detail screen) asks the Map tab to
+  select the team's pin and fly the camera to its position.
+- Team Manager receives cluster via URL param (`assignClusterId`) or
+  context (`activeClusterId`).
 
 ## Status enums (API rejects anything else)
 
