@@ -69,23 +69,21 @@ function LayerRow({ config, active, onSelect }: LayerRowProps) {
         />
         <View style={[styles.dot, { backgroundColor: palette.stroke }]} />
         <View style={styles.info}>
-          <View style={styles.labelRow}>
-            <Text style={[styles.label, !active && styles.labelDisabled]}>
-              {config.label}
-            </Text>
-            {config.recommended ? (
-              <View style={[styles.badge, active && styles.badgeActive]}>
-                <Text
-                  style={[
-                    styles.badgeText,
-                    active && styles.badgeTextActive,
-                  ]}
-                >
-                  Recommended
-                </Text>
-              </View>
-            ) : null}
-          </View>
+          {config.recommended ? (
+            <View style={[styles.badge, active && styles.badgeActive]}>
+              <Text
+                style={[
+                  styles.badgeText,
+                  active && styles.badgeTextActive,
+                ]}
+              >
+                Recommended
+              </Text>
+            </View>
+          ) : null}
+          <Text style={[styles.label, !active && styles.labelDisabled]}>
+            {config.label}
+          </Text>
           {LAYER_DESCRIPTIONS[config.id] ? (
             <Text style={styles.description}>
               {LAYER_DESCRIPTIONS[config.id]}
@@ -221,19 +219,16 @@ const styles = StyleSheet.create({
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
   info: { flex: 1 },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
   label: { fontSize: 14, fontWeight: "600", color: "#111827" },
   labelDisabled: { color: "#9CA3AF" },
   description: { fontSize: 11, color: "#6B7280", marginTop: 2 },
   badge: {
+    alignSelf: "flex-start",
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 6,
     backgroundColor: "#EFF6FF",
+    marginBottom: 2,
   },
   badgeActive: { backgroundColor: "#208AEF" },
   badgeText: { fontSize: 9, fontWeight: "700", color: "#208AEF" },
