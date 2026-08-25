@@ -843,13 +843,16 @@ export default function Index() {
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.layersButton}
-        onPress={() => setLayersOpen(true)}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="layers" size={24} color="#4287f5" />
-      </TouchableOpacity>
+      <View style={styles.layersButtonWrap}>
+        <TouchableOpacity
+          style={styles.layersButton}
+          onPress={() => setLayersOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="layers" size={24} color="#4287f5" />
+        </TouchableOpacity>
+        {activeId && <View style={styles.layersDot} />}
+      </View>
 
 
       <HazardLayersPanel
@@ -954,10 +957,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   // sits directly above the GPS/locate button, right-aligned
-  layersButton: {
+  layersButtonWrap: {
     position: 'absolute',
     bottom: 92,
     right: 16,
+  },
+  layersButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -974,6 +979,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#E32F31',
+  layersDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#208AEF',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   locateButtonIcon: {
     fontSize: 22,
