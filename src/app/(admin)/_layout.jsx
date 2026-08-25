@@ -56,20 +56,20 @@ export default function AdminLayout() {
         }}
       >
         <Tabs.Screen
-          name="map"
-          options={{
-            title: "Map",
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name={TAB_ICONS.map} size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="reports"
           options={{
             title: "Reports",
             tabBarIcon: ({ color, size }) => (
               <Ionicons name={TAB_ICONS.reports} size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="map"
+          options={{
+            title: "Map",
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name={TAB_ICONS.map} size={size} color={color} />
             ),
           }}
         />
