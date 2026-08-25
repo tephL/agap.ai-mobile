@@ -15,10 +15,12 @@ import StatusBadge from "../ui/StatusBadge";
 import PriorityChip from "../ui/PriorityChip";
 import {
   assignTeamToCluster,
+  assignmentError,
   getOpenClusters,
   getTeams,
 } from "../../services/teamService";
 import { formatDistance, haversineMeters } from "../../utils/haversine";
+import { useCluster } from "../../context/ClusterContext";
 
 /**
  * Self-contained "Assign a Team" popup.
@@ -49,6 +51,7 @@ export default function AssignTeamModal({
   const [loading, setLoading] = useState(true);
   const [assigningId, setAssigningId] = useState(null);
   const [error, setError] = useState(null);
+  const { invalidateClusters } = useCluster();
 
   // Pure fetch + sort — no state writes, so both the open-effect and the
   // retry button can share it.
@@ -116,10 +119,14 @@ export default function AssignTeamModal({
         team.team_id,
         Number(clusterId)
       );
+      // keep other dispatcher screens (Map, Reports) in sync immediately
+      invalidateClusters();
       onAssigned?.(assignment, team);
       onClose?.();
     } catch (err) {
-      setError(err?.message ?? "Failed to assign this team.");
+      setError(
+        assignmentError(err, "Failed to assign this team.")
+      );
     } finally {
       setAssigningId(null);
     }

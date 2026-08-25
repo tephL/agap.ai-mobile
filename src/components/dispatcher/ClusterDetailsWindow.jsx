@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import PriorityChip from "../ui/PriorityChip";
+import StatusBadge from "../ui/StatusBadge";
 
 const TABS = [
   { key: "plan", label: "Action Plan" },
@@ -34,10 +35,24 @@ function formatDate(value) {
   }
 }
 
+// Hard cap for report descriptions. Very long (or unbroken) descriptions
+// can defeat native line-clamping and blow up the card layout, so trim to
+// a sane length in JS first; the Text below still ellipsizes to 3 lines.
+const DESCRIPTION_MAX_LENGTH = 200;
+
+function trimDescription(text) {
+  if (!text) return "";
+  const clean = String(text);
+  if (clean.length <= DESCRIPTION_MAX_LENGTH) return clean;
+  return `${clean.slice(0, DESCRIPTION_MAX_LENGTH).trimEnd()}…`;
+}
+
 export default function ClusterDetailsWindow({
   cluster,
   reports,
   loading,
+  assignedTeam = null,
+  assignedExtraCount = 0,
   onClose,
   onAssignTeam,
 }) {
@@ -73,6 +88,23 @@ export default function ClusterDetailsWindow({
         </TouchableOpacity>
       </View>
 
+      {/* Team currently dispatched to this cluster */}
+      {assignedTeam ? (
+        <View style={styles.assignedBanner}>
+          <View style={styles.assignedIconWrap}>
+            <Ionicons name="people-circle-outline" size={18} color={colors.white} />
+          </View>
+          <View style={styles.assignedBody}>
+            <Text style={styles.assignedLabel}>Assigned Team</Text>
+            <Text style={styles.assignedName} numberOfLines={1}>
+              {assignedTeam.name}
+              {assignedExtraCount > 0 ? ` +${assignedExtraCount}` : ""}
+            </Text>
+          </View>
+          <StatusBadge status={assignedTeam.status} />
+        </View>
+      ) : null}
+
       {/* Tab toggle */}
       <View style={styles.tabTrack}>
         {TABS.map((tab) => (
@@ -83,14 +115,33 @@ export default function ClusterDetailsWindow({
             accessibilityRole="tab"
             accessibilityState={{ selected: activeTab === tab.key }}
           >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === tab.key && styles.tabLabelActive,
-              ]}
-            >
-              {tab.label}
-            </Text>
+            <View style={styles.tabInner}>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  activeTab === tab.key && styles.tabLabelActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+              {tab.key === "reports" ? (
+                <View
+                  style={[
+                    styles.tabCount,
+                    activeTab === tab.key && styles.tabCountActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabCountText,
+                      activeTab === tab.key && styles.tabCountTextActive,
+                    ]}
+                  >
+                    {cluster.report_count ?? 0}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </TouchableOpacity>
         ))}
       </View>
@@ -104,11 +155,6 @@ export default function ClusterDetailsWindow({
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.infoRowWrap}>
-              <View style={[styles.infoStat, styles.infoStatGap]}>
-                <Ionicons name="documents-outline" size={16} color={colors.muted} />
-                <Text style={styles.infoStatLabel}>Reports</Text>
-                <Text style={styles.infoStatValue}>{cluster.report_count ?? 0}</Text>
-              </View>
               <View style={styles.infoStat}>
                 <Ionicons name="people-outline" size={16} color={colors.muted} />
                 <Text style={styles.infoStatLabel}>Affected</Text>
@@ -149,15 +195,18 @@ export default function ClusterDetailsWindow({
             </Text>
           </ScrollView>
 
-          {/* Pinned below the scroll area so it stays visible while scrolling. */}
-          <TouchableOpacity
-            style={styles.assignButton}
-            activeOpacity={0.8}
-            onPress={onAssignTeam}
-          >
-            <Ionicons name="people-circle-outline" size={18} color={colors.white} />
-            <Text style={styles.assignButtonText}>Assign a Team</Text>
-          </TouchableOpacity>
+          {/* Pinned below the scroll area so it stays visible while scrolling.
+              Hidden while a team is dispatched to this cluster. */}
+          {!assignedTeam ? (
+            <TouchableOpacity
+              style={styles.assignButton}
+              activeOpacity={0.8}
+              onPress={onAssignTeam}
+            >
+              <Ionicons name="people-circle-outline" size={18} color={colors.white} />
+              <Text style={styles.assignButtonText}>Assign a Team</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : (
         <ScrollView
@@ -226,10 +275,14 @@ export default function ClusterDetailsWindow({
                         {formatDate(report.created_at)}
                       </Text>
                     </View>
-                    <Text style={styles.reportDescription} numberOfLines={3}>
-                      {report.description ??
-                        report.ai_summary ??
-                        "No description provided."}
+                    <Text
+                      style={styles.reportDescription}
+                      numberOfLines={3}
+                      ellipsizeMode="tail"
+                    >
+                      {trimDescription(
+                        report.description ?? report.ai_summary
+                      ) || "No description provided."}
                     </Text>
                     {metaText ? (
                       <Text style={styles.reportMeta} numberOfLines={1}>
@@ -290,6 +343,41 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textTransform: "capitalize",
   },
+  assignedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FDECEC",
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  assignedIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignedBody: {
+    flex: 1,
+    gap: 1,
+  },
+  assignedLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: colors.primary,
+  },
+  assignedName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.text,
+  },
   tabTrack: {
     flexDirection: "row",
     borderWidth: 1.5,
@@ -315,6 +403,31 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: colors.white,
   },
+  tabInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  tabCount: {
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: "#FDECEC",
+    alignItems: "center",
+  },
+  tabCountActive: {
+    backgroundColor: colors.white,
+  },
+  tabCountText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  tabCountTextActive: {
+    color: colors.primary,
+  },
   bodyScroll: {
     flexGrow: 0,
     flexShrink: 1,
@@ -339,9 +452,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 6,
-  },
-  infoStatGap: {
-    marginRight: 8,
   },
   infoStatLabel: {
     flex: 1,

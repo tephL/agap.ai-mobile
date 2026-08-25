@@ -11,6 +11,7 @@ import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
 import TeamDetailsWindow from '../../components/dispatcher/TeamDetailsWindow';
 import AssignTeamModal from '../../components/dispatcher/AssignTeamModal';
+import AssignSuccessModal from '../../components/dispatcher/AssignSuccessModal';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +25,10 @@ const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MA
 const LOCATE_ZOOM = 15;
 const LOCATE_FLY_DURATION_MS = 1000;
 const CLUSTERS_FETCH_INTERVAL_MS = 1000 * 60; // 1 min
+
+// radar-style pulse loop for cluster halos: ~18fps ticks, full cycle ~1s
+const PULSE_TICK_MS = 55;
+const PULSE_STEP = 0.06;
 
 // where the camera settles when a cluster is expanded
 const CLUSTER_FOCUS_ZOOM = 15;
@@ -83,6 +88,8 @@ export default function Index() {
   const [clusterReports, setClusterReports] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  // populated right after a successful assign, drives the done popup
+  const [assignSuccess, setAssignSuccess] = useState(null);
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -90,10 +97,32 @@ export default function Index() {
   const handledFocusRef = useRef(0);
   // guards the one-time auto-zoom so it runs only on the first location fix
   const hasAutoZoomedRef = useRef(false);
+  const handledTeamFocusRef = useRef(0);
+
+  // drives the expanding halo ring around every cluster; a single phase
+  // value is baked into the pulse layer's paint each tick
+  const [pulsePhase, setPulsePhase] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(
+      () => setPulsePhase((p) => (p + PULSE_STEP) % 1),
+      PULSE_TICK_MS
+    );
+    return () => clearInterval(id);
+  }, []);
 
   // team.jsx reads the selected cluster across tabs; focusNonce marks
-  // explicit focus requests coming from the Reports tab
-  const { activeClusterId, setActiveClusterId, focusNonce } = useCluster();
+  // explicit focus requests coming from the Reports tab, clustersNonce
+  // marks cluster mutations (resolve/assign) done in other tabs,
+  // focusTeamNonce marks "go to this team" requests (Teams tab)
+  const {
+    activeClusterId,
+    setActiveClusterId,
+    focusNonce,
+    clustersNonce,
+    focusTeamId,
+    focusTeamNonce,
+  } = useCluster();
 
   // ---- clusters + teams fetch loop ---------------------------------------
   const refreshClusters = useCallback(async () => {
@@ -114,6 +143,14 @@ export default function Index() {
     const interval = setInterval(refreshClusters, CLUSTERS_FETCH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [refreshClusters]);
+
+  // another tab just resolved a cluster / dispatched a team — refetch
+  // right away so the pin disappears the moment it's resolved instead
+  // of waiting for the next poll tick
+  useEffect(() => {
+    if (clustersNonce === 0) return;
+    refreshClusters();
+  }, [clustersNonce, refreshClusters]);
 
   // ---- derived geojson for cluster markers --------------------------------
   const clustersGeojson = {
@@ -216,6 +253,21 @@ export default function Index() {
     };
   }, [clustersGeojson, selectedClusterId]);
 
+  // team(s) currently dispatched to the expanded cluster — shown in the
+  // details window banner in place of the "Assign a Team" button
+  const selectedAssignedTeam = useMemo(() => {
+    if (selectedCluster == null) return null;
+    const clusterId = Number(selectedCluster.cluster_id);
+    const assigned = teams.filter((t) => Number(t.assigned_to) === clusterId);
+    if (assigned.length === 0) return null;
+    return { team: assigned[0], extraCount: assigned.length - 1 };
+  }, [teams, selectedCluster]);
+
+  // radar-style ring: swells outward and fades away over each cycle,
+  // tinted per cluster via the shared priority color expression
+  const pulseScale = 1 + 1.6 * pulsePhase;
+  const pulseFade = 1 - pulsePhase;
+
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
     if (locating) return;
@@ -264,6 +316,18 @@ export default function Index() {
     setReportsLoading(false);
     setActiveClusterId(null);
   }, [setActiveClusterId]);
+
+  // if the expanded cluster got resolved elsewhere it stops coming back
+  // from the server — collapse immediately so its pin, halo, reports and
+  // details window all vanish with the refetched data
+  useEffect(() => {
+    if (
+      selectedClusterId != null &&
+      !clusters.some((c) => c.cluster_id === selectedClusterId)
+    ) {
+      collapseCluster();
+    }
+  }, [clusters, selectedClusterId, collapseCluster]);
 
   const expandCluster = useCallback(
     async (clusterId) => {
@@ -397,6 +461,40 @@ export default function Index() {
     expandCluster(activeClusterId);
   }, [focusNonce, activeClusterId, mapReady, clusters, expandCluster]);
 
+  // "go to this team" from the Team detail screen: select the team's pin
+  // (which drops any expanded cluster, same as tapping the pin) and fly
+  // the camera to its position; waits for map + teams data like above
+  useEffect(() => {
+    if (
+      focusTeamNonce === handledTeamFocusRef.current ||
+      focusTeamId == null ||
+      !mapReady ||
+      teams.length === 0
+    ) {
+      return;
+    }
+    handledTeamFocusRef.current = focusTeamNonce;
+
+    const team = teams.find((t) => t.team_id === focusTeamId);
+    if (!team) return;
+
+    setSelectedTeamId(team.team_id);
+    collapseCluster();
+
+    if (
+      typeof team.lat === "number" &&
+      typeof team.lng === "number" &&
+      !Number.isNaN(team.lat) &&
+      !Number.isNaN(team.lng)
+    ) {
+      cameraRef.current?.flyTo({
+        center: [team.lng, team.lat],
+        zoom: CLUSTER_FOCUS_ZOOM,
+        duration: CLUSTER_FOCUS_DURATION_MS,
+      });
+    }
+  }, [focusTeamNonce, focusTeamId, mapReady, teams, collapseCluster]);
+
   // ---------------------------------------------------------------------
   return (
     <View style={styles.container}>
@@ -430,6 +528,24 @@ export default function Index() {
             hitbox={{ top: 16, right: 16, bottom: 16, left: 16 }}
             onPress={handleClusterPress}
           >
+            {/* expanding priority-colored halo behind every cluster dot */}
+            <Layer
+              type="circle"
+              id="clustersPulseLayer"
+              paint={{
+                'circle-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-opacity': 0.3 * pulseFade,
+                'circle-radius': [
+                  'interpolate', ['linear'], ['zoom'],
+                  5, 4 * pulseScale,
+                  10, 8 * pulseScale,
+                  16, 14 * pulseScale,
+                ],
+                'circle-stroke-width': 1.5,
+                'circle-stroke-color': CLUSTER_PRIORITY_COLOR_EXPR,
+                'circle-stroke-opacity': 0.55 * pulseFade,
+              }}
+            />
             <Layer
               type="circle"
               id="clustersLayer"
@@ -444,6 +560,31 @@ export default function Index() {
                 'circle-stroke-width': 2,
                 'circle-stroke-color': '#ffffff',
                 'circle-opacity': 0.85,
+              }}
+            />
+            {/* report count rendered in the middle of each cluster dot */}
+            <Layer
+              type="symbol"
+              id="clustersCountLayer"
+              layout={{
+                'text-field': ['to-string', ['get', 'report_count']],
+                'text-size': [
+                  'interpolate', ['linear'], ['zoom'],
+                  9, 10,
+                  16, 14,
+                ],
+                'text-allow-overlap': true,
+                'text-ignore-placement': true,
+              }}
+              paint={{
+                'text-color': '#ffffff',
+                'text-halo-color': 'rgba(38, 50, 56, 0.65)',
+                'text-halo-width': 1.2,
+                'text-opacity': [
+                  'interpolate', ['linear'], ['zoom'],
+                  7.5, 0,
+                  9, 1,
+                ],
               }}
             />
           </GeoJSONSource>
@@ -550,6 +691,8 @@ export default function Index() {
           cluster={selectedCluster}
           reports={clusterReports}
           loading={reportsLoading}
+          assignedTeam={selectedAssignedTeam?.team ?? null}
+          assignedExtraCount={selectedAssignedTeam?.extraCount ?? 0}
           onClose={collapseCluster}
           onAssignTeam={() => setAssignOpen(true)}
         />
@@ -568,7 +711,23 @@ export default function Index() {
         clusterId={selectedCluster?.cluster_id}
         clusterName={selectedCluster?.city}
         onClose={() => setAssignOpen(false)}
-        onAssigned={() => refreshClusters()}
+        onAssigned={(assignment, team) => {
+          setAssignSuccess({
+            teamName: team?.name,
+            clusterLabel:
+              selectedCluster?.city && selectedCluster?.cluster_id != null
+                ? `Cluster #${selectedCluster.cluster_id} · ${selectedCluster.city}`
+                : `Cluster #${selectedCluster?.cluster_id ?? ""}`,
+          });
+          refreshClusters();
+        }}
+      />
+
+      <AssignSuccessModal
+        visible={assignSuccess != null}
+        teamName={assignSuccess?.teamName}
+        clusterLabel={assignSuccess?.clusterLabel}
+        onClose={() => setAssignSuccess(null)}
       />
     </View>
   );
