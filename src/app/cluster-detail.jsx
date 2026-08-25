@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import PriorityChip from "@/components/ui/PriorityChip";
@@ -48,7 +48,6 @@ function trimDescription(text) {
 
 export default function ClusterDetailScreen() {
   const params = useLocalSearchParams();
-  const router = useRouter();
 
   const clusterId = Number(params.clusterId);
   const cityFromParams = params.city ?? "";
@@ -118,21 +117,12 @@ export default function ClusterDetailScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Header bar */}
+      {/* Cluster title + priority */}
       <View style={styles.headerBar}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={styles.backButton}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {locationLabel}
         </Text>
-        <View style={styles.headerRight}>
-          <PriorityChip priority={displayCluster.priority_level} />
-        </View>
+        <PriorityChip priority={displayCluster.priority_level} />
       </View>
 
       {/* Tab toggle */}
@@ -341,22 +331,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 10,
   },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   headerTitle: {
     flex: 1,
     fontSize: 15,
     fontWeight: "700",
     color: colors.text,
-  },
-  headerRight: {
-    marginLeft: "auto",
   },
   tabTrack: {
     flexDirection: "row",
