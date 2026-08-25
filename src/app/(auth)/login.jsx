@@ -102,7 +102,7 @@ export default function LoginScreen() {
       }
       if (isDispatcher) {
         await saveDispatcherSession(data.token);
-        router.replace("/reports");
+        router.replace("/map");
         return;
       }
       await SecureStore.setItemAsync("token", data.token);
