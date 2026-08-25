@@ -880,8 +880,6 @@ export default function Index() {
       {selectedCluster && (
         <ClusterDetailsWindow
           cluster={selectedCluster}
-          reports={clusterReports}
-          loading={reportsLoading}
           assignedTeam={selectedAssignedTeam?.team ?? null}
           assignedExtraCount={selectedAssignedTeam?.extraCount ?? 0}
           onClose={collapseCluster}
