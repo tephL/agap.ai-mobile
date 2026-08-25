@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Image,
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -78,7 +79,7 @@ export default function Assistant() {
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    }, 150);
   }, []);
 
   const handleSend = useCallback(
@@ -145,9 +146,7 @@ export default function Assistant() {
   );
 
   const renderItem = useCallback(
-    ({ item, index }) => (
-      <ChatBubble message={item} isUser={item.role === "user"} />
-    ),
+    ({ item }) => <ChatBubble message={item} isUser={item.role === "user"} />,
     []
   );
 
@@ -161,11 +160,15 @@ export default function Assistant() {
     return (
       <View style={styles.welcomeContainer}>
         <View style={styles.logoWrap}>
-          <Ionicons name="sparkles" size={28} color={colors.white} />
+          <Image
+            source={require("@/assets/icons/logo.png")}
+            style={styles.logoImage}
+          />
         </View>
-        <Text style={styles.welcomeTitle}>AGAP AI Assistant</Text>
+        <Text style={styles.welcomeTitle}>AGAP.ai</Text>
+        <Text style={styles.welcomeTagline}>MAAGAP NA KA-AGAPAY</Text>
         <Text style={styles.welcomeSubtitle}>
-          Ask me anything about disaster preparedness, safety tips, or emergency guidance.
+          Your AI-powered emergency assistant. Ask about disaster preparedness, safety tips, or emergency guidance.
         </Text>
       </View>
     );
@@ -184,109 +187,118 @@ export default function Assistant() {
   }, [loading]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={0}
-    >
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.headerAvatar}>
-            <Ionicons name="sparkles" size={16} color={colors.white} />
-          </View>
-          <View>
-            <Text style={styles.headerTitle}>AI Assistant</Text>
-            <Text style={styles.headerStatus}>Always here to help</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          onPress={handleClearChat}
-          style={styles.headerButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="trash-outline" size={18} color={colors.muted} />
-        </TouchableOpacity>
-      </View>
-
-      {showSuggestions && suggestions.length > 0 && messages.length <= 1 && (
-        <SuggestionChips
-          suggestions={suggestions}
-          onSelect={handleSuggestionSelect}
-          visible={true}
-        />
-      )}
-
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        ListHeaderComponent={renderHeader}
-        ListFooterComponent={renderFooter}
-        contentContainerStyle={[
-          styles.chatContent,
-          { paddingTop: messages.length <= 1 ? 8 : 12 },
-        ]}
-        onContentSizeChange={scrollToBottom}
-        keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
-      />
-
-      <View
-        style={[
-          styles.inputBar,
-          { paddingBottom: Math.max(insets.bottom, 8) },
-        ]}
+    <View style={styles.screen}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
-        <View style={styles.inputWrap}>
-          <TextInput
-            ref={inputRef}
-            style={styles.textInput}
-            placeholder="Ask me anything..."
-            placeholderTextColor={colors.placeholder}
-            value={input}
-            onChangeText={setInput}
-            multiline
-            maxLength={2000}
-            editable={!loading}
-            selectionColor={colors.primary}
-          />
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerAvatar}>
+              <Image
+                source={require("@/assets/icons/logo.png")}
+                style={styles.headerLogo}
+              />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>AGAP.ai</Text>
+              <View style={styles.statusRow}>
+                <View style={styles.statusDot} />
+                <Text style={styles.headerStatus}>Online</Text>
+              </View>
+            </View>
+          </View>
           <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!input.trim() || loading) && styles.sendButtonDisabled,
-            ]}
-            onPress={() => handleSend()}
-            disabled={!input.trim() || loading}
-            activeOpacity={0.7}
+            onPress={handleClearChat}
+            style={styles.headerButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons
-              name="arrow-up"
-              size={20}
-              color={!input.trim() || loading ? colors.muted : colors.white}
-            />
+            <Ionicons name="trash-outline" size={18} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+
+        <View style={styles.chatArea}>
+          {showSuggestions && suggestions.length > 0 && messages.length <= 1 && (
+            <SuggestionChips
+              suggestions={suggestions}
+              onSelect={handleSuggestionSelect}
+              visible={true}
+            />
+          )}
+
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            ListHeaderComponent={renderHeader}
+            ListFooterComponent={renderFooter}
+            contentContainerStyle={styles.chatContent}
+            onContentSizeChange={scrollToBottom}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            style={styles.flatList}
+          />
+        </View>
+
+        <View
+          style={[
+            styles.inputBar,
+            { paddingBottom: Math.max(insets.bottom, 10) },
+          ]}
+        >
+          <View style={styles.inputWrap}>
+            <TextInput
+              ref={inputRef}
+              style={styles.textInput}
+              placeholder="Ask me anything..."
+              placeholderTextColor={colors.placeholder}
+              value={input}
+              onChangeText={setInput}
+              multiline
+              maxLength={2000}
+              editable={!loading}
+              selectionColor={colors.primary}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!input.trim() || loading) && styles.sendButtonDisabled,
+              ]}
+              onPress={() => handleSend()}
+              disabled={!input.trim() || loading}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="arrow-up"
+                size={22}
+                fontWeight="bold"
+                color={!input.trim() || loading ? colors.muted : colors.white}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.primary,
+  },
+  flex: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.white,
+    paddingBottom: 14,
+    backgroundColor: colors.primary,
   },
   headerLeft: {
     flexDirection: "row",
@@ -294,93 +306,152 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  headerLogo: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.white,
+    letterSpacing: -0.3,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 1,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#34D399",
+  },
+  headerStatus: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.75)",
+  },
+  headerButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.text,
+    backgroundColor: "rgba(255,255,255,0.15)",
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  headerStatus: {
-    fontSize: 12,
-    color: colors.muted,
-  },
-  headerButton: {
-    padding: 6,
+  chatArea: {
+    flex: 1,
+    backgroundColor: "#F8F9FB",
   },
   welcomeContainer: {
     alignItems: "center",
-    paddingHorizontal: 32,
-    paddingTop: 24,
+    paddingHorizontal: 36,
+    paddingTop: 32,
     paddingBottom: 16,
   },
   logoWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.text,
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: colors.white,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  logoImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
   },
   welcomeTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "800",
-    color: colors.text,
-    marginBottom: 6,
+    color: colors.primary,
+    letterSpacing: -0.5,
+    marginBottom: 2,
+  },
+  welcomeTagline: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.muted,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    marginBottom: 14,
   },
   welcomeSubtitle: {
     fontSize: 14,
     color: colors.muted,
     textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 21,
+  },
+  flatList: {
+    flex: 1,
   },
   chatContent: {
     flexGrow: 1,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   inputBar: {
     paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingTop: 10,
     backgroundColor: colors.white,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: "#EEEEEE",
   },
   inputWrap: {
     flexDirection: "row",
     alignItems: "flex-end",
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingLeft: 14,
-    paddingRight: 4,
-    minHeight: 44,
-    maxHeight: 100,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 24,
+    paddingLeft: 16,
+    paddingRight: 5,
+    minHeight: 46,
+    maxHeight: 120,
   },
   textInput: {
     flex: 1,
     fontSize: 15,
     color: colors.text,
-    paddingVertical: 10,
-    maxHeight: 100,
+    paddingVertical: 11,
+    maxHeight: 120,
+    lineHeight: 20,
   },
   sendButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
     marginBottom: 5,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sendButtonDisabled: {
-    backgroundColor: colors.surface,
+    backgroundColor: "#E5E7EB",
+    shadowOpacity: 0,
+    elevation: 0,
   },
 });

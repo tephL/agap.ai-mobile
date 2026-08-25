@@ -5,43 +5,48 @@ import colors from "@/constants/colors";
 const RESPONSE_TYPES = {
   tip: {
     icon: "bulb",
-    iconColor: "#F59E0B",
+    iconColor: "#D97706",
     bgColor: "#FFFBEB",
     borderColor: "#FDE68A",
+    accentColor: "#F59E0B",
     label: "Tip",
-    labelColor: "#B45309",
+    labelColor: "#92400E",
   },
   warning: {
     icon: "warning",
-    iconColor: "#EF4444",
+    iconColor: "#DC2626",
     bgColor: "#FEF2F2",
     borderColor: "#FECACA",
+    accentColor: "#EF4444",
     label: "Warning",
-    labelColor: "#B91C1C",
+    labelColor: "#991B1B",
   },
   info: {
     icon: "information-circle",
-    iconColor: "#3B82F6",
+    iconColor: "#2563EB",
     bgColor: "#EFF6FF",
     borderColor: "#BFDBFE",
+    accentColor: "#3B82F6",
     label: "Info",
-    labelColor: "#1D4ED8",
+    labelColor: "#1E40AF",
   },
   emergency: {
     icon: "alert-circle",
-    iconColor: "#DC2626",
-    bgColor: "#FEE2E2",
-    borderColor: "#FCA5A5",
+    iconColor: "#B91C1C",
+    bgColor: "#FEF2F2",
+    borderColor: "#FECACA",
+    accentColor: "#DC2626",
     label: "Emergency",
-    labelColor: "#991B1B",
+    labelColor: "#7F1D1D",
   },
   success: {
     icon: "checkmark-circle",
-    iconColor: "#16A34A",
+    iconColor: "#15803D",
     bgColor: "#F0FDF4",
     borderColor: "#BBF7D0",
+    accentColor: "#22C55E",
     label: "Success",
-    labelColor: "#15803D",
+    labelColor: "#166534",
   },
 };
 
@@ -74,7 +79,7 @@ function parseResponseBlocks(text) {
 function HighlightedBlock({ block }) {
   if (block.type === "normal") {
     return (
-      <Text style={styles.userText}>
+      <Text style={styles.normalText}>
         {block.text}
       </Text>
     );
@@ -83,9 +88,16 @@ function HighlightedBlock({ block }) {
   const config = RESPONSE_TYPES[block.type];
 
   return (
-    <View style={[styles.highlightBlock, { backgroundColor: config.bgColor, borderColor: config.borderColor }]}>
+    <View
+      style={[
+        styles.highlightBlock,
+        { backgroundColor: config.bgColor, borderLeftColor: config.accentColor },
+      ]}
+    >
       <View style={styles.highlightHeader}>
-        <Ionicons name={config.icon} size={16} color={config.iconColor} />
+        <View style={[styles.highlightIconWrap, { backgroundColor: config.accentColor + "18" }]}>
+          <Ionicons name={config.icon} size={13} color={config.accentColor} />
+        </View>
         <Text style={[styles.highlightLabel, { color: config.labelColor }]}>
           {config.label}
         </Text>
@@ -113,7 +125,7 @@ export default function ChatBubble({ message, isUser }) {
   return (
     <View style={styles.assistantRow}>
       <View style={styles.avatarWrap}>
-        <Ionicons name="sparkles" size={14} color={colors.white} />
+        <Ionicons name="sparkles" size={12} color={colors.white} />
       </View>
       <View style={styles.assistantBubble}>
         {blocks.map((block, idx) => (
@@ -128,67 +140,91 @@ const styles = StyleSheet.create({
   userRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginBottom: 8,
-    paddingHorizontal: 16,
+    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingLeft: 48,
   },
   userBubble: {
     backgroundColor: colors.primary,
-    borderRadius: 16,
-    borderBottomRightRadius: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    maxWidth: "80%",
+    borderRadius: 20,
+    borderBottomRightRadius: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    maxWidth: "85%",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   userText: {
     color: colors.white,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 21,
   },
   assistantRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 8,
-    paddingHorizontal: 16,
+    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingRight: 48,
   },
   avatarWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.text,
+    width: 26,
+    height: 26,
+    borderRadius: 9,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
   assistantBubble: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderBottomLeftRadius: 4,
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    borderBottomLeftRadius: 6,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    maxWidth: "82%",
+    paddingVertical: 12,
+    maxWidth: "85%",
     gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  normalText: {
+    color: colors.text,
+    fontSize: 15,
+    lineHeight: 21,
   },
   highlightBlock: {
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
   },
   highlightHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    marginBottom: 4,
+    gap: 6,
+  },
+  highlightIconWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
   },
   highlightLabel: {
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   highlightText: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

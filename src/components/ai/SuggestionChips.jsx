@@ -8,7 +8,7 @@ export default function SuggestionChips({ suggestions, onSelect, visible }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Ionicons name="flash" size={14} color={colors.muted} />
+        <Ionicons name="flash" size={13} color={colors.primary} />
         <Text style={styles.headerText}>Suggested questions</Text>
       </View>
       <ScrollView
@@ -23,7 +23,7 @@ export default function SuggestionChips({ suggestions, onSelect, visible }) {
             activeOpacity={0.7}
             onPress={() => onSelect(item.text)}
           >
-            <Ionicons name={item.icon || "chatbubble-ellipses"} size={13} color={colors.primary} />
+            <Ionicons name={item.icon || "chatbubble-ellipses"} size={14} color={colors.primary} />
             <Text style={styles.chipText} numberOfLines={2}>
               {item.text}
             </Text>
@@ -36,20 +36,22 @@ export default function SuggestionChips({ suggestions, onSelect, visible }) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
     marginBottom: 8,
+    paddingLeft: 2,
   },
   headerText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: colors.muted,
+    fontWeight: "700",
+    color: colors.primary,
+    letterSpacing: 0.2,
   },
   scrollContent: {
     gap: 8,
@@ -57,19 +59,25 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 7,
     backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxWidth: 220,
+    borderWidth: 1.5,
+    borderColor: "#F0F0F5",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    maxWidth: 230,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   chipText: {
     fontSize: 13,
     fontWeight: "500",
     color: colors.text,
     flexShrink: 1,
+    lineHeight: 17,
   },
 });
