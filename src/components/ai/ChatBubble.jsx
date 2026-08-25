@@ -109,6 +109,19 @@ function HighlightedBlock({ block }) {
   );
 }
 
+export function parseSuggestions(text) {
+  const match = text.match(/\n?\[SUGGESTIONS\]\s*\n([\s\S]*?)$/);
+  if (!match) return [];
+  return match[1]
+    .split("\n")
+    .map((l) => l.replace(/^\?\s*/, "").trim())
+    .filter((q) => q.length > 0);
+}
+
+function stripSuggestions(text) {
+  return text.replace(/\n?\[SUGGESTIONS\]\s*\n[\s\S]*$/, "").trim();
+}
+
 export default function ChatBubble({ message, isUser }) {
   if (isUser) {
     return (
@@ -120,7 +133,8 @@ export default function ChatBubble({ message, isUser }) {
     );
   }
 
-  const blocks = parseResponseBlocks(message.content);
+  const clean = stripSuggestions(message.content);
+  const blocks = parseResponseBlocks(clean);
 
   return (
     <View style={styles.assistantRow}>

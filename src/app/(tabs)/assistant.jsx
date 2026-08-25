@@ -14,7 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import colors from "@/constants/colors";
-import ChatBubble from "@/components/ai/ChatBubble";
+import ChatBubble, { parseSuggestions } from "@/components/ai/ChatBubble";
 import SuggestionChips from "@/components/ai/SuggestionChips";
 import TypingIndicator from "@/components/ai/TypingIndicator";
 import {
@@ -36,7 +36,6 @@ export default function Assistant() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(true);
   const flatListRef = useRef(null);
   const inputRef = useRef(null);
   const initialized = useRef(false);
@@ -51,14 +50,24 @@ export default function Assistant() {
           id: m.conversation_id,
         }));
         setMessages(formatted);
-        setShowSuggestions(false);
+        const lastAssistant = [...formatted].reverse().find((m) => m.role === "assistant");
+        if (lastAssistant) {
+          const followUps = parseSuggestions(lastAssistant.content);
+          if (followUps.length > 0) {
+            setSuggestions(followUps);
+            return;
+          }
+        }
+        loadSuggestions();
       } else {
         setMessages([WELCOME_MESSAGE]);
+        loadSuggestions();
       }
     } catch {
       setMessages([WELCOME_MESSAGE]);
+      loadSuggestions();
     }
-  }, []);
+  }, [loadSuggestions]);
 
   const loadSuggestions = useCallback(async () => {
     try {
@@ -91,13 +100,19 @@ export default function Assistant() {
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
       setLoading(true);
-      setShowSuggestions(false);
+      setSuggestions([]);
       scrollToBottom();
 
       try {
         const data = await sendChatMessage(msg);
         const assistantMessage = { role: "assistant", content: data.reply };
         setMessages((prev) => [...prev, assistantMessage]);
+        const followUps = parseSuggestions(data.reply);
+        if (followUps.length > 0) {
+          setSuggestions(followUps);
+        } else {
+          loadSuggestions();
+        }
         scrollToBottom();
       } catch {
         const errorMessage = {
@@ -111,7 +126,7 @@ export default function Assistant() {
         scrollToBottom();
       }
     },
-    [input, loading, scrollToBottom]
+    [input, loading, scrollToBottom, loadSuggestions]
   );
 
   const handleClearChat = useCallback(() => {
@@ -127,7 +142,6 @@ export default function Assistant() {
             try {
               await clearChatHistory();
               setMessages([WELCOME_MESSAGE]);
-              setShowSuggestions(true);
               loadSuggestions();
             } catch {
               Alert.alert("Error", "Failed to clear chat history.");
@@ -139,7 +153,8 @@ export default function Assistant() {
   }, [loadSuggestions]);
 
   const handleSuggestionSelect = useCallback(
-    (text) => {
+    (text, index) => {
+      setSuggestions((prev) => prev.filter((_, i) => i !== index));
       handleSend(text);
     },
     [handleSend]
@@ -219,14 +234,6 @@ export default function Assistant() {
         </View>
 
         <View style={styles.chatArea}>
-          {showSuggestions && suggestions.length > 0 && messages.length <= 1 && (
-            <SuggestionChips
-              suggestions={suggestions}
-              onSelect={handleSuggestionSelect}
-              visible={true}
-            />
-          )}
-
           <FlatList
             ref={flatListRef}
             data={messages}
@@ -248,6 +255,12 @@ export default function Assistant() {
             { paddingBottom: Math.max(insets.bottom, 10) },
           ]}
         >
+          {suggestions.length > 0 && (
+            <SuggestionChips
+              suggestions={suggestions}
+              onSelect={handleSuggestionSelect}
+            />
+          )}
           <View style={styles.inputWrap}>
             <TextInput
               ref={inputRef}
@@ -411,16 +424,18 @@ const styles = StyleSheet.create({
   },
   inputBar: {
     paddingHorizontal: 12,
-    paddingTop: 10,
-    backgroundColor: colors.white,
+    paddingTop: 6,
+    backgroundColor: "#F8F9FB",
     borderTopWidth: 1,
     borderTopColor: "#EEEEEE",
   },
   inputWrap: {
     flexDirection: "row",
     alignItems: "flex-end",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: colors.white,
     borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
     paddingLeft: 16,
     paddingRight: 5,
     minHeight: 46,
