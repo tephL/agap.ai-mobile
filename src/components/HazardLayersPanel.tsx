@@ -73,6 +73,18 @@ function LayerRow({ config, active, onSelect }: LayerRowProps) {
             <Text style={[styles.label, !active && styles.labelDisabled]}>
               {config.label}
             </Text>
+            {config.recommended ? (
+              <View style={[styles.badge, active && styles.badgeActive]}>
+                <Text
+                  style={[
+                    styles.badgeText,
+                    active && styles.badgeTextActive,
+                  ]}
+                >
+                  Recommended
+                </Text>
+              </View>
+            ) : null}
           </View>
           {LAYER_DESCRIPTIONS[config.id] ? (
             <Text style={styles.description}>

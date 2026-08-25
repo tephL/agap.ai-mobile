@@ -130,11 +130,11 @@ export default function Index() {
   useEffect(() => {
     (async () => {
       try {
-        if (!(await isDownloaded("flood_5yr"))) {
-          await downloadLayer("flood_5yr");
+        if (!(await isDownloaded("flood_25yr"))) {
+          await downloadLayer("flood_25yr");
         }
       } catch (e) {
-        console.log("auto-download flood_5yr failed", e);
+        console.log("auto-download flood_25yr failed", e);
       }
     })();
   }, []);
