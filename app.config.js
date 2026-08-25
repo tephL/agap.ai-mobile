@@ -1,6 +1,6 @@
 export default {
   "expo": {
-    "owner": "airiquos-team",
+    "owner": "tephl",
     "name": "agapai-mobile",
     "slug": "agapai-mobile",
     "version": "1.0.0",
@@ -60,7 +60,7 @@ export default {
     },
     "extra": {
       "eas": {
-        projectId: "dde62e9a-1fdb-4ad5-bc72-a21e850a6221"
+        "projectId": "66eacbac-6bfd-4f73-880f-84f8c9b2567a"
       }
     }
   }
