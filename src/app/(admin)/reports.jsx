@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,30 +15,42 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import PriorityChip from "../../components/ui/PriorityChip";
 import { getCityClusters } from "../../services/clusterService";
+import { fetchClusterReports } from "../../services/dispatcher/clusterServ";
 import { useCluster } from "../../context/ClusterContext";
+import ClusterDetailsWindow from "../../components/dispatcher/ClusterDetailsWindow";
+import AssignTeamModal from "../../components/dispatcher/AssignTeamModal";
+import AssignSuccessModal from "../../components/dispatcher/AssignSuccessModal";
 
 export default function ReportsScreen() {
   const router = useRouter();
-  const { focusCluster } = useCluster();
+  const { focusCluster, invalidateClusters } = useCluster();
 
   const [clusters, setClusters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errored, setErrored] = useState(false);
 
-  const loadData = useCallback(async ({ refreshing = false } = {}) => {
-    if (refreshing) setRefreshing(true);
-    try {
-      const rows = await getCityClusters();
-      setClusters(rows);
-      setErrored(false);
-    } catch {
-      setErrored(true);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const [selectedClusterId, setSelectedClusterId] = useState(null);
+  const [selectedCluster, setSelectedCluster] = useState(null);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignSuccess, setAssignSuccess] = useState(null);
+
+  const loadData = useCallback(
+    async ({ refreshing: isRefresh = false } = {}) => {
+      if (isRefresh) setRefreshing(true);
+      try {
+        const rows = await getCityClusters();
+        setClusters(rows);
+        setErrored(false);
+      } catch {
+        setErrored(true);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    []
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -46,19 +58,68 @@ export default function ReportsScreen() {
     }, [loadData])
   );
 
-  // PM: cluster cards are clickable — selecting one opens it on the
-  // Map tab through ClusterContext (which survives tab switches); the
-  // map expands and centers it exactly like a direct marker tap.
-  const openOnMap = (cluster) => {
-    focusCluster(cluster.id);
-    router.navigate("/(admin)/map");
+  // Fetch full cluster data when a card is selected so the popup has
+  // latitude, ai_summary, action_plan, etc.
+  useEffect(() => {
+    if (selectedClusterId == null) {
+      setSelectedCluster(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await fetchClusterReports(selectedClusterId);
+        if (!cancelled) setSelectedCluster(data?.cluster ?? null);
+      } catch {
+        // If the fetch fails, fall back to the normalised row from the list
+        const fallback = clusters.find((c) => c.id === selectedClusterId);
+        if (!cancelled && fallback) {
+          setSelectedCluster({
+            cluster_id: fallback.id,
+            city: fallback.city,
+            latitude: fallback.lat,
+            longitude: fallback.lng,
+            priority_level: fallback.priority,
+            status: fallback.status,
+            report_count: fallback.reportCount,
+            people_affected: fallback.peopleAffected,
+            ai_summary: null,
+            action_plan: [],
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClusterId, clusters]);
+
+  // Clear popup when navigating away
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setSelectedClusterId(null);
+        setSelectedCluster(null);
+      };
+    }, [])
+  );
+
+  const handleCardPress = (item) => {
+    setSelectedClusterId(item.id);
   };
+
+  const handleCloseWindow = () => {
+    setSelectedClusterId(null);
+    setSelectedCluster(null);
+  };
+
+  const handleAssignTeam = () => setAssignOpen(true);
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
       style={styles.card}
       activeOpacity={0.7}
-      onPress={() => openOnMap(item)}
+      onPress={() => handleCardPress(item)}
     >
       <View style={styles.cardTopRow}>
         <Text style={styles.cardTitle} numberOfLines={1}>
@@ -72,8 +133,8 @@ export default function ReportsScreen() {
           {item.peopleAffected} people affected
         </Text>
         <View style={styles.goToWrap}>
-          <MaterialIcons name="near-me" size={12} color={colors.primary} />
-          <Text style={styles.goToText}>Go to location</Text>
+          <MaterialIcons name="chevron-forward" size={14} color={colors.primary} />
+          <Text style={styles.goToText}>View</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -149,6 +210,41 @@ export default function ReportsScreen() {
           }
         />
       </View>
+
+      {/* Same popup window as the map tab */}
+      {selectedCluster && (
+        <ClusterDetailsWindow
+          cluster={selectedCluster}
+          onClose={handleCloseWindow}
+          onAssignTeam={handleAssignTeam}
+        />
+      )}
+
+      <AssignTeamModal
+        visible={assignOpen}
+        clusterId={selectedCluster?.cluster_id}
+        clusterName={selectedCluster?.city}
+        onClose={() => setAssignOpen(false)}
+        onAssigned={(assignment, team) => {
+          setAssignSuccess({
+            teamName: team?.name,
+            clusterLabel:
+              selectedCluster?.city && selectedCluster?.cluster_id != null
+                ? `Cluster #${selectedCluster.cluster_id} · ${selectedCluster.city}`
+                : `Cluster #${selectedCluster?.cluster_id ?? ""}`,
+          });
+          setAssignOpen(false);
+          invalidateClusters();
+          loadData();
+        }}
+      />
+
+      <AssignSuccessModal
+        visible={assignSuccess != null}
+        teamName={assignSuccess?.teamName}
+        clusterLabel={assignSuccess?.clusterLabel}
+        onClose={() => setAssignSuccess(null)}
+      />
     </SafeAreaView>
   );
 }
