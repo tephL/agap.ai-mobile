@@ -171,13 +171,13 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    maxHeight: "65%",
+    maxHeight: "70%",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 8,
+    paddingBottom: 32,
   },
   header: {
     flexDirection: "row",
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
   },
-  list: { flexGrow: 0 },
+  list: { flex: 1 },
   row: {
     flexDirection: "row",
     alignItems: "center",
