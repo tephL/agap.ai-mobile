@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { Layer, VectorSource } from "@maplibre/maplibre-react-native";
+import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 import HAZARD_COLORS, {
   type HazardColorSet,
@@ -22,6 +23,24 @@ import { useOfflinePMTilesLayer } from "@/hooks/useOfflinePMTilesLayer";
 
 /** Below this zoom hazard polygons cover whole regions; don't draw them. */
 const DEFAULT_MIN_ZOOM = 8;
+
+/** Zoom-interpolated value: `from` at `startZoom` easing to `to` at `endZoom`. */
+function zoomRamp(
+  from: number,
+  to: number,
+  startZoom: number,
+  endZoom: number,
+): ExpressionSpecification {
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    startZoom,
+    from,
+    endZoom,
+    to,
+  ];
+}
 
 interface HazardLayerOverlayProps {
   layerId: string;
@@ -53,13 +72,55 @@ function HazardLayerOverlayInner({
     [config?.hazardType, colors]
   );
 
+  // Hazard source data is gridded model output, so heavy outlines turn every
+  // cell into a visible box. The paint below instead: fades the fill in with
+  // zoom, then draws a soft blurred halo under a thin rounded edge line, so
+  // coverage reads as one smooth mass instead of a mosaic of squares.
+  const fadeStart = minZoom;
+  const fadeEnd = minZoom + 2;
+
   const fillPaint = useMemo(
-    () => ({ "fill-color": palette.fill, "fill-opacity": palette.opacity }),
-    [palette.fill, palette.opacity]
+    () => ({
+      "fill-color": palette.fill,
+      "fill-antialias": true,
+      "fill-opacity": zoomRamp(0, palette.opacity, fadeStart, fadeEnd),
+    }),
+    [palette.fill, palette.opacity, fadeStart, fadeEnd]
   );
-  const linePaint = useMemo(
-    () => ({ "line-color": palette.stroke, "line-width": 1 }),
-    [palette.stroke]
+
+  // Wide, blurred, low-opacity halo — the soft glow that hides cell edges.
+  const haloPaint = useMemo(
+    () => ({
+      "line-color": palette.stroke,
+      "line-join": "round",
+      "line-cap": "round",
+      "line-blur": zoomRamp(2, 5, fadeStart, 14),
+      "line-width": zoomRamp(4, 10, fadeStart, 16),
+      "line-opacity": zoomRamp(0, 0.3, fadeStart, fadeEnd),
+    }),
+    [palette.stroke, fadeStart, fadeEnd]
+  );
+
+  // Thin rounded core line — definition without boxing individual cells.
+  const outlinePaint = useMemo(
+    () => ({
+      "line-color": palette.stroke,
+      "line-join": "round",
+      "line-cap": "round",
+      "line-width": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        fadeStart,
+        0.5,
+        12,
+        1.2,
+        16,
+        2,
+      ] as ExpressionSpecification,
+      "line-opacity": zoomRamp(0, 0.55, fadeStart, fadeEnd),
+    }),
+    [palette.stroke, fadeStart, fadeEnd]
   );
 
   if (!config) return null;
@@ -86,12 +147,20 @@ function HazardLayerOverlayInner({
         paint={fillPaint}
       />
       <Layer
+        id={`${sourceId}-halo`}
+        type="line"
+        source-layer={config.sourceLayerId}
+        minzoom={minZoom}
+        maxzoom={maxZoom}
+        paint={haloPaint}
+      />
+      <Layer
         id={`${sourceId}-outline`}
         type="line"
         source-layer={config.sourceLayerId}
         minzoom={minZoom}
         maxzoom={maxZoom}
-        paint={linePaint}
+        paint={outlinePaint}
       />
     </VectorSource>
   );
