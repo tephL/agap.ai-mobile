@@ -118,6 +118,8 @@ export default function Index() {
   const [mapReady, setMapReady] = useState(false);
   const cameraRef = useRef(null);
   const handledFocusRef = useRef(0);
+  // guards the one-time auto-zoom so it runs only on the first location fix
+  const hasAutoZoomedRef = useRef(false);
   const handledTeamFocusRef = useRef(0);
 
   // drives the expanding halo ring around every cluster; a single phase
@@ -878,8 +880,6 @@ export default function Index() {
       {selectedCluster && (
         <ClusterDetailsWindow
           cluster={selectedCluster}
-          reports={clusterReports}
-          loading={reportsLoading}
           assignedTeam={selectedAssignedTeam?.team ?? null}
           assignedExtraCount={selectedAssignedTeam?.extraCount ?? 0}
           onClose={collapseCluster}

@@ -46,9 +46,6 @@ export default function ReportsScreen() {
     }, [loadData])
   );
 
-  // PM: cluster cards are clickable — selecting one opens it on the
-  // Map tab through ClusterContext (which survives tab switches); the
-  // map expands and centers it exactly like a direct marker tap.
   const openOnMap = (cluster) => {
     focusCluster(cluster.id);
     router.navigate("/(admin)/map");

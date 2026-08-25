@@ -1,7 +1,7 @@
 import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer } from '@maplibre/maplibre-react-native';
+import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 
@@ -947,7 +947,6 @@ export default function Index() {
           onClose={handleCloseHazards}
         />
       )}
-
 
       <HazardLayersPanel
         visible={layersOpen}
