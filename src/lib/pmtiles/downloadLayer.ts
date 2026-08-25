@@ -28,6 +28,8 @@ export interface HazardLayerConfig {
   hazardType: HazardType;
   /** Rounded display size; also used to flag oversized downloads in UI. */
   approxSizeMB: number;
+  /** Marks the layer pre-selected on first launch (exactly one, please). */
+  recommended?: boolean;
 }
 
 export const HAZARD_LAYERS: HazardLayerConfig[] = [
@@ -38,6 +40,7 @@ export const HAZARD_LAYERS: HazardLayerConfig[] = [
     sourceLayerId: "flood_5yr",
     hazardType: "flood",
     approxSizeMB: 486,
+    recommended: true,
   },
   {
     id: "flood_25yr",
@@ -107,6 +110,10 @@ export const HAZARD_LAYERS: HazardLayerConfig[] = [
 ];
 
 const LAYERS_BY_ID = new Map(HAZARD_LAYERS.map((layer) => [layer.id, layer]));
+
+/** The layer pre-selected on first launch (flood 5-year). */
+export const RECOMMENDED_LAYER_ID =
+  HAZARD_LAYERS.find((layer) => layer.recommended)?.id ?? HAZARD_LAYERS[0].id;
 
 /** Files larger than this are flagged as risky for JS-side range reads on Android. */
 export const JS_RANGE_READ_RISK_BYTES = 1.8 * 1024 * 1024 * 1024;

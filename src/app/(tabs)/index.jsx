@@ -20,9 +20,8 @@ import { PersonCard } from '@/components/PersonCard';
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
 import HazardLayersPanel from '@/components/HazardLayersPanel';
 
-// hazard layer visibility prefs
-import { HAZARD_LAYERS } from '../../lib/pmtiles/downloadLayer';
-import { useHazardLayerVisibility } from '../../hooks/useHazardLayerVisibility';
+// hazard layer selection prefs
+import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
@@ -173,8 +172,8 @@ export default function Index() {
   const [pulse, setPulse] = useState(0);
   const [damPulse, setDamPulse] = useState({ normal: 0, caution: 0, danger: 0 });
 
-  // hazard overlay visibility (persisted) + layers sheet state
-  const { enabledIds, toggle: toggleHazardLayer } = useHazardLayerVisibility();
+  // hazard overlay selection (persisted, single-select) + layers sheet state
+  const { activeId, select: selectHazardLayer } = useActiveHazardLayer();
   const [layersOpen, setLayersOpen] = useState(false);
 
   // staleness re-check clock
@@ -802,13 +801,13 @@ export default function Index() {
           />
         )}
 
-        {/* hazard overlays — only the layers checked in the sheet; each
-            streams tiles for the visible area, or uses its local archive
-            once downloaded */}
-        {mapReady &&
-          HAZARD_LAYERS.filter((layer) => enabledIds.has(layer.id)).map(
-            (layer) => <HazardLayerOverlay key={layer.id} layerId={layer.id} />
-          )}
+        {/* hazard overlay — exactly one at a time (picked in the layers
+            sheet). key={activeId} unmounts the previous layer's source and
+            tiles the moment the selection changes. Streams for the visible
+            area, or uses its local archive once downloaded. */}
+        {mapReady && activeId != null && (
+          <HazardLayerOverlay key={activeId} layerId={activeId} />
+        )}
       </Map>
 
       <LayersControl
@@ -855,8 +854,8 @@ export default function Index() {
       <HazardLayersPanel
         visible={layersOpen}
         onClose={() => setLayersOpen(false)}
-        enabledIds={enabledIds}
-        onToggle={toggleHazardLayer}
+        activeId={activeId}
+        onSelect={selectHazardLayer}
       />
 
       {selectedPerson && (
