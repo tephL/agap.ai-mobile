@@ -38,6 +38,7 @@ export default function ClusterDetailsWindow({
   cluster,
   reports,
   loading,
+  teamAssigned = false,
   onClose,
   onAssignTeam,
 }) {
@@ -83,14 +84,33 @@ export default function ClusterDetailsWindow({
             accessibilityRole="tab"
             accessibilityState={{ selected: activeTab === tab.key }}
           >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeTab === tab.key && styles.tabLabelActive,
-              ]}
-            >
-              {tab.label}
-            </Text>
+            <View style={styles.tabInner}>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  activeTab === tab.key && styles.tabLabelActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+              {tab.key === "reports" ? (
+                <View
+                  style={[
+                    styles.tabCount,
+                    activeTab === tab.key && styles.tabCountActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabCountText,
+                      activeTab === tab.key && styles.tabCountTextActive,
+                    ]}
+                  >
+                    {cluster.report_count ?? 0}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </TouchableOpacity>
         ))}
       </View>
@@ -104,11 +124,6 @@ export default function ClusterDetailsWindow({
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.infoRowWrap}>
-              <View style={[styles.infoStat, styles.infoStatGap]}>
-                <Ionicons name="documents-outline" size={16} color={colors.muted} />
-                <Text style={styles.infoStatLabel}>Reports</Text>
-                <Text style={styles.infoStatValue}>{cluster.report_count ?? 0}</Text>
-              </View>
               <View style={styles.infoStat}>
                 <Ionicons name="people-outline" size={16} color={colors.muted} />
                 <Text style={styles.infoStatLabel}>Affected</Text>
@@ -149,15 +164,18 @@ export default function ClusterDetailsWindow({
             </Text>
           </ScrollView>
 
-          {/* Pinned below the scroll area so it stays visible while scrolling. */}
-          <TouchableOpacity
-            style={styles.assignButton}
-            activeOpacity={0.8}
-            onPress={onAssignTeam}
-          >
-            <Ionicons name="people-circle-outline" size={18} color={colors.white} />
-            <Text style={styles.assignButtonText}>Assign a Team</Text>
-          </TouchableOpacity>
+          {/* Pinned below the scroll area so it stays visible while scrolling.
+              Hidden once a team is already dispatched to this cluster. */}
+          {!teamAssigned ? (
+            <TouchableOpacity
+              style={styles.assignButton}
+              activeOpacity={0.8}
+              onPress={onAssignTeam}
+            >
+              <Ionicons name="people-circle-outline" size={18} color={colors.white} />
+              <Text style={styles.assignButtonText}>Assign a Team</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : (
         <ScrollView
@@ -315,6 +333,31 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: colors.white,
   },
+  tabInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  tabCount: {
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: "#FDECEC",
+    alignItems: "center",
+  },
+  tabCountActive: {
+    backgroundColor: colors.white,
+  },
+  tabCountText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  tabCountTextActive: {
+    color: colors.primary,
+  },
   bodyScroll: {
     flexGrow: 0,
     flexShrink: 1,
@@ -339,9 +382,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 6,
-  },
-  infoStatGap: {
-    marginRight: 8,
   },
   infoStatLabel: {
     flex: 1,
