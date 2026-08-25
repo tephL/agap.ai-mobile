@@ -28,6 +28,8 @@ export interface HazardLayerConfig {
   hazardType: HazardType;
   /** Rounded display size; also used to flag oversized downloads in UI. */
   approxSizeMB: number;
+  /** Marks the layer as recommended in the UI. */
+  recommended?: boolean;
 }
 
 export const HAZARD_LAYERS: HazardLayerConfig[] = [
@@ -46,6 +48,7 @@ export const HAZARD_LAYERS: HazardLayerConfig[] = [
     sourceLayerId: "flood_25yr",
     hazardType: "flood",
     approxSizeMB: 563,
+    recommended: true,
   },
   {
     id: "flood_100yr",
