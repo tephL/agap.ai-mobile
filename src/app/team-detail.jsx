@@ -23,6 +23,7 @@ import {
   assignmentError,
   updateAssignmentStatus,
 } from "@/services/teamService";
+import { useCluster } from "@/context/ClusterContext";
 
 function Stepper({ status }) {
   const current = ASSIGNMENT_STATUSES.indexOf(status);
@@ -62,6 +63,7 @@ function Stepper({ status }) {
 export default function TeamDetailScreen() {
   const params = useLocalSearchParams();
   const teamId = Number(params.teamId);
+  const { invalidateClusters } = useCluster();
   // Preselected when arriving via "Assign a Team" on a cluster.
   const preselectClusterId = params.assignClusterId
     ? Number(params.assignClusterId)
@@ -139,6 +141,7 @@ export default function TeamDetailScreen() {
       setClusters((prev) =>
         prev.filter((c) => c.cluster_id !== selectedClusterId)
       );
+      invalidateClusters();
     } catch (err) {
       setError(assignmentError(err, "Failed to assign team."));
       // A rejection usually means state moved elsewhere (team got assigned
@@ -163,6 +166,9 @@ export default function TeamDetailScreen() {
     setError(null);
     try {
       await updateAssignmentStatus(assignment.assignment_id, next);
+      // resolving deletes the cluster server-side; tell the Map tab so
+      // its pin disappears immediately
+      invalidateClusters();
       await refresh();
     } catch (err) {
       setError(assignmentError(err, "Failed to update status."));

@@ -95,8 +95,9 @@ export default function Index() {
   const hasAutoZoomedRef = useRef(false);
 
   // team.jsx reads the selected cluster across tabs; focusNonce marks
-  // explicit focus requests coming from the Reports tab
-  const { activeClusterId, setActiveClusterId, focusNonce } = useCluster();
+  // explicit focus requests coming from the Reports tab, clustersNonce
+  // marks cluster mutations (resolve/assign) done in other tabs
+  const { activeClusterId, setActiveClusterId, focusNonce, clustersNonce } = useCluster();
 
   // ---- clusters + teams fetch loop ---------------------------------------
   const refreshClusters = useCallback(async () => {
@@ -117,6 +118,14 @@ export default function Index() {
     const interval = setInterval(refreshClusters, CLUSTERS_FETCH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [refreshClusters]);
+
+  // another tab just resolved a cluster / dispatched a team — refetch
+  // right away so the pin disappears the moment it's resolved instead
+  // of waiting for the next poll tick
+  useEffect(() => {
+    if (clustersNonce === 0) return;
+    refreshClusters();
+  }, [clustersNonce, refreshClusters]);
 
   // ---- derived geojson for cluster markers --------------------------------
   const clustersGeojson = {
@@ -275,6 +284,18 @@ export default function Index() {
     setReportsLoading(false);
     setActiveClusterId(null);
   }, [setActiveClusterId]);
+
+  // if the expanded cluster got resolved elsewhere it stops coming back
+  // from the server — collapse immediately so its pin, halo, reports and
+  // details window all vanish with the refetched data
+  useEffect(() => {
+    if (
+      selectedClusterId != null &&
+      !clusters.some((c) => c.cluster_id === selectedClusterId)
+    ) {
+      collapseCluster();
+    }
+  }, [clusters, selectedClusterId, collapseCluster]);
 
   const expandCluster = useCallback(
     async (clusterId) => {
