@@ -178,6 +178,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 32,
+    flexDirection: "column",
+    overflow: "hidden",
   },
   header: {
     flexDirection: "row",
@@ -191,7 +193,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
   },
-  list: { flex: 1 },
+  list: { flexGrow: 1, minHeight: 0 },
   row: {
     flexDirection: "row",
     alignItems: "center",
