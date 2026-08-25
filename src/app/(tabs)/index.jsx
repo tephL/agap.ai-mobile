@@ -22,6 +22,7 @@ import HazardLayersPanel from '@/components/HazardLayersPanel';
 
 // hazard layer selection prefs
 import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
+import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
@@ -168,6 +169,19 @@ export default function Index() {
   // guards the one-time auto-zoom so it runs only on the first location fix
   const hasAutoZoomedRef = useRef(false);
 
+  // auto-download the 5-year flood layer on first mount
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!(await isDownloaded("flood_5yr"))) {
+          await downloadLayer("flood_5yr");
+        }
+      } catch (e) {
+        console.log("auto-download flood_5yr failed", e);
+      }
+    })();
+  }, []);
+
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
   const [damPulse, setDamPulse] = useState({ normal: 0, caution: 0, danger: 0 });
@@ -260,19 +274,28 @@ export default function Index() {
   );
 
   // ---- auto-zoom to the user once their location loads ---------------------
-  // mirrors the GPS button: flies to the current position on the first fix
+  // Retries up to 5 times with 2s delays in case GPS fix isn't immediate.
   useEffect(() => {
     if (!locationGranted || !mapReady || hasAutoZoomedRef.current) return;
     let cancelled = false;
+    const MAX_ATTEMPTS = 5;
+    const RETRY_DELAY_MS = 2000;
+
     (async () => {
-      const coords = await resolveCoords();
-      if (cancelled || !coords || hasAutoZoomedRef.current) return;
-      hasAutoZoomedRef.current = true;
-      cameraRef.current?.flyTo({
-        center: [coords.longitude, coords.latitude],
-        zoom: SELECTED_PERSON_FLY_ZOOM,
-        duration: SELECTED_PERSON_FLY_DURATION_MS,
-      });
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        if (cancelled || hasAutoZoomedRef.current) return;
+        const coords = await resolveCoords();
+        if (coords && !cancelled && !hasAutoZoomedRef.current) {
+          hasAutoZoomedRef.current = true;
+          cameraRef.current?.flyTo({
+            center: [coords.longitude, coords.latitude],
+            zoom: SELECTED_PERSON_FLY_ZOOM,
+            duration: SELECTED_PERSON_FLY_DURATION_MS,
+          });
+          return;
+        }
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      }
     })();
     return () => {
       cancelled = true;
