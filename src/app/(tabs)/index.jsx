@@ -13,6 +13,12 @@ import { getMyFamily } from '../../services/familyService.js';
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import { PersonCard } from '@/components/PersonCard';
+import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
+import HazardLayersPanel from '@/components/HazardLayersPanel';
+
+// hazard layer selection prefs
+import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
+
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 
 // ---------------------------------------------------------------------------
@@ -121,6 +127,10 @@ export default function Index() {
 
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
+
+  // hazard overlay selection (persisted, single-select) + layers sheet state
+  const { activeId, select: selectHazardLayer } = useActiveHazardLayer();
+  const [layersOpen, setLayersOpen] = useState(false);
 
   // staleness re-check clock
   const [now, setNow] = useState(Date.now());
@@ -443,6 +453,14 @@ export default function Index() {
             androidRenderMode="gps"
           />
         )}
+
+        {/* hazard overlay — exactly one at a time (picked in the layers
+            sheet). key={activeId} unmounts the previous layer's source and
+            tiles the moment the selection changes. Streams for the visible
+            area, or uses its local archive once downloaded. */}
+        {mapReady && activeId != null && (
+          <HazardLayerOverlay key={activeId} layerId={activeId} />
+        )}
       </Map>
 
       <TouchableOpacity
@@ -457,6 +475,22 @@ export default function Index() {
           <Ionicons name="locate" size={24} color="#4287f5" />
         )}
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.layersButton}
+        onPress={() => setLayersOpen(true)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="layers" size={24} color="#4287f5" />
+      </TouchableOpacity>
+
+
+      <HazardLayersPanel
+        visible={layersOpen}
+        onClose={() => setLayersOpen(false)}
+        activeId={activeId}
+        onSelect={selectHazardLayer}
+      />
 
       {selectedPerson && (
         <PersonCard
@@ -519,6 +553,23 @@ const styles = StyleSheet.create({
   locateButton: {
     position: 'absolute',
     bottom: 32,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  // sits directly above the GPS/locate button, right-aligned
+  layersButton: {
+    position: 'absolute',
+    bottom: 92,
     right: 16,
     width: 48,
     height: 48,
