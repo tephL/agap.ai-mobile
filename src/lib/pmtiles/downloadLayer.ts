@@ -130,6 +130,15 @@ export function getRemoteUrl(layerId: string): string {
   return `${HUGGINGFACE_BASE_URL}/${getHazardLayer(layerId).remoteFileName}`;
 }
 
+/**
+ * Source URL that streams tiles straight from the remote archive. MapLibre
+ * Native reads PMTiles over HTTP with byte-range requests, so only the tiles
+ * covering the visible area are fetched — no full download required.
+ */
+export function getRemoteSourceUrl(layerId: string): string {
+  return `pmtiles://${getRemoteUrl(layerId)}`;
+}
+
 export function getLocalUri(layerId: string): string {
   return `${getLayersDirectory()}${layerId}.pmtiles`;
 }

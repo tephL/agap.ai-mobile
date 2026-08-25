@@ -13,6 +13,7 @@ import { getMyFamily } from '../../services/familyService.js';
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import { PersonCard } from '@/components/PersonCard';
+import { AllHazardOverlays } from '@/components/HazardLayerToggle';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 
 // ---------------------------------------------------------------------------
@@ -420,6 +421,10 @@ export default function Index() {
             androidRenderMode="gps"
           />
         )}
+
+        {/* hazard overlays — stream tiles for the visible area; uses the
+            local archive automatically once a layer has been downloaded */}
+        {mapReady && <AllHazardOverlays />}
       </Map>
 
       <TouchableOpacity

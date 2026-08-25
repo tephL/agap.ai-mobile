@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import HAZARD_COLORS, {
   type HazardColorSet,
 } from "@/constants/hazardColors";
-import { HAZARD_LAYERS, type HazardLayerConfig } from "@/lib/pmtiles/downloadLayer";
+import { HAZARD_LAYERS, getRemoteSourceUrl, type HazardLayerConfig } from "@/lib/pmtiles/downloadLayer";
 import { useOfflinePMTilesLayer } from "@/hooks/useOfflinePMTilesLayer";
 
 /**
@@ -19,7 +19,8 @@ import { useOfflinePMTilesLayer } from "@/hooks/useOfflinePMTilesLayer";
  *   </MapLibreRN.MapView>
  *
  * and render <HazardLayerToggle /> anywhere outside the map to let users
- * download/remove layers. A layer only draws once its archive is downloaded.
+ * download/remove layers. Layers stream from the remote archive for the
+ * visible area until a full offline copy is downloaded.
  */
 
 interface HazardLayerOverlayProps {
@@ -32,13 +33,18 @@ export function HazardLayerOverlay({ layerId, colors }: HazardLayerOverlayProps)
   const { status, sourceUrl } = useOfflinePMTilesLayer(layerId);
   const config = HAZARD_LAYERS.find((layer) => layer.id === layerId);
 
-  if (!config || status !== "ready" || !sourceUrl) return null;
+  if (!config) return null;
+
+  // Prefer the downloaded archive; otherwise stream just the tiles for the
+  // visible area straight from the remote archive via byte-range requests.
+  const url =
+    status === "ready" && sourceUrl ? sourceUrl : getRemoteSourceUrl(config.id);
 
   const palette = { ...HAZARD_COLORS[config.hazardType], ...colors };
   const sourceId = `hazard-source-${config.id}`;
 
   return (
-    <VectorSource id={sourceId} url={sourceUrl}>
+    <VectorSource id={sourceId} url={url}>
       {/* v11 API: one Layer component, props follow the MapLibre style spec.
           Nested layers inherit `source` from the enclosing VectorSource. */}
       <Layer
