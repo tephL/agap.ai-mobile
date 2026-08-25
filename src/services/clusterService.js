@@ -8,7 +8,7 @@
 // client-side until the endpoint matures.
 import { api } from "./api";
 
-const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
+const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
 
 function normalizeCluster(row) {
   if (!row || typeof row !== "object") return null;
@@ -29,6 +29,9 @@ function normalizeCluster(row) {
     status: row.status ?? "open",
     reportCount: row.report_count ?? 0,
     peopleAffected: row.people_affected ?? 0,
+    aiSeverity: row.ai_severity ?? null,
+    aiDisasterType: row.ai_disaster_type ?? null,
+    aiAnalyzedAt: row.ai_analyzed_at ?? null,
   };
 }
 

@@ -56,6 +56,7 @@ const ROUTE_DASH_SEQUENCE = [
 const CLUSTER_PRIORITY_COLOR_EXPR = [
   'match',
   ['get', 'priority'],
+  'critical', '#991B1B',
   'high', '#ef4444',
   'medium', '#eab308',
   'low', '#22c55e',
@@ -279,6 +280,9 @@ export default function Index() {
           people_affected: cluster.people_affected,
           ai_summary: cluster.ai_summary,
           action_plan: cluster.action_plan,
+          ai_severity: cluster.ai_severity,
+          ai_disaster_type: cluster.ai_disaster_type,
+          ai_analyzed_at: cluster.ai_analyzed_at,
         },
       })),
   };
