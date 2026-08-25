@@ -116,6 +116,9 @@ export default function Index() {
   // background family refetch doesn't keep re-flying/re-opening the card
   const handledSelectedUserIdRef = useRef(null);
 
+  // guards the one-time auto-zoom so it runs only on the first location fix
+  const hasAutoZoomedRef = useRef(false);
+
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
 
@@ -190,6 +193,26 @@ export default function Index() {
       }
     }, [refreshFamilyLocations, resolveCoords])
   );
+
+  // ---- auto-zoom to the user once their location loads ---------------------
+  // mirrors the GPS button: flies to the current position on the first fix
+  useEffect(() => {
+    if (!locationGranted || !mapReady || hasAutoZoomedRef.current) return;
+    let cancelled = false;
+    (async () => {
+      const coords = await resolveCoords();
+      if (cancelled || !coords || hasAutoZoomedRef.current) return;
+      hasAutoZoomedRef.current = true;
+      cameraRef.current?.flyTo({
+        center: [coords.longitude, coords.latitude],
+        zoom: SELECTED_PERSON_FLY_ZOOM,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [locationGranted, mapReady, resolveCoords]);
 
   // ---- honor a selectedUserId passed in from FamilyScreen -----------------
   useEffect(() => {

@@ -95,6 +95,8 @@ export default function Index() {
   const [mapReady, setMapReady] = useState(false);
   const cameraRef = useRef(null);
   const handledFocusRef = useRef(0);
+  // guards the one-time auto-zoom so it runs only on the first location fix
+  const hasAutoZoomedRef = useRef(false);
   const handledTeamFocusRef = useRef(0);
 
   // drives the expanding halo ring around every cluster; a single phase
@@ -285,6 +287,26 @@ export default function Index() {
       setLocating(false);
     }
   };
+
+  // ---- auto-zoom to the user once their location loads ---------------------
+  // mirrors the GPS button: flies to the current position on the first fix
+  useEffect(() => {
+    if (!locationGranted || !mapReady || hasAutoZoomedRef.current) return;
+    let cancelled = false;
+    (async () => {
+      const coords = await resolveCoords();
+      if (cancelled || !coords || hasAutoZoomedRef.current) return;
+      hasAutoZoomedRef.current = true;
+      cameraRef.current?.flyTo({
+        center: [coords.longitude, coords.latitude],
+        zoom: LOCATE_ZOOM,
+        duration: LOCATE_FLY_DURATION_MS,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [locationGranted, mapReady, resolveCoords]);
 
   // ---- cluster expand / collapse -----------------------------------------
   const collapseCluster = useCallback(() => {
