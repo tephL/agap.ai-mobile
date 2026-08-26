@@ -20,12 +20,14 @@ const SMS_SEGMENT_LIMIT = 160;
 
 // --- Location cache ---
 // In-memory cache so the offline SMS flow doesn't pay for two full GPS fixes
-// (once for the character counter on mount, again at submit time).  The first
-// getDeviceLocation() call warms the cache; subsequent calls within the TTL
-// return instantly without touching the GPS hardware or re-checking permissions.
+// (once for the character counter on mount, again at submit time).  The hold
+// gesture pre-fetches location via getDeviceLocation() in the background
+// (CustomTabBar.onHoldComplete), warming this cache before the report screen
+// even mounts.  The 5-minute TTL covers the entire SOS typing session so
+// no second GPS fix is needed.
 let _cachedLocation = null;    // { latitude, longitude }
 let _cachedTimestamp = 0;      // Date.now() when _cachedLocation was set
-const LOCATION_CACHE_TTL_MS = 30_000; // 30 seconds — fresh enough for an SOS
+const LOCATION_CACHE_TTL_MS = 300_000; // 5 minutes — covers the full SOS typing session
 
 // Permission / services status cached after the first successful check so
 // subsequent calls within the same session skip the async checks entirely.
@@ -161,9 +163,10 @@ export async function requestReportLocation() {
  * requestReportLocation(), reusing the same `code`s so the report screen's
  * existing error handling (open Settings / retry copy) still applies.
  *
- * Results are cached for LOCATION_CACHE_TTL_MS so the offline SMS flow
- * (character counter on mount → actual send on submit) doesn't pay for
- * two full GPS fixes.
+ * Results are cached for LOCATION_CACHE_TTL_MS (5 minutes) so the offline
+ * SMS flow (character counter on mount → actual send on submit) doesn't pay
+ * for two full GPS fixes.  The hold gesture in CustomTabBar fires this in
+ * the background so the cache is already warm when the report screen mounts.
  */
 export async function getDeviceLocation() {
   // Return cached location instantly when still fresh — no GPS hardware

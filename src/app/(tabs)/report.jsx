@@ -124,8 +124,14 @@ export default function ReportScreen() {
   // know the actual coordinates (see handleOfflineSubmit / the effect
   // below), since the SMS's fixed "SOS <lon> | <lat>" prefix eats into the
   // 160-char budget by a few characters depending on the digits involved.
-  const [offlineDescLimit, setOfflineDescLimit] = useState(OFFLINE_DESCRIPTION_MAX);
-  const [offlineCoords, setOfflineCoords] = useState(null);
+  const [offlineCoords, setOfflineCoords] = useState(() => {
+    if (!isOnline) return getCachedLocation();
+    return null;
+  });
+  const [offlineDescLimit, setOfflineDescLimit] = useState(() => {
+    if (offlineCoords) return getOfflineDescriptionLimit(offlineCoords);
+    return OFFLINE_DESCRIPTION_MAX;
+  });
 
   useEffect(() => {
     setNotes("");
@@ -135,10 +141,9 @@ export default function ReportScreen() {
   }, [sentAt]);
 
   // Offline mode has no photo/network round trip to kick off location
-  // fetching, so grab it as soon as the screen mounts offline purely to
-  // give the description counter an accurate limit.  If a fresh cached
-  // location already exists (from a prior call within the same session)
-  // use it immediately — otherwise fetch and cache it.
+  // fetching, so the hold gesture pre-fetches location in the background
+  // (see CustomTabBar.onHoldComplete). This effect uses the cached result
+  // for the character counter — or fetches if the cache was empty.
   useEffect(() => {
     if (isOnline || offlineCoords) return;
 
