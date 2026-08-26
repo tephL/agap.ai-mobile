@@ -9,7 +9,6 @@ const TAB_ICONS = {
   reports: "document-text",
   map: "map",
   team: "people",
-  typhoon: "thunderstorm",
 };
 
 export default function AdminLayout() {
@@ -81,15 +80,7 @@ export default function AdminLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="typhoon"
-        options={{
-          title: "Typhoon",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name={TAB_ICONS.typhoon} size={size} color={color} />
-          ),
-        }}
-      />
+
     </Tabs>
   );
 }
