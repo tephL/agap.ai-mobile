@@ -19,9 +19,32 @@ function dedupeDams(dams) {
   return [...bySlug.values()];
 }
 
+// ── Offline LRU cache ────────────────────────────────────────────────────────
+// Caches the last N API responses in memory so the UI can fall back to stale
+// data when the network is unavailable. Max 20 entries (1 all-dams + ~19 per-slug).
+const damCache = new Map();
+const DAM_CACHE_MAX = 20;
+
+function cacheSet(key, data) {
+  damCache.set(key, data);
+  if (damCache.size > DAM_CACHE_MAX) {
+    damCache.delete(damCache.keys().next().value);
+  }
+}
+
+export function getCachedDamStatuses() {
+  return damCache.get("all") ?? null;
+}
+
+export function getCachedDamStatus(slug) {
+  return damCache.get(`slug:${slug}`) ?? null;
+}
+
 export async function getDamStatuses() {
   const response = await api.get("/api/dams");
-  return { ...response.data, dams: dedupeDams(response.data?.dams) };
+  const data = { ...response.data, dams: dedupeDams(response.data?.dams) };
+  cacheSet("all", data);
+  return data;
 }
 
 // Returns { reportedAt, scrapedAt, source, stale?, staleReason?, dam } or null
@@ -29,5 +52,6 @@ export async function getDamStatuses() {
 export async function getDamStatusBySlug(slug) {
   const response = await api.get(`/api/dams/${encodeURIComponent(slug)}`);
   if (!response.data) return null;
+  cacheSet(`slug:${slug}`, response.data);
   return response.data;
 }

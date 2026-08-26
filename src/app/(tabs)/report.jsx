@@ -569,7 +569,7 @@ export default function ReportScreen() {
             disabled={submitting}
             hitSlop={8}
           >
-            <Text style={styles.skip}>SKIP</Text>
+            <Text style={styles.skip}>CANCEL</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

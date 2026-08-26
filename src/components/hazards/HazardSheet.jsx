@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { getDamStatusBySlug } from "../../services/hazardService";
+import { getDamStatusBySlug, getCachedDamStatus } from "../../services/hazardService";
 import { haversineMeters, formatDistance } from "../../utils/haversine";
 import {
   parseDamObservationMs,
@@ -155,7 +155,13 @@ function HazardSheetInner({
         }
       })
       .catch((error) => {
-        if (!cancelled) setFetchState({ slug, data: null, error });
+        if (cancelled) return;
+        const cached = getCachedDamStatus(slug);
+        if (cached) {
+          setFetchState({ slug, data: cached && cached.dam ? cached : null, error: null, stale: true });
+        } else {
+          setFetchState({ slug, data: null, error });
+        }
       });
 
     return () => {
@@ -284,7 +290,7 @@ function HazardSheetInner({
   const gates = shownDam?.gateOpening;
   const inflow = shownDam?.inflow;
   const outflow = shownDam?.outflow;
-  const showStaleBanner = Boolean(detailData?.stale);
+  const showStaleBanner = Boolean(detailData?.stale || fetchState.stale);
 
   const statusSentence = shownDam ? describeDamStatus(shownDam, severity) : null;
 
@@ -828,6 +834,7 @@ const styles = StyleSheet.create({
   },
   detailsBlock: {
     marginTop: 12,
+    paddingHorizontal: 20,
   },
   elevationNote: {
     fontSize: 12,
@@ -869,7 +876,7 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     color: "#9AA2B1",
     paddingBottom: 8,
-    paddingLeft: 28,
+    paddingHorizontal: 28,
   },
 });
 
