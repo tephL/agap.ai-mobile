@@ -2,6 +2,8 @@
 // (marker/halo colors), the drawer list dots, the sheet's summary card, and
 // the AI context provider — tune the thresholds here and everything follows.
 
+import { CREST_ELEVATIONS } from "../../data/hydrology";
+
 export const SEVERITY_LEVELS = {
   normal: {
     level: "normal",
@@ -24,7 +26,7 @@ export const SEVERITY_LEVELS = {
     label: "Danger",
     color: "#E32F31",
     icon: "warning",
-    title: "Water is close to the spill level.",
+    title: "The reservoir is near capacity.",
     advice: "Stay alert for official dam advisories in your area.",
   },
   unknown: {
@@ -43,6 +45,50 @@ const CAUTION_RULE_CURVE_M = 1; // ≥1 m above rule curve
 const CAUTION_RISE_24H_M = 0.5; // fast rise while near-full
 const CAUTION_RISE_NHWL_WINDOW_M = 4;
 
+// ---- Decision criteria (consumed by SeverityDetail modal) -------------------
+
+export const SEVERITY_CRITERIA = {
+  danger: {
+    label: "Danger",
+    color: "#E32F31",
+    summary: "The reservoir is near capacity.",
+    criteria: [
+      `Water level is within ${DANGER_MARGIN_M} m of the normal high water level (NHWL) — the spill threshold.`,
+      "The dam may need to release water through its spillway to prevent overtopping.",
+      "Stay alert for official dam advisories in your area.",
+    ],
+  },
+  caution: {
+    label: "Caution",
+    color: "#EAB308",
+    summary: "The reservoir is running higher than usual.",
+    criteria: [
+      `Water level is within ${CAUTION_MARGIN_M} m of the NHWL.`,
+      `Rule curve deviation is ${CAUTION_RULE_CURVE_M} m or more above the target curve.`,
+      `Water is rising fast — ${CAUTION_RISE_24H_M} m or more in 24 hours while within ${CAUTION_RISE_NHWL_WINDOW_M} m of the NHWL.`,
+    ],
+  },
+  normal: {
+    label: "Normal",
+    color: "#4287f5",
+    summary: "Water levels are within safe limits.",
+    criteria: [
+      "Water level is well below the NHWL (more than 2 m below).",
+      "No fast rising detected.",
+      "No unusual activity at this reservoir right now.",
+    ],
+  },
+  unknown: {
+    label: "Unknown",
+    color: "#a9a9a9",
+    summary: "No current reading available.",
+    criteria: [
+      "Latest observation data is unavailable for this dam.",
+      "Severity cannot be determined without a reservoir water level reading.",
+    ],
+  },
+};
+
 function num(value) {
   return typeof value === "number" && !Number.isNaN(value) ? value : null;
 }
@@ -57,8 +103,29 @@ export function resolveDamSeverity(dam) {
     return SEVERITY_LEVELS.unknown;
   }
 
-  const devNHWL = num(dam.deviationFromNHWL);
-  const devRuleCurve = num(dam.deviationFromRuleCurve);
+  const rwl = dam.reservoirWaterLevel;
+  const rawDevNHWL = num(dam.deviationFromNHWL);
+  const rawNHWL = num(dam.normalHighWaterLevel);
+
+  // When upstream reports NHWL as 0 (e.g. Caliraya), use static crest as fallback
+  const crestFallback = dam.slug ? (CREST_ELEVATIONS[dam.slug] ?? null) : null;
+  const effectiveNHWL = (rawNHWL != null && rawNHWL > 0) ? rawNHWL : crestFallback;
+
+  // Recompute deviation when using fallback and raw value is 0
+  const devNHWL =
+    effectiveNHWL != null && (rawDevNHWL === 0 || rawDevNHWL == null)
+      ? Math.round((rwl - effectiveNHWL) * 100) / 100
+      : rawDevNHWL;
+
+  const rawDevRuleCurve = num(dam.deviationFromRuleCurve);
+  const rawRuleCurve = num(dam.ruleCurveElevation);
+  const effectiveRuleCurve = rawRuleCurve != null && rawRuleCurve > 0 ? rawRuleCurve : null;
+
+  const devRuleCurve =
+    effectiveRuleCurve != null && (rawDevRuleCurve === 0 || rawDevRuleCurve == null)
+      ? Math.round((rwl - effectiveRuleCurve) * 100) / 100
+      : (rawDevRuleCurve != null && rawDevRuleCurve !== 0 ? rawDevRuleCurve : null);
+
   const trend24h = num(dam.waterLevelDeviation?.amount);
 
   // devNHWL is meters relative to NHWL (negative = below it), so values

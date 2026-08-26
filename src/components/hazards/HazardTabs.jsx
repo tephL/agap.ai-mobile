@@ -1,74 +1,37 @@
 import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import DamsTab from "./DamsTab";
-import TabPlaceholder from "./TabPlaceholder";
 
 const TABS = [
   {
     key: "nearYou",
     label: "Near You",
     icon: "location-outline",
-    placeholder: {
-      icon: "location-outline",
-      title: "Near You",
-      subtitle: "A combined view of every hazard near your location is coming soon.",
-    },
   },
   { key: "dams", label: "Dams", icon: "water-outline" },
   {
     key: "faultLines",
     label: "Fault Lines",
     icon: "map-outline",
-    placeholder: {
-      icon: "map-outline",
-      title: "Fault Lines",
-      subtitle: "Active fault data from PHIVOLCS is coming soon.",
-    },
   },
   {
     key: "volcanoes",
     label: "Volcanoes",
     icon: "flame-outline",
-    placeholder: {
-      icon: "flame-outline",
-      title: "Volcanoes",
-      subtitle: "Volcano alert levels from PHIVOLCS are coming soon.",
-    },
   },
   {
     key: "typhoons",
     label: "Typhoons",
     icon: "thunderstorm-outline",
-    placeholder: {
-      icon: "thunderstorm-outline",
-      title: "Typhoons",
-      subtitle: "Live tropical cyclone bulletins from PAGASA are coming soon.",
-    },
   },
   {
     key: "weatherBulletins",
-    label: "Weather Bulletins",
+    label: "Weather",
     icon: "newspaper-outline",
-    placeholder: {
-      icon: "newspaper-outline",
-      title: "Weather Bulletins",
-      subtitle: "General weather advisories from PAGASA are coming soon.",
-    },
   },
 ];
 
-export default function HazardTabs({
-  activeTab,
-  onChangeTab,
-  dams,
-  userLocation,
-  nearestSlug,
-  influencingSlugs = [],
-  onSelectDam,
-}) {
-  const active = TABS.find((tab) => tab.key === activeTab);
-
+export default function HazardTabs({ activeTab, onChangeTab }) {
   return (
     <View style={styles.wrap}>
       <ScrollView
@@ -81,79 +44,62 @@ export default function HazardTabs({
           return (
             <TouchableOpacity
               key={tab.key}
-              style={styles.tabButton}
+              style={[styles.chip, isActive && styles.chipActive]}
               onPress={() => onChangeTab(tab.key)}
               activeOpacity={0.7}
             >
               <Ionicons
                 name={tab.icon}
-                size={14}
-                color={isActive ? "#E32F31" : "#737B8C"}
+                size={13}
+                color={isActive ? "#FFFFFF" : "#737B8C"}
               />
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+              <Text style={[styles.chipLabel, isActive && styles.chipLabelActive]}>
                 {tab.label}
               </Text>
-              <View
-                style={[styles.tabUnderline, isActive && styles.tabUnderlineActive]}
-              />
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-
-      <View style={styles.content}>
-        {activeTab === "dams" ? (
-          <DamsTab
-            dams={dams}
-            userLocation={userLocation}
-            nearestSlug={nearestSlug}
-            influencingSlugs={influencingSlugs}
-            onSelect={onSelectDam}
-          />
-        ) : (
-          <TabPlaceholder {...(active?.placeholder ?? {})} />
-        )}
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    flex: 1,
+    position: "absolute",
+    top: 60,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    elevation: 20,
   },
   tabRow: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
+    gap: 6,
   },
-  tabButton: {
-    paddingHorizontal: 10,
-    paddingTop: 6,
+  chip: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
   },
-  tabLabel: {
+  chipActive: {
+    backgroundColor: "#E32F31",
+  },
+  chipLabel: {
     fontSize: 12,
     fontWeight: "600",
     color: "#737B8C",
-    marginTop: 3,
   },
-  tabLabelActive: {
-    color: "#E32F31",
-  },
-  tabUnderline: {
-    height: 2,
-    alignSelf: "stretch",
-    marginTop: 5,
-    borderRadius: 1,
-    backgroundColor: "transparent",
-  },
-  tabUnderlineActive: {
-    backgroundColor: "#E32F31",
-  },
-  content: {
-    flex: 1,
-    borderTopWidth: 1,
-    borderTopColor: "#E0E2E7",
-    paddingHorizontal: 20,
-    paddingTop: 4,
+  chipLabelActive: {
+    color: "#FFFFFF",
   },
 });

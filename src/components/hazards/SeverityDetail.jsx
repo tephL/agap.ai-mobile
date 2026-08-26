@@ -9,58 +9,48 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { IMPACT_TIERS, getImpactTier } from "../../data/hydrology";
+import { SEVERITY_CRITERIA } from "./damSeverity";
 import HazardDisclaimer from "./HazardDisclaimer";
 
-const TIER_ORDER = ["catastrophic", "severe", "high", "moderate", "watch"];
+const SEVERITY_ORDER = ["danger", "caution", "normal", "unknown"];
 
-/**
- * Full-screen explainer for the impact-zone system. Opens from the
- * HazardSheet impact card; shows where the user's dam sits on the tier
- * ladder and exactly why each tier exists.
- */
-export default function ImpactZoneDetail({
+export default function SeverityDetail({
   visible,
   onClose,
   damName,
-  tierKey,
-  minor = false,
-  distanceText,
+  severityLevel,
 }) {
-  const current = getImpactTier(tierKey) ?? IMPACT_TIERS[IMPACT_TIERS.length - 1];
+  const current = SEVERITY_CRITERIA[severityLevel] ?? SEVERITY_CRITERIA.unknown;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose}>
         <Pressable style={styles.panel} onPress={() => {}}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Understanding your risk</Text>
+            <Text style={styles.headerTitle}>How reservoir status is decided</Text>
             <Pressable hitSlop={12} onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={22} color="#5A6273" />
             </Pressable>
           </View>
 
           <ScrollView bounces={false} contentContainerStyle={styles.scrollBody}>
+            {/* Current status card */}
             <View style={[styles.currentCard, { borderColor: `${current.color}59` }]}>
               <View style={styles.currentHead}>
                 <View style={[styles.currentChip, { backgroundColor: current.color }]}>
                   <Text style={styles.currentChipText}>{current.label}</Text>
                 </View>
-                {minor && (
-                  <View style={styles.minorChip}>
-                    <Text style={styles.minorChipText}>Minor structure</Text>
-                  </View>
-                )}
               </View>
               <Text style={styles.currentDam}>{damName ?? "This dam"}</Text>
-              <Text style={styles.currentSummary}>{current.plainSummary}</Text>
+              <Text style={styles.currentSummary}>{current.summary}</Text>
             </View>
 
-            <Text style={styles.sectionTitle}>How zones are decided</Text>
+            {/* Decision ladder */}
+            <Text style={styles.sectionTitle}>How status is determined</Text>
             <View style={styles.ladder}>
-              {TIER_ORDER.map((key, index) => {
-                const tier = getImpactTier(key);
-                const isCurrent = key === current.key;
+              {SEVERITY_ORDER.map((key, index) => {
+                const tier = SEVERITY_CRITERIA[key];
+                const isCurrent = key === severityLevel;
                 return (
                   <View key={key} style={styles.tierBlockWrap}>
                     <View
@@ -75,28 +65,23 @@ export default function ImpactZoneDetail({
                           <Text style={[styles.tierLabel, { color: tier.color }]}>
                             {tier.label}
                           </Text>
-                          <Text style={styles.tierBand}>
-                            {index === 0
-                              ? "0–5 km of dam"
-                              : index === TIER_ORDER.length - 1
-                                ? "60+ km"
-                                : `${IMPACT_TIERS[index].maxKm}–${tier.maxKm} km`}
-                            {isCurrent ? " · you" : ""}
-                          </Text>
+                          {isCurrent && (
+                            <Text style={styles.youBadge}>you</Text>
+                          )}
                         </View>
-                        <Text style={styles.tierPlain}>{tier.plainSummary}</Text>
+                        <Text style={styles.tierPlain}>{tier.summary}</Text>
                         {isCurrent &&
                           tier.criteria.map((line) => (
                             <Text key={line} style={styles.criteriaLine}>
-                              {"• "}
+                              {"\u2022 "}
                               {line}
                             </Text>
                           ))}
                       </View>
                     </View>
-                    {index < TIER_ORDER.length - 1 && (
+                    {index < SEVERITY_ORDER.length - 1 && (
                       <View style={styles.tierConnector}>
-                        <View style={[styles.connectorLine, { backgroundColor: getImpactTier(TIER_ORDER[index + 1]).color }]} />
+                        <View style={[styles.connectorLine, { backgroundColor: SEVERITY_CRITERIA[SEVERITY_ORDER[index + 1]].color }]} />
                       </View>
                     )}
                   </View>
@@ -104,31 +89,24 @@ export default function ImpactZoneDetail({
               })}
             </View>
 
-            <Text style={styles.sectionTitle}>Why is this dam listed?</Text>
-            <Text style={styles.explainText}>
-              Three things decide what you see:
+            {/* What do these numbers mean */}
+            <Text style={styles.sectionTitle}>What do these numbers mean?</Text>
+            <Text style={styles.explainBullet}>
+              <Text style={styles.explainBold}>{"NHWL (normal high water level) \u2014 "}</Text>
+              the maximum safe water height for a reservoir. When water reaches
+              this level, the dam&apos;s spillway may activate to release excess water.
             </Text>
             <Text style={styles.explainBullet}>
-              <Text style={styles.explainBold}>{"Reservoir status — "}</Text>
-              how full the dam is right now compared with its safety levels
-              (Normal / Caution / Danger).
+              <Text style={styles.explainBold}>{"Rule curve \u2014 "}</Text>
+              a target water level set by dam operators for each month. Staying
+              near the rule curve leaves enough flood-storage capacity for the
+              rainy season.
             </Text>
             <Text style={styles.explainBullet}>
-              <Text style={styles.explainBold}>{"River connection — "}</Text>
-              whether the dam&apos;s water actually flows toward your area.
-              Dams on other river systems never claim to affect you.
-            </Text>
-            <Text style={styles.explainBullet}>
-              <Text style={styles.explainBold}>{"Structure size — "}</Text>
-              a few dams (like Ipo) mainly redirect water rather than store it.
-              They share their river&apos;s zone but are tagged{" "}
-              <Text style={styles.explainBold}>Minor</Text> because they can
-              hold very little water compared with a main dam like Angat.
-            </Text>
-
-            <Text style={styles.glossaryNote}>
-              {"NHWL = normal high water level, the maximum safe water height for a reservoir. "}
-              {"A spillway is the structure that releases excess water to prevent overtopping."}
+              <Text style={styles.explainBold}>{"Spillway \u2014 "}</Text>
+              a structure that safely releases excess water to prevent the dam
+              from overtopping. A spillway release is a normal operational
+              procedure, not an emergency.
             </Text>
 
             <HazardDisclaimer style={styles.disclaimer} />
@@ -200,17 +178,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
-  minorChip: {
-    borderRadius: 9,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: "#EEF1F5",
-  },
-  minorChipText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#737B8C",
-  },
   currentDam: {
     fontSize: 15,
     fontWeight: "700",
@@ -252,16 +219,21 @@ const styles = StyleSheet.create({
   tierLabelRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 8,
   },
   tierLabel: {
     fontSize: 13,
     fontWeight: "800",
   },
-  tierBand: {
-    fontSize: 11,
-    fontWeight: "600",
+  youBadge: {
+    fontSize: 10,
+    fontWeight: "700",
     color: "#737B8C",
+    backgroundColor: "#EEF1F5",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    overflow: "hidden",
   },
   tierPlain: {
     fontSize: 12,
@@ -283,11 +255,6 @@ const styles = StyleSheet.create({
     height: "100%",
     opacity: 0.35,
   },
-  explainText: {
-    fontSize: 13,
-    color: "#5A6273",
-    marginBottom: 6,
-  },
   explainBullet: {
     fontSize: 13,
     lineHeight: 18,
@@ -298,13 +265,6 @@ const styles = StyleSheet.create({
   explainBold: {
     fontWeight: "700",
     color: "#182033",
-  },
-  glossaryNote: {
-    marginTop: 12,
-    fontSize: 11,
-    lineHeight: 15,
-    color: "#9AA1B0",
-    fontStyle: "italic",
   },
   disclaimer: {
     marginTop: 12,

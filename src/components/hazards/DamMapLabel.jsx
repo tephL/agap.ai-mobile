@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
  * drawer just to confirm which dam they selected. Rendered while a dam is
  * selected; X dismisses it (and the selection).
  */
-export default function DamMapLabel({ name, severityColor, distanceText, onClose }) {
+export default function DamMapLabel({ name, severityColor, distanceText, statusText, statusColor, onClose }) {
   return (
     <View style={styles.wrap} pointerEvents="box-none">
       <View style={styles.pill}>
@@ -20,6 +20,14 @@ export default function DamMapLabel({ name, severityColor, distanceText, onClose
           <>
             <View style={styles.separator} />
             <Text style={styles.distance}>{distanceText}</Text>
+          </>
+        ) : null}
+        {statusText ? (
+          <>
+            <View style={styles.separator} />
+            <Text style={[styles.status, statusColor ? { color: statusColor } : null]} numberOfLines={1}>
+              {statusText}
+            </Text>
           </>
         ) : null}
         <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.close}>
@@ -77,6 +85,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#6B7280",
+  },
+  status: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#6B7280",
+    flexShrink: 1,
   },
   close: {
     marginLeft: 2,

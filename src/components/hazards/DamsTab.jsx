@@ -1,12 +1,10 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { haversineMeters, formatDistance } from "../../utils/haversine";
 import { resolveDamSeverity } from "./damSeverity";
 import { getDamImpact, getImpactTier } from "../../data/hydrology";
 import HazardDisclaimer from "./HazardDisclaimer";
-
-const EXPECTED_DAM_COUNT = 9;
-const NEAREST_TINT = "rgba(66, 135, 245, ";
 
 function DamsTabInner({
   dams,
@@ -14,6 +12,7 @@ function DamsTabInner({
   nearestSlug,
   influencingSlugs = [],
   onSelect,
+  hideHeader = false,
 }) {
   const rows = useMemo(() => {
     const hasOrigin =
@@ -36,31 +35,27 @@ function DamsTabInner({
       });
   }, [dams, userLocation]);
 
-  // Fallback for the Closest chip before the map computes its own nearest.
   const nearest = nearestSlug ?? rows[0]?.dam.slug ?? null;
-  const incomplete = rows.length > 0 && rows.length < EXPECTED_DAM_COUNT;
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Dams</Text>
-        <View style={[styles.countBadge, incomplete && styles.countBadgeWarn]}>
-          <Text style={[styles.countText, incomplete && styles.countTextWarn]}>
-            {incomplete ? `${rows.length} of ${EXPECTED_DAM_COUNT}` : rows.length}
-          </Text>
+      {!hideHeader && (
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Monitored Dams</Text>
+          <Text style={styles.headerSubtitle}>Tap a dam for details</Text>
         </View>
-      </View>
+      )}
 
       {rows.length === 0 ? (
         <View style={styles.empty}>
+          <Ionicons name="water-outline" size={28} color="#C5CBD6" />
           <Text style={styles.emptyText}>No dam data available right now.</Text>
         </View>
       ) : (
         rows.map(({ dam, distanceMeters }) => {
           const severity = resolveDamSeverity(dam);
-          const dev = dam.deviationFromNHWL;
-          const impact = getDamImpact(dam, userLocation);
-          const impactTier = impact ? getImpactTier(impact.impact.key) : null;
+          const impactCtx = getDamImpact(dam, userLocation);
+          const impactTier = impactCtx ? getImpactTier(impactCtx.impact.key) : null;
           const isNearest = dam.slug === nearest;
           const isInfluencing = influencingSlugs.includes(dam.slug);
 
@@ -71,72 +66,43 @@ function DamsTabInner({
               onPress={() => onSelect(dam)}
               activeOpacity={0.7}
             >
-              <View style={[styles.dot, { backgroundColor: severity.color }]} />
-              <View style={styles.main}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.name}>{dam.name}</Text>
-                  {isNearest && (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>Closest</Text>
-                    </View>
-                  )}
-                  {!isNearest && isInfluencing && (
-                    <View style={[styles.chip, styles.chipRange]}>
-                      <Text style={[styles.chipText, styles.chipTextRange]}>
-                        In range
-                      </Text>
-                    </View>
-                  )}
-                  <View
-                    style={[
-                      styles.severityChip,
-                      { backgroundColor: `${severity.color}1A` },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.severityChipText,
-                        { color: severity.color },
-                      ]}
-                    >
-                      {severity.label}
+              <View style={[styles.cardBar, { backgroundColor: severity.color }]} />
+              <View style={styles.cardBody}>
+                <View style={styles.cardTop}>
+                  <View style={styles.nameRow}>
+                    <View style={[styles.dot, { backgroundColor: severity.color }]} />
+                    <Text style={styles.name} numberOfLines={1}>
+                      {dam.name}
                     </Text>
                   </View>
-                  {impact && isInfluencing && impactTier && (
-                    <View
-                      style={[
-                        styles.impactMiniChip,
-                        { backgroundColor: `${impactTier.color}1A` },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.impactMiniChipText,
-                          { color: impactTier.color },
-                        ]}
-                      >
-                        {impactTier.label}
-                        {impact.minor ? " · minor" : ""}
-                      </Text>
-                    </View>
-                  )}
                   {distanceMeters != null && (
                     <Text style={styles.distance}>
                       {formatDistance(distanceMeters)}
                     </Text>
                   )}
                 </View>
-                <Text style={styles.caption}>
-                  {dev != null
-                    ? `${dev > 0 ? "+" : ""}${dev} m vs NHWL`
-                    : severity.title}
-                </Text>
+                <View style={styles.cardBottom}>
+                  <View style={[styles.severityPill, { backgroundColor: `${severity.color}1A` }]}>
+                    <Text style={[styles.severityPillText, { color: severity.color }]}>
+                      {severity.label}
+                    </Text>
+                  </View>
+                  {impactTier && isInfluencing && (
+                    <View style={[styles.impactPill, { backgroundColor: `${impactTier.color}1A` }]}>
+                      <Text style={[styles.impactPillText, { color: impactTier.color }]}>
+                        {impactCtx?.minor ? "Minor \u00B7 " : ""}{impactTier.label}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.rwlBadge}>
+                    <Text style={styles.rwlText}>
+                      {dam.reservoirWaterLevel != null
+                        ? `${dam.reservoirWaterLevel} m`
+                        : "\u2014"}
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <Text style={styles.rwl}>
-                {dam.reservoirWaterLevel != null
-                  ? `${dam.reservoirWaterLevel} m`
-                  : "—"}
-              </Text>
             </TouchableOpacity>
           );
         })
@@ -152,133 +118,114 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    marginBottom: 8,
   },
   headerTitle: {
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    color: "#737B8C",
+    color: "#182033",
+    letterSpacing: 0.2,
   },
-  countBadge: {
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: "#EEF1F5",
-  },
-  countBadgeWarn: {
-    backgroundColor: "#FEF3C7",
-  },
-  countText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#737B8C",
-  },
-  countTextWarn: {
-    color: "#B45309",
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#9AA2B1",
+    marginTop: 1,
   },
   empty: {
     alignItems: "center",
-    paddingVertical: 32,
+    paddingVertical: 36,
+    gap: 8,
   },
   emptyText: {
-    color: "#737B8C",
-    fontSize: 14,
+    color: "#9AA2B1",
+    fontSize: 13,
   },
   card: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E0E2E7",
-    backgroundColor: "#ffffff",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 8,
+    backgroundColor: "#FFFFFF",
+    marginBottom: 10,
+    overflow: "hidden",
   },
   cardNearest: {
-    backgroundColor: `${NEAREST_TINT}0.08)`,
-    borderColor: `${NEAREST_TINT}0.35)`,
+    borderColor: "#4287f5",
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  cardBar: {
+    width: 4,
   },
-  main: {
+  cardBody: {
     flex: 1,
+    paddingVertical: 12,
+    paddingLeft: 10,
+    paddingRight: 12,
+  },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
+    gap: 8,
+    flexShrink: 1,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   name: {
     fontSize: 15,
     fontWeight: "700",
     color: "#182033",
   },
-  chip: {
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    backgroundColor: `${NEAREST_TINT}0.15)`,
-  },
-  chipText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#4287f5",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  chipRange: {
-    backgroundColor: "rgba(115, 123, 140, 0.12)",
-  },
-  chipTextRange: {
-    color: "#737B8C",
-  },
-  severityChip: {
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  severityChipText: {
-    fontSize: 10,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  impactMiniChip: {
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  impactMiniChipText: {
-    fontSize: 10,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
   distance: {
     fontSize: 12,
     fontWeight: "600",
     color: "#4287f5",
   },
-  caption: {
-    fontSize: 12,
-    color: "#737B8C",
-    marginTop: 2,
+  cardBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    flexWrap: "wrap",
   },
-  rwl: {
-    fontSize: 15,
+  severityPill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  severityPillText: {
+    fontSize: 11,
     fontWeight: "700",
-    color: "#182033",
+  },
+  impactPill: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  impactPillText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  rwlBadge: {
+    marginLeft: "auto",
+    backgroundColor: "#F5F5F7",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  rwlText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#5A6273",
     fontVariant: ["tabular-nums"],
   },
   disclaimer: {
@@ -287,5 +234,4 @@ const styles = StyleSheet.create({
   },
 });
 
-// Memoized so the map screen's pulse ticks do not re-render the list.
 export default React.memo(DamsTabInner);

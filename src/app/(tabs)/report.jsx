@@ -233,14 +233,7 @@ export default function ReportScreen() {
 
   const handleSkip = () => {
     if (submitting) return;
-    Alert.alert(
-      "Skip this report?",
-      "None of these details will be sent, and they won't be saved.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Confirm", style: "destructive", onPress: () => closeForm("active") },
-      ]
-    );
+    closeForm("active");
   };
 
   // Re-fires the location request if the first attempt failed (e.g. the
@@ -406,23 +399,9 @@ export default function ReportScreen() {
   const confirmSubmit = () => {
     if (submitting) return;
     if (isOnline) {
-      Alert.alert(
-        "Submit details?",
-        "Are you sure you want to submit your current details?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Confirm", onPress: handleSubmit },
-        ]
-      );
+      handleSubmit();
     } else {
-      Alert.alert(
-        "Send text message?",
-        "This opens your messaging app with your location pre-filled. You'll still need to tap Send there.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Confirm", onPress: handleOfflineSubmit },
-        ]
-      );
+      handleOfflineSubmit();
     }
   };
 
@@ -448,15 +427,15 @@ export default function ReportScreen() {
           <Text style={styles.subtitle}>
             {isOnline
               ? "help us help you. Add critical details."
-              : "press submit details so we can receive your sos report."}
+              : "Tap submit to send your SOS report as a text message."}
           </Text>
 
           {!isOnline && (
             <View style={styles.offlineNotice}>
               <Ionicons name="cloud-offline-outline" size={16} color={colors.text} />
               <Text style={styles.offlineNoticeText}>
-                You're offline. We'll open a text message with your location
-                instead — photos aren't available right now.
+                You&apos;re offline. We&apos;ll open a text message with your location
+                instead. Photos aren&apos;t available right now.
               </Text>
             </View>
           )}

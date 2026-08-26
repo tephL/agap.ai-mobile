@@ -1,17 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
-  Animated,
-  Easing,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-
-const COUNTDOWN_SECONDS = 5;
-const RING_SIZE = 132;
-const SWEEP_MS = 1000; // one full sweep per remaining second
 
 /**
  * Copy variants:
@@ -23,110 +17,56 @@ const COPY = {
   received: {
     title: "We have received your report",
     sub: "Help is on the way.",
+    icon: "checkmark",
+    iconColor: "#16A34A",
   },
   prepared: {
     title: "Your SOS message is ready",
-    sub: "Tap Send in Messages if you haven't — help is on the way.",
+    sub: "Tap Send in Messages if you haven't. Help is on the way.",
+    icon: "checkmark",
+    iconColor: "#16A34A",
   },
   active: {
-    title: "Your SOS is active",
-    sub: "Help is on the way.",
+    title: "You cancelled your offline SOS report",
+    sub: "No report was sent.",
+    icon: "close",
+    iconColor: "#DC2626",
   },
 };
 
-/**
- * Rotating arc that sweeps the ring once per second while the number counts
- * down — a progress ring built without SVG (no new deps): a half-circle clip
- * of a bordered circle, spun by an Animated transform.
- */
-function SweepRing({ children }) {
-  // State initializer keeps one stable Animated.Value without touching refs
-  // during render (react-hooks/refs).
-  const [spin] = useState(() => new Animated.Value(0));
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.timing(spin, {
-        toValue: 1,
-        duration: SWEEP_MS,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [spin]);
-
-  const rotate = spin.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
-
-  return (
-    <View style={styles.ringWrap}>
-      {/* track */}
-      <View style={styles.ringTrack} />
-      {/* sweeping arc */}
-      <Animated.View style={[styles.sweepWrap, { transform: [{ rotate }] }]}>
-        <View style={styles.sweepClip}>
-          <View style={styles.sweepArc} />
-        </View>
-      </Animated.View>
-      <View style={styles.center}>{children}</View>
-    </View>
-  );
-}
-
 export default function SosReceivedOverlay({ variant = "received", onDone }) {
   const copy = COPY[variant] ?? COPY.received;
-  const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(id);
-          onDone?.();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, SWEEP_MS);
-    return () => clearInterval(id);
-  }, [onDone]);
 
   return (
     <View style={styles.backdrop}>
       <View style={styles.card}>
-        <SweepRing>
-          <Ionicons name="checkmark" size={44} color="#16A34A" />
-          <Text style={styles.seconds}>{secondsLeft}</Text>
-        </SweepRing>
+        <View style={styles.checkCircle}>
+          <Ionicons name={copy.icon} size={44} color={copy.iconColor} />
+        </View>
 
         <Text style={styles.title}>{copy.title}</Text>
         <Text style={styles.sub}>{copy.sub}</Text>
-
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onDone}
-          accessibilityRole="button"
-          accessibilityLabel="Back to map"
-        >
-          <Text style={styles.backButtonText}>Back to map</Text>
-        </TouchableOpacity>
       </View>
+
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={onDone}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <Text style={styles.closeButtonText}>Close</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.55)",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 60,
-    elevation: 60,
   },
   card: {
     width: "85%",
@@ -135,53 +75,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 24,
+    paddingTop: 36,
+    paddingBottom: 28,
   },
-  ringWrap: {
-    width: RING_SIZE,
-    height: RING_SIZE,
+  checkCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#ECFDF5",
     alignItems: "center",
     justifyContent: "center",
-  },
-  ringTrack: {
-    position: "absolute",
-    width: RING_SIZE,
-    height: RING_SIZE,
-    borderRadius: RING_SIZE / 2,
-    borderWidth: 8,
-    borderColor: "#E5E7EB",
-  },
-  sweepWrap: {
-    position: "absolute",
-    width: RING_SIZE,
-    height: RING_SIZE,
-  },
-  sweepClip: {
-    position: "absolute",
-    right: 0,
-    width: RING_SIZE / 2,
-    height: RING_SIZE,
-    overflow: "hidden",
-  },
-  sweepArc: {
-    position: "absolute",
-    left: 0,
-    width: RING_SIZE,
-    height: RING_SIZE,
-    borderRadius: RING_SIZE / 2,
-    borderWidth: 8,
-    borderColor: "#208AEF",
-  },
-  center: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  seconds: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
-    marginTop: -2,
   },
   title: {
     marginTop: 20,
@@ -197,16 +100,23 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
-  backButton: {
-    marginTop: 22,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 24,
-    backgroundColor: "#208AEF",
+  closeButton: {
+    position: "absolute",
+    bottom: 60,
+    alignSelf: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 64,
+    borderRadius: 28,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  backButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
+  closeButtonText: {
+    fontSize: 16,
     fontWeight: "700",
+    color: "#182033",
   },
 });

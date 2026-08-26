@@ -1,4 +1,4 @@
-import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
@@ -26,9 +26,9 @@ import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
-import DamMapLabel from '@/components/hazards/DamMapLabel';
+import HazardTabs from '@/components/hazards/HazardTabs';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
-import { haversineMeters, formatDistance } from '../../utils/haversine.js';
+
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -176,6 +176,7 @@ export default function Index() {
   const [hazardsOpen, setHazardsOpen] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [visibleLayers, setVisibleLayers] = useState({ dams: true });
+  const [activeTab, setActiveTab] = useState("dams");
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -419,33 +420,6 @@ export default function Index() {
     [influencingBySlug]
   );
 
-  // Full data for the tapped dam — drives the floating map label.
-  const selectedDamData = useMemo(
-    () =>
-      selectedDam
-        ? dams.find((dam) => dam.slug === selectedDam.slug) ?? null
-        : null,
-    [dams, selectedDam]
-  );
-
-  const selectedDamDistanceText = useMemo(() => {
-    if (!selectedDam) return null;
-    const fromInfluence = influencingBySlug[selectedDam.slug]?.distanceMeters;
-    if (fromInfluence != null) return formatDistance(fromInfluence);
-    if (!selectedDamData?.coordinates || userLocation.latitude == null) {
-      return null;
-    }
-    return formatDistance(
-      haversineMeters(
-        { lat: userLocation.latitude, lng: userLocation.longitude },
-        {
-          lat: selectedDamData.coordinates.lat,
-          lng: selectedDamData.coordinates.lng,
-        }
-      )
-    );
-  }, [selectedDam, influencingBySlug, selectedDamData, userLocation]);
-
   // "Report received" overlay shown once after returning from the report
   // form (ref-guarded so re-visiting the tab doesn't replay it).
   const [sosReceivedVariant, setSosReceivedVariant] = useState(null);
@@ -525,14 +499,14 @@ export default function Index() {
           geometry: {
             type: 'LineString',
             coordinates: [
-              [coarseUserLocation.longitude, coarseUserLocation.latitude],
+              [userLocation.longitude, userLocation.latitude],
               [dam.coordinates.lng, dam.coordinates.lat],
             ],
           },
           properties: { slug: dam.slug, distanceMeters, index },
         })),
     };
-  }, [influencingDams, coarseUserLocation.latitude, coarseUserLocation.longitude]);
+  }, [influencingDams, coarseUserLocation.latitude, coarseUserLocation.longitude, userLocation.latitude, userLocation.longitude]);
 
   // ---- pulsing "dih" effect ----------------------------------------------
   // 10 Hz interval instead of requestAnimationFrame: the old 60fps loop
@@ -938,16 +912,6 @@ export default function Index() {
         {activeId && <View style={styles.layersDot} />}
       </View>
 
-      {/* Floating name tag for the tapped dam (marker or route tap). */}
-      {selectedDamData && (
-        <DamMapLabel
-          name={selectedDamData.name}
-          severityColor={resolveDamSeverity(selectedDamData).color}
-          distanceText={selectedDamDistanceText}
-          onClose={handleCloseHazards}
-        />
-      )}
-
       <HazardLayersPanel
         visible={layersOpen}
         onClose={() => setLayersOpen(false)}
@@ -973,6 +937,20 @@ export default function Index() {
         />
       )}
 
+      {hazardsOpen && !selectedDam && (
+        <HazardTabs
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          dams={dams}
+          userLocation={userLocation}
+          nearestSlug={nearestDamSlug}
+          influencingSlugs={
+            influencingSlugs.length > 0 ? influencingSlugs : EMPTY_SLUGS
+          }
+          onSelectDam={handleSelectDamFromList}
+        />
+      )}
+
       {(selectedDam || hazardsOpen) && (
         <HazardSheet
           key={selectedDam?.slug ?? 'drawer'}
@@ -984,6 +962,7 @@ export default function Index() {
           }
           userElevation={userElevation}
           dam={selectedDam}
+          activeTab={activeTab}
           expanded={sheetExpanded}
           onExpandedChange={setSheetExpanded}
           onSelectDam={handleSelectDamFromList}
@@ -992,10 +971,17 @@ export default function Index() {
       )}
 
       {sosReceivedVariant && (
-        <SosReceivedOverlay
-          variant={sosReceivedVariant}
-          onDone={() => setSosReceivedVariant(null)}
-        />
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSosReceivedVariant(null)}
+        >
+          <SosReceivedOverlay
+            variant={sosReceivedVariant}
+            onDone={() => setSosReceivedVariant(null)}
+          />
+        </Modal>
       )}
     </View>
   );
