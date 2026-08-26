@@ -452,7 +452,7 @@ export default function ReportScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.sentAt}>
-            request sent: {formatSentAt(sentAt)}
+            Request sent: {formatSentAt(sentAt)}
           </Text>
 
           <PingingCheckmark />
@@ -460,8 +460,8 @@ export default function ReportScreen() {
           <Text style={styles.title}>{isOnline ? "SOS SENT" : "SOS PENDING"}</Text>
           <Text style={styles.subtitle}>
             {isOnline
-              ? "help us help you. Add critical details."
-              : "Tap submit to send your SOS report as a text message."}
+              ? "Magdagdag ng detalye upang ikaw ay aming matulungan"
+              : "Pindutin ang Submit para ipadala ang SOS gamit ang text"}
           </Text>
 
           {!isOnline && (
@@ -480,8 +480,8 @@ export default function ReportScreen() {
             onChangeText={(value) => setNotes(value.slice(0, descriptionMax))}
             placeholder={
               isOnline
-                ? "describe your situation in detail (e.g. number of people involved, specific injuries and any hazards) this information is crucial for first responders..."
-                : "add a short description to include in the text (optional)"
+                ? "Describe your situation in detail (e.g. number of people involved, specific injuries and any hazards) this information is crucial for first responders."
+                : "Add a short description to include in the text (optional)"
             }
             placeholderTextColor={colors.placeholder}
             multiline
@@ -536,7 +536,7 @@ export default function ReportScreen() {
                     atLimit && styles.takePhotoLabelDisabled,
                   ]}
                 >
-                  take photo
+                  Take Photo
                 </Text>
               </TouchableOpacity>
 
@@ -579,7 +579,7 @@ export default function ReportScreen() {
             </View>
           </View>
 
-          <Text style={styles.caption}>attach up to {MAX_PHOTOS} images only</Text>
+          <Text style={styles.caption}>Attach up to {MAX_PHOTOS} images only</Text>
           </>
           )}
 
