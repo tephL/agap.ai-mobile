@@ -168,19 +168,24 @@ export default function HazardLayersPanel({
             ipakita sa isang oras para sa maayos na performance.
           </Text>
 
-          <ScrollView style={styles.list} nestedScrollEnabled>
-            {HAZARD_LAYERS.map((layer) => (
-              <LayerRow
-                key={layer.id}
-                config={layer}
-                active={activeId === layer.id}
-                onSelect={() =>
-                  onSelect(activeId === layer.id ? null : layer.id)
-                }
-                onAskAI={onAskAI}
-              />
-            ))}
-          </ScrollView>
+            <ScrollView
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
+              {HAZARD_LAYERS.map((layer) => (
+                <LayerRow
+                  key={layer.id}
+                  config={layer}
+                  active={activeId === layer.id}
+                  onSelect={() =>
+                    onSelect(activeId === layer.id ? null : layer.id)
+                  }
+                  onAskAI={onAskAI}
+                />
+              ))}
+            </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -194,7 +199,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    maxHeight: "70%",
+    maxHeight: "90%",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: "#FFFFFF",
@@ -216,7 +221,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
   },
-  list: { flexGrow: 1, minHeight: 0 },
+  list: {
+    paddingBottom: 10, 
+    flexShrink: 1, 
+    minHeight: 0,
+  },
+  listContent: {
+    flexGrow: 1,
+    paddingBottom: 8,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -271,5 +284,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#F3F4F6",
     marginLeft: 6,
+    marginRight: 7
   },
 });
