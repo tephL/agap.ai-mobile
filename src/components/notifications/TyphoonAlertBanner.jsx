@@ -24,7 +24,7 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
               <Ionicons name="thunderstorm" size={18} color={colors.white} />
             </View>
             <View style={styles.headerTextWrap}>
-              <Text style={styles.title}>Typhoon Alert</Text>
+              <Text style={styles.title}>Alerto sa Bagyo</Text>
               <Text style={styles.subtitle}>Signal No. {ASSUMED_SIGNAL}</Text>
             </View>
           </View>
@@ -52,26 +52,27 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
                 }}
               >
                 <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
-                <Text style={styles.buttonText}>View Details</Text>
+                <Text style={styles.buttonText}>Tingnan ang Detalye</Text>
               </Pressable>
               <Pressable
                 style={[styles.button, styles.primaryButton]}
                 onPress={onAskPreparedness}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.white} />
-                <Text style={[styles.buttonText, styles.primaryButtonText]}>Ask for Preparedness</Text>
-              </Pressable>
+                  <Text style={[styles.buttonText, styles.primaryButtonText]}>Magtanong ng Preparedness</Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <View style={styles.detailsSection}>
               <View style={styles.detailRow}>
                 <Ionicons name="name-outline" size={14} color={colors.muted} />
-                <Text style={styles.detailLabel}>Name</Text>
+                <Text style={styles.detailLabel}>Pangalan</Text>
                 <Text style={styles.detailValue}>{typhoon.name}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Ionicons name="ribbon-outline" size={14} color={colors.muted} />
-                <Text style={styles.detailLabel}>Category</Text>
+                <Text style={styles.detailLabel}>Kategorya</Text>
                 <Text style={styles.detailValue}>{typhoon.category ?? "N/A"}</Text>
               </View>
               <View style={styles.detailRow}>
@@ -82,14 +83,14 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
               {typhoon.source ? (
                 <View style={styles.detailRow}>
                   <Ionicons name="information-circle-outline" size={14} color={colors.muted} />
-                  <Text style={styles.detailLabel}>Source</Text>
+                  <Text style={styles.detailLabel}>Pinagmulan</Text>
                   <Text style={styles.detailValue}>{typhoon.source}</Text>
                 </View>
               ) : null}
               {typhoon.created_at ? (
                 <View style={styles.detailRow}>
                   <Ionicons name="time-outline" size={14} color={colors.muted} />
-                  <Text style={styles.detailLabel}>Posted</Text>
+                  <Text style={styles.detailLabel}>Inilathala</Text>
                   <Text style={styles.detailValue}>
                     {new Date(typhoon.created_at).toLocaleDateString()}
                   </Text>
@@ -102,14 +103,14 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
                   onPress={() => setExpanded(false)}
                 >
                   <Ionicons name="chevron-up" size={16} color={colors.primary} />
-                  <Text style={styles.buttonText}>Collapse</Text>
+                  <Text style={styles.buttonText}>I-collapse</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.button, styles.primaryButton]}
                   onPress={onAskPreparedness}
                 >
                   <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.white} />
-                  <Text style={[styles.buttonText, styles.primaryButtonText]}>Ask for Preparedness</Text>
+                <Text style={[styles.buttonText, styles.primaryButtonText]}>Magtanong ng Preparedness</Text>
                 </Pressable>
               </View>
             </View>

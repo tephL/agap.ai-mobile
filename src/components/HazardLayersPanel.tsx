@@ -31,13 +31,13 @@ interface LayerRowProps {
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
   flood_5yr:
-    "Areas likely to flood in a common 5-year storm event",
+    "Mga lugar na malamang na bahain sa isang karaniwang 5 taon na bagyo",
   flood_25yr:
-    "Areas likely to flood in a 1-in-25 year storm event",
+    "Mga lugar na malamang na bahain sa isang 1 sa 25 taon na bagyo",
   flood_100yr:
-    "Areas likely to flood in a 1-in-100 year extreme storm event",
+    "Mga lugar na malamang na bahain sa isang 1 sa 100 taon na matinding bagyo",
   landslide:
-    "Zones prone to landslides based on slope, soil, and rainfall",
+    "Mga zona na madulas batay sa hulmahan, lupa, at ulan",
 };
 
 function LayerRow({ config, active, onSelect, onAskAI }: LayerRowProps) {
@@ -49,12 +49,12 @@ function LayerRow({ config, active, onSelect, onAskAI }: LayerRowProps) {
   // offline copy isn't orphaned silently in the background.
   const metaText =
     status === "downloading"
-      ? `~${config.approxSizeMB} MB · downloading ${progress}%`
+      ? `~${config.approxSizeMB} MB · nagda-download ${progress}%`
       : status === "ready"
-        ? `~${config.approxSizeMB} MB · saved offline`
+        ? `~${config.approxSizeMB} MB · naka-save offline`
         : status === "error"
-          ? `~${config.approxSizeMB} MB · download failed`
-          : `~${config.approxSizeMB} MB · streaming`;
+          ? `~${config.approxSizeMB} MB · nabigo ang download`
+          : `~${config.approxSizeMB} MB · nag-stream`;
 
   return (
     <View style={styles.row}>
@@ -78,7 +78,7 @@ function LayerRow({ config, active, onSelect, onAskAI }: LayerRowProps) {
                   active && styles.badgeTextActive,
                 ]}
               >
-                Recommended
+                Inirerekomenda
               </Text>
             </View>
           ) : null}
@@ -158,14 +158,14 @@ export default function HazardLayersPanel({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>Hazard Map Layers</Text>
+            <Text style={styles.title}>Mga Layer ng Hazard Map</Text>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
           </View>
           <Text style={styles.subtitle}>
-            Select a hazard overlay to view on the map. Only one layer can be
-            shown at a time to keep performance smooth.
+            Pumili ng hazard overlay para sa mapa. Isang layer lang ang maaaring
+            ipakita sa isang oras para sa maayos na performance.
           </Text>
 
           <ScrollView style={styles.list} nestedScrollEnabled>

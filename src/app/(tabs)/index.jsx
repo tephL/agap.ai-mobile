@@ -122,7 +122,7 @@ export default function Index() {
     (layerLabel) => {
       router.push({
         pathname: "/assistant",
-        params: { question: `What does the "${layerLabel}" hazard layer mean? Explain it in detail.` },
+        params: { question: `Ano ang ibig sabihin ng "${layerLabel}" na hazard layer? Ipaliwanag ito nang detalyado.` },
       });
     },
     [router]
@@ -132,7 +132,7 @@ export default function Index() {
     router.push({
       pathname: "/assistant",
       params: {
-        question: "There's an active typhoon (Signal No. 3 in my area) — what disaster preparedness tips should I follow?",
+        question: "May aktibong bagyo (Signal No. 3 sa aking lugar) — ano ang mga tips sa disaster preparedness na dapat kong sundin?",
       },
     });
   }, [router]);
