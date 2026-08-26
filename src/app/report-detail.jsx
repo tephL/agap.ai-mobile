@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
-import { getReportById } from "@/services/reportService";
+import { getReportById, updateReportStatus } from "@/services/reportService";
 import { reverseGeocode } from "@/services/geocodingService";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -42,6 +45,7 @@ export default function ReportDetailScreen() {
   const [error, setError] = useState(null);
   const [locationLabel, setLocationLabel] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [resolving, setResolving] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -90,6 +94,38 @@ export default function ReportDetailScreen() {
     },
     []
   );
+
+  const handleCall = () => {
+    const phone = report?.reporter?.phone_number;
+    if (!phone) return;
+    Linking.openURL(`tel:${phone.replace(/\s+/g, "")}`);
+  };
+
+  const handleResolve = () => {
+    Alert.alert(
+      "Mark as Resolved",
+      "Are you sure you want to mark this report as resolved?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Resolve",
+          style: "destructive",
+          onPress: async () => {
+            if (resolving) return;
+            setResolving(true);
+            try {
+              await updateReportStatus(reportId, "resolved");
+              setReport((prev) => ({ ...prev, status: "resolved" }));
+            } catch (e) {
+              console.log("resolve report error:", e);
+            } finally {
+              setResolving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (loading) {
     return (
@@ -262,7 +298,33 @@ export default function ReportDetailScreen() {
                 </Text>
               </View>
             ) : null}
+            {report.reporter.phone_number ? (
+              <TouchableOpacity
+                style={styles.callButton}
+                activeOpacity={0.8}
+                onPress={handleCall}
+              >
+                <Ionicons name="call-outline" size={16} color={colors.white} />
+                <Text style={styles.callButtonText}>Call Reporter</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
+        ) : null}
+
+        {report.status !== "resolved" ? (
+          <TouchableOpacity
+            style={styles.resolveButton}
+            activeOpacity={0.85}
+            onPress={handleResolve}
+            disabled={resolving}
+          >
+            {resolving ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
+            )}
+            <Text style={styles.resolveButtonText}>Mark as Resolved</Text>
+          </TouchableOpacity>
         ) : null}
       </ScrollView>
     </View>
@@ -420,5 +482,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
     flex: 1,
+  },
+  callButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  callButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  resolveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#15803D",
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 40,
+  },
+  resolveButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.white,
   },
 });
