@@ -27,18 +27,18 @@ import {
 } from "@/services/aiService";
 
 const SYSTEM_SUGGESTIONS = [
-  { text: "What should I do during a typhoon?", icon: "thunderstorm" },
-  { text: "How do I prepare an emergency go bag?", icon: "bag-check" },
-  { text: "What are the nearest evacuation centers?", icon: "location" },
-  { text: "How do I check hazard maps for my area?", icon: "map" },
-  { text: "What emergency supplies do I need?", icon: "water" },
-  { text: "How do I set up my family emergency plan?", icon: "people" },
+  { text: "Ano ang dapat kong gawin kapag may bagyo?", icon: "thunderstorm" },
+  { text: "Paano ko gagawin ang aking emergency go-bag?", icon: "bag-check" },
+  { text: "Saan ang pinakamalapit na evacuation center?", icon: "location" },
+  { text: "Paano ko che-check ang hazard map sa aking lugar?", icon: "map" },
+  { text: "Ano ang mga emergency supplies na kailangan ko?", icon: "water" },
+  { text: "Paano ko gagawin ang emergency plan ng aking pamilya?", icon: "people" },
 ];
 
 const WELCOME_MESSAGE = {
   role: "assistant",
   content:
-    "[INFO] I'm your AI emergency assistant. I can help you stay safe during disasters, understand risks in your area, and guide you through emergencies.\n\nWhat would you like to know?",
+    "[IMPORMASYON] Ikaw ay may AI emergency assistant. Matutulungan kitang maging ligtas sa panahon ng kalamidad, maunawaan ang mga panganib sa iyong lugar, at gagabayan ka sa mga emerhensya.\n\nAno ang gusto mong malaman?",
 };
 
 export default function Assistant() {
@@ -57,8 +57,8 @@ export default function Assistant() {
 
   const netInfoLabel = useMemo(() => {
     if (isConnected && isInternetReachable) return "Online";
-    if (isConnected && isInternetReachable === null) return "Checking...";
-    if (!isConnected) return "No connection";
+    if (isConnected && isInternetReachable === null) return "Tinitingnan...";
+    if (!isConnected) return "Walang koneksyon";
     return "Offline";
   }, [isConnected, isInternetReachable]);
 
@@ -68,7 +68,7 @@ export default function Assistant() {
         ...prev,
         {
           role: "assistant",
-          content: `[WARNING] You are offline.\n\nConnection: ${isConnected ? "Connected to network" : "No network interface"}\nInternet: ${isInternetReachable === null ? "Unknown" : isInternetReachable ? "Reachable" : "Not reachable"}\n\nI can't reach the AI service without internet. Please check your connection and try again.`,
+          content: `[WARNING] Wala ka sa online.\n\nKoneksyon: ${isConnected ? "Nakakonekta sa network" : "Walang network interface"}\nInternet: ${isInternetReachable === null ? "Hindi alam" : isInternetReachable ? "Maabot" : "Hindi maabot"}\n\nHindi ko maabot ang AI service nang walang internet. Mangyaring suriin ang iyong koneksyon at subukan muli.`,
         },
       ]);
     }
@@ -139,7 +139,7 @@ export default function Assistant() {
       if (!isOnline) {
         const offlineMsg = {
           role: "assistant",
-          content: `[WARNING] You are offline.\n\nConnection: ${isConnected ? "Connected to network" : "No network interface"}\nInternet: ${isInternetReachable === null ? "Unknown" : isInternetReachable ? "Reachable" : "Not reachable"}\n\nI can't send messages without internet. Please check your connection and try again.`,
+          content: `[WARNING] Wala ka sa online.\n\nKoneksyon: ${isConnected ? "Nakakonekta sa network" : "Walang network interface"}\nInternet: ${isInternetReachable === null ? "Hindi alam" : isInternetReachable ? "Maabot" : "Hindi maabot"}\n\nHindi ako makakapagpadala ng mensahe nang walang internet. Mangyaring suriin ang iyong koneksyon at subukan muli.`,
         };
         setMessages((prev) => [...prev, { role: "user", content: msg }, offlineMsg]);
         setInput("");
@@ -169,7 +169,7 @@ export default function Assistant() {
         const errorMessage = {
           role: "assistant",
           content:
-            "[WARNING] Sorry, I couldn't process your request right now. Please check your connection and try again.",
+            "[WARNING] Paumanhin, hindi ko maiproseso ang iyong kahilingan sa ngayon. Mangyaring suriin ang iyong koneksyon at subukan muli.",
         };
         setMessages((prev) => [...prev, errorMessage]);
       } finally {
@@ -198,12 +198,12 @@ export default function Assistant() {
 
   const handleClearChat = useCallback(() => {
     Alert.alert(
-      "Clear conversation",
-      "This will delete all your chat history with the assistant.",
+      "Burahin ang usapan",
+      "Mabubura ang lahat ng iyong kasaysayan ng chat sa assistant.",
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Kanselahin", style: "cancel" },
         {
-          text: "Clear",
+          text: "Burahin",
           style: "destructive",
           onPress: async () => {
             try {
@@ -211,7 +211,7 @@ export default function Assistant() {
               setMessages([WELCOME_MESSAGE]);
               loadSuggestions();
             } catch {
-              Alert.alert("Error", "Failed to clear chat history.");
+              Alert.alert("Error", "Hindi nabura ang kasaysayan ng chat.");
             }
           },
         },
@@ -250,7 +250,7 @@ export default function Assistant() {
         <Text style={styles.welcomeTitle}>AGAP.ai</Text>
         <Text style={styles.welcomeTagline}>MAAGAP NA KA-AGAPAY</Text>
         <Text style={styles.welcomeSubtitle}>
-          Your AI-powered emergency assistant. Ask about disaster preparedness, safety tips, or emergency guidance.
+          Ang iyong AI-powered na emergency assistant. Magtanong tungkol sa paghahanda sa kalamidad, mga tip sa kaligtasan, o gabay sa emerhensya.
         </Text>
       </View>
     );
@@ -332,7 +332,7 @@ export default function Assistant() {
             <View style={styles.offlineBar}>
               <Ionicons name="cloud-offline" size={14} color="#B45309" />
               <Text style={styles.offlineBarText}>
-                You are offline — AI responses unavailable
+                Wala ka sa online — Hindi available ang mga AI na tugon
               </Text>
             </View>
           )}
@@ -340,7 +340,7 @@ export default function Assistant() {
             <TextInput
               ref={inputRef}
               style={styles.textInput}
-              placeholder={isOnline ? "Ask me anything..." : "No internet connection..."}
+              placeholder={isOnline ? "Tanungin mo ako kahit ano..." : "Walang internet connection..."}
               placeholderTextColor={colors.placeholder}
               value={input}
               onChangeText={setInput}
