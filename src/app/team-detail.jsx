@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -157,7 +158,7 @@ export default function TeamDetailScreen() {
     }
   };
 
-  const handleAdvanceStatus = async () => {
+  const handleAdvanceStatus = () => {
     if (busy || !assignment) return;
     const next =
       assignment.status === "pending"
@@ -167,12 +168,29 @@ export default function TeamDetailScreen() {
           : null;
     if (!next) return;
 
+    if (next === "resolved") {
+      Alert.alert(
+        "Mark as Resolved",
+        "Are you sure you want to mark this assignment as resolved?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Resolve",
+            style: "destructive",
+            onPress: () => advanceStatus(next),
+          },
+        ]
+      );
+    } else {
+      advanceStatus(next);
+    }
+  };
+
+  const advanceStatus = async (next) => {
     setBusy(true);
     setError(null);
     try {
       await updateAssignmentStatus(assignment.assignment_id, next);
-      // resolving deletes the cluster server-side; tell the Map tab so
-      // its pin disappears immediately
       invalidateClusters();
       await refresh();
     } catch (err) {
