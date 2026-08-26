@@ -87,6 +87,11 @@ export async function getReportById(reportId) {
   return response.data;
 }
 
+export async function updateReportStatus(reportId, status) {
+  const { data } = await api.patch(`/api/reports/${reportId}/status`, { status });
+  return data.report;
+}
+
 export async function attachReportDescription(description) {
   const response = await api.post("/api/reports/description", {
     description,
