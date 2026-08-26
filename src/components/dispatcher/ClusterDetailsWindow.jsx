@@ -313,18 +313,6 @@ export default function ClusterDetailsWindow({
             </Text>
           </ScrollView>
 
-          {/* Pinned below the scroll area so it stays visible while scrolling.
-              Hidden while a team is dispatched to this cluster. */}
-          {!assignedTeam ? (
-            <TouchableOpacity
-              style={styles.assignButton}
-              activeOpacity={0.8}
-              onPress={onAssignTeam}
-            >
-              <Ionicons name="people-circle-outline" size={18} color={colors.white} />
-              <Text style={styles.assignButtonText}>Assign a Team</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
       ) : (
         <ScrollView
@@ -537,6 +525,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   seeDetailsButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -662,6 +651,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   assignButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
