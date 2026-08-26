@@ -119,20 +119,23 @@ export default function Index() {
   const [activeTyphoon, setActiveTyphoon] = useState(null);
   const [typhoonDismissed, setTyphoonDismissed] = useState(false);
 
-  // "Report received" overlay shown once after returning from the report
-  // form (ref-guarded so re-visiting the tab doesn't replay it).
+  // "Report received" overlay shown after returning from the report form.
+  // Reset the ref guard each time this screen gains focus so the overlay
+  // can re-appear on the next submission.
   const [sosReceivedVariant, setSosReceivedVariant] = useState(null);
   const handledSosStatusRef = useRef(null);
-  useEffect(() => {
-    if (
-      typeof sosStatus === "string" &&
-      ["received", "prepared", "active"].includes(sosStatus) &&
-      handledSosStatusRef.current !== sosStatus
-    ) {
-      handledSosStatusRef.current = sosStatus;
-      setSosReceivedVariant(sosStatus);
-    }
-  }, [sosStatus]);
+  useFocusEffect(
+    useCallback(() => {
+      handledSosStatusRef.current = null;
+      if (
+        typeof sosStatus === "string" &&
+        ["received", "prepared", "active"].includes(sosStatus)
+      ) {
+        handledSosStatusRef.current = sosStatus;
+        setSosReceivedVariant(sosStatus);
+      }
+    }, [sosStatus])
+  );
 
   const handleAskAI = useCallback(
     (layerLabel) => {
