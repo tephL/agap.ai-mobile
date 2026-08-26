@@ -124,14 +124,8 @@ export default function ReportScreen() {
   // know the actual coordinates (see handleOfflineSubmit / the effect
   // below), since the SMS's fixed "SOS <lon> | <lat>" prefix eats into the
   // 160-char budget by a few characters depending on the digits involved.
-  const [offlineCoords, setOfflineCoords] = useState(() => {
-    if (!isOnline) return getCachedLocation();
-    return null;
-  });
-  const [offlineDescLimit, setOfflineDescLimit] = useState(() => {
-    if (offlineCoords) return getOfflineDescriptionLimit(offlineCoords);
-    return OFFLINE_DESCRIPTION_MAX;
-  });
+  const [offlineDescLimit, setOfflineDescLimit] = useState(OFFLINE_DESCRIPTION_MAX);
+  const [offlineCoords, setOfflineCoords] = useState(null);
 
   useEffect(() => {
     setNotes("");
@@ -141,9 +135,10 @@ export default function ReportScreen() {
   }, [sentAt]);
 
   // Offline mode has no photo/network round trip to kick off location
-  // fetching, so the hold gesture pre-fetches location in the background
-  // (see CustomTabBar.onHoldComplete). This effect uses the cached result
-  // for the character counter — or fetches if the cache was empty.
+  // fetching, so grab it as soon as the screen mounts offline purely to
+  // give the description counter an accurate limit.  If a fresh cached
+  // location already exists (from a prior call within the same session)
+  // use it immediately — otherwise fetch and cache it.
   useEffect(() => {
     if (isOnline || offlineCoords) return;
 
@@ -203,9 +198,14 @@ export default function ReportScreen() {
     cameraStore.removePhoto(index);
   };
 
-  const closeForm = useCallback(() => {
+  const closeForm = useCallback((sosStatus) => {
     cameraStore.discardReport();
-    router.replace("/");
+    // sosStatus tells the map screen which confirmation overlay to show:
+    // "received" (online submit) | "prepared" (offline composer opened) |
+    // "active" (skipped the details form).
+    router.replace(
+      sosStatus ? { pathname: "/(tabs)", params: { sosStatus } } : "/(tabs)"
+    );
   }, [router]);
 
   useFocusEffect(
@@ -233,14 +233,25 @@ export default function ReportScreen() {
 
   const handleSkip = () => {
     if (submitting) return;
-    Alert.alert(
-      "Skip this report?",
-      "None of these details will be sent, and they won't be saved.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Confirm", style: "destructive", onPress: closeForm },
-      ]
-    );
+    if (isOnline) {
+      Alert.alert(
+        "Send without details?",
+        "Your SOS report will be sent without additional details or photos.",
+        [
+          { text: "Go back", style: "cancel" },
+          { text: "Send", onPress: () => handleSubmit(true) },
+        ]
+      );
+    } else {
+      Alert.alert(
+        "Cancel report?",
+        "This will discard your SOS report. No message will be sent.",
+        [
+          { text: "Keep editing", style: "cancel" },
+          { text: "Discard", style: "destructive", onPress: () => closeForm("active") },
+        ]
+      );
+    }
   };
 
   // Re-fires the location request if the first attempt failed (e.g. the
@@ -300,11 +311,11 @@ export default function ReportScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationStatus, locationError]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (skipValidation = false) => {
     if (submitting) return;
 
     const description = notes.trim();
-    if (photos.length === 0 && !description) {
+    if (!skipValidation && photos.length === 0 && !description) {
       Alert.alert(
         "Add a detail",
         "Add at least a photo or a description before submitting."
@@ -323,18 +334,18 @@ export default function ReportScreen() {
         return;
       }
 
-      for (let i = 0; i < photos.length; i += 1) {
-        await uploadReportPhoto(photos[i].uri);
-      }
-      if (description) {
-        await attachReportDescription(description);
+      // Fire all uploads in parallel — faster than sequential round trips.
+      const tasks = photos.map((p) => uploadReportPhoto(p.uri));
+      if (description) tasks.push(attachReportDescription(description));
+      const results = await Promise.allSettled(tasks);
+      const failed = results.filter((r) => r.status === "rejected");
+      if (failed.length > 0) {
+        const msg = failed.map((r) => r.reason?.message || "upload failed").join("; ");
+        Alert.alert("Some uploads failed", msg);
+        return;
       }
 
-      Alert.alert(
-        "SOS Sent Successfully",
-        "Your emergency report has been submitted. Help is on the way.",
-        [{ text: "OK", onPress: closeForm }]
-      );
+      closeForm("received");
     } catch (err) {
       const message = err?.response
         ? err?.response?.data?.message ||
@@ -370,11 +381,7 @@ export default function ReportScreen() {
         return;
       }
 
-      Alert.alert(
-        "SOS Sent Successfully",
-        "Your emergency text message with your location has been sent. Help is on the way.",
-        [{ text: "OK", onPress: closeForm }]
-      );
+      closeForm("prepared");
     } catch (err) {
       if (err?.code === "SERVICES_DISABLED") {
         Alert.alert(
@@ -413,25 +420,23 @@ export default function ReportScreen() {
 
   const confirmSubmit = () => {
     if (submitting) return;
-    if (isOnline) {
-      Alert.alert(
-        "Submit details?",
-        "Are you sure you want to submit your current details?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Confirm", onPress: handleSubmit },
-        ]
-      );
-    } else {
-      Alert.alert(
-        "Send SOS via text message?",
-        "This will open your messaging app with an SOS text message pre-filled with your location and description. Tap Send in the text composer to deliver it to emergency services.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Send", onPress: handleOfflineSubmit },
-        ]
-      );
-    }
+    Alert.alert(
+      "Submit report?",
+      "This will send your SOS report to emergency responders.",
+      [
+        { text: "Not yet", style: "cancel" },
+        {
+          text: "Submit",
+          onPress: () => {
+            if (isOnline) {
+              handleSubmit();
+            } else {
+              handleOfflineSubmit();
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -452,20 +457,19 @@ export default function ReportScreen() {
 
           <PingingCheckmark />
 
-          <Text style={styles.title}>SOS SENT</Text>
+          <Text style={styles.title}>{isOnline ? "SOS SENT" : "SOS PENDING"}</Text>
           <Text style={styles.subtitle}>
-            help us help you. Add critical details.
+            {isOnline
+              ? "help us help you. Add critical details."
+              : "Tap submit to send your SOS report as a text message."}
           </Text>
 
           {!isOnline && (
             <View style={styles.offlineNotice}>
-              <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
+              <Ionicons name="cloud-offline-outline" size={16} color={colors.text} />
               <Text style={styles.offlineNoticeText}>
-                You're offline. When you tap Send, we'll open your messaging
-                app with an SOS text message containing your location. The
-                message will be sent to emergency services — you'll just
-                need to tap Send in the text composer. Photos aren't
-                available in offline mode.
+                You&apos;re offline. We&apos;ll open a text message with your location
+                instead. Photos aren&apos;t available right now.
               </Text>
             </View>
           )}
@@ -589,7 +593,7 @@ export default function ReportScreen() {
               <ActivityIndicator color={colors.text} />
             ) : (
               <Text style={styles.submitText}>
-                {isOnline ? "SUBMIT DETAILS" : "SEND SOS VIA TEXT"}
+                {isOnline ? "SUBMIT DETAILS" : "SEND TEXT MESSAGE"}
               </Text>
             )}
           </TouchableOpacity>
@@ -599,7 +603,7 @@ export default function ReportScreen() {
             disabled={submitting}
             hitSlop={8}
           >
-            <Text style={styles.skip}>SKIP</Text>
+            <Text style={styles.skip}>{isOnline ? "SKIP" : "CANCEL"}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

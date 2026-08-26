@@ -1,4 +1,4 @@
-import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Linking } from "react-native";
+import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Linking, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
@@ -28,6 +28,7 @@ import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
 import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
+import SosReceivedOverlay from '@/components/SosReceivedOverlay';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -111,12 +112,27 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
 // Component
 // ---------------------------------------------------------------------------
 export default function Index() {
-  const { selectedUserId } = useLocalSearchParams();
+  const { selectedUserId, sosStatus } = useLocalSearchParams();
   const router = useRouter();
 
   // typhoon alert state (session-only dismissal)
   const [activeTyphoon, setActiveTyphoon] = useState(null);
   const [typhoonDismissed, setTyphoonDismissed] = useState(false);
+
+  // "Report received" overlay shown once after returning from the report
+  // form (ref-guarded so re-visiting the tab doesn't replay it).
+  const [sosReceivedVariant, setSosReceivedVariant] = useState(null);
+  const handledSosStatusRef = useRef(null);
+  useEffect(() => {
+    if (
+      typeof sosStatus === "string" &&
+      ["received", "prepared", "active"].includes(sosStatus) &&
+      handledSosStatusRef.current !== sosStatus
+    ) {
+      handledSosStatusRef.current = sosStatus;
+      setSosReceivedVariant(sosStatus);
+    }
+  }, [sosStatus]);
 
   const handleAskAI = useCallback(
     (layerLabel) => {
@@ -710,6 +726,20 @@ export default function Index() {
         onDismiss={dismiss}
         style={activeTyphoon && !typhoonDismissed ? { top: 160 } : undefined}
       />
+
+      {sosReceivedVariant && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSosReceivedVariant(null)}
+        >
+          <SosReceivedOverlay
+            variant={sosReceivedVariant}
+            onDone={() => setSosReceivedVariant(null)}
+          />
+        </Modal>
+      )}
     </View>
   );
 }
