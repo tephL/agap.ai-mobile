@@ -334,11 +334,15 @@ export default function ReportScreen() {
         return;
       }
 
-      for (let i = 0; i < photos.length; i += 1) {
-        await uploadReportPhoto(photos[i].uri);
-      }
-      if (description) {
-        await attachReportDescription(description);
+      // Fire all uploads in parallel — faster than sequential round trips.
+      const tasks = photos.map((p) => uploadReportPhoto(p.uri));
+      if (description) tasks.push(attachReportDescription(description));
+      const results = await Promise.allSettled(tasks);
+      const failed = results.filter((r) => r.status === "rejected");
+      if (failed.length > 0) {
+        const msg = failed.map((r) => r.reason?.message || "upload failed").join("; ");
+        Alert.alert("Some uploads failed", msg);
+        return;
       }
 
       closeForm("received");

@@ -131,9 +131,15 @@ export async function requestReportLocation() {
       );
     }
 
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+    // Try a cached fix first — instant, no GPS cold-start delay.
+    // Only use it if it's fresh (< 30 s old); otherwise fall through
+    // to a live fix which is slower but more accurate.
+    let position = await Location.getLastKnownPositionAsync();
+    if (!position || Date.now() - position.timestamp > 30_000) {
+      position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+    }
 
     await api.post("/api/reports/location", {
       latitude: position.coords.latitude,
