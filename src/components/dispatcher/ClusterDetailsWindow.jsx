@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,6 +12,7 @@ import colors from "../../constants/colors";
 import PriorityChip from "../ui/PriorityChip";
 import StatusBadge from "../ui/StatusBadge";
 import { reverseGeocode } from "../../services/geocodingService";
+import { updateClusterStatus } from "../../services/teamService";
 
 export default function ClusterDetailsWindow({
   cluster,
@@ -18,9 +20,11 @@ export default function ClusterDetailsWindow({
   assignedExtraCount = 0,
   onClose,
   onAssignTeam,
+  onResolved,
 }) {
   const router = useRouter();
   const [barangay, setBarangay] = useState(null);
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     if (!cluster?.latitude || !cluster?.longitude) return;
@@ -51,6 +55,20 @@ export default function ClusterDetailsWindow({
         peopleAffected: String(cluster.people_affected ?? 0),
       },
     });
+  };
+
+  const handleResolve = async () => {
+    if (resolving) return;
+    setResolving(true);
+    try {
+      await updateClusterStatus(cluster.cluster_id, "resolved");
+      onResolved?.();
+      onClose?.();
+    } catch (e) {
+      console.log("resolve cluster error:", e);
+    } finally {
+      setResolving(false);
+    }
   };
 
   return (
@@ -147,6 +165,20 @@ export default function ClusterDetailsWindow({
             <Text style={styles.assignButtonText}>Assign a Team</Text>
           </TouchableOpacity>
         ) : null}
+
+        <TouchableOpacity
+          style={styles.resolveButton}
+          activeOpacity={0.8}
+          onPress={handleResolve}
+          disabled={resolving}
+        >
+          {resolving ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
+          )}
+          <Text style={styles.resolveButtonText}>Resolved</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -318,6 +350,21 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   assignButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  resolveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#15803D",
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+  },
+  resolveButtonText: {
     fontSize: 14,
     fontWeight: "700",
     color: colors.white,

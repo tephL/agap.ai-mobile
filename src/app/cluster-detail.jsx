@@ -14,7 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import PriorityChip from "@/components/ui/PriorityChip";
 import { fetchClusterReports } from "@/services/dispatcher/clusterServ";
+import { updateClusterStatus } from "@/services/teamService";
 import { reverseGeocode } from "@/services/geocodingService";
+import { useCluster } from "@/context/ClusterContext";
 
 const TABS = [
   { key: "summary", label: "Summary" },
@@ -49,6 +51,7 @@ function trimDescription(text) {
 export default function ClusterDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { invalidateClusters } = useCluster();
 
   const clusterId = Number(params.clusterId);
   const cityFromParams = params.city ?? "";
@@ -62,6 +65,7 @@ export default function ClusterDetailScreen() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [barangay, setBarangay] = useState(null);
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +117,20 @@ export default function ClusterDetailScreen() {
     : [];
 
   const reportList = useMemo(() => reports ?? [], [reports]);
+
+  const handleResolve = async () => {
+    if (resolving) return;
+    setResolving(true);
+    try {
+      await updateClusterStatus(clusterId, "resolved");
+      invalidateClusters();
+      router.back();
+    } catch (e) {
+      console.log("resolve cluster error:", e);
+    } finally {
+      setResolving(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -233,6 +251,22 @@ export default function ClusterDetailScreen() {
           <Text style={styles.updatedText}>
             Updated {formatDate(displayCluster.updated_at)}
           </Text>
+
+          {displayCluster.status !== "resolved" ? (
+            <TouchableOpacity
+              style={styles.resolveButton}
+              activeOpacity={0.85}
+              onPress={handleResolve}
+              disabled={resolving}
+            >
+              {resolving ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
+              )}
+              <Text style={styles.resolveButtonText}>Mark as Resolved</Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       ) : (
         <ScrollView
@@ -547,5 +581,20 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: "center",
     paddingVertical: 24,
+  },
+  resolveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#15803D",
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginTop: 8,
+  },
+  resolveButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.white,
   },
 });
