@@ -9,7 +9,7 @@ export default function SuggestionChips({ suggestions, onSelect }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Ionicons name="flash" size={13} color={colors.primary} />
-        <Text style={styles.headerText}>Suggested questions</Text>
+        <Text style={styles.headerText}>Mga iminumungkahing tanong</Text>
       </View>
       <ScrollView
         horizontal

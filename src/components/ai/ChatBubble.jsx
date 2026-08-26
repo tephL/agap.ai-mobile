@@ -21,13 +21,13 @@ const RESPONSE_TYPES = {
     label: "Warning",
     labelColor: "#991B1B",
   },
-  info: {
+  impormasyon: {
     icon: "information-circle",
     iconColor: "#2563EB",
     bgColor: "#EFF6FF",
     borderColor: "#BFDBFE",
     accentColor: "#3B82F6",
-    label: "Info",
+    label: "Impormasyon",
     labelColor: "#1E40AF",
   },
   emergency: {
@@ -71,7 +71,7 @@ function stripMarkdown(text) {
 
 function parseResponseBlocks(text) {
   const blocks = [];
-  const tagPattern = /\[(TIP|WARNING|INFO|EMERGENCY|SUCCESS)\]\s*/gi;
+  const tagPattern = /\[(TIP|WARNING|IMPORMASYON|EMERGENCY|SUCCESS)\]\s*/gi;
   const parts = text.split(tagPattern);
 
   for (let i = 0; i < parts.length; i++) {
@@ -79,7 +79,7 @@ function parseResponseBlocks(text) {
     if (!part || !part.trim()) continue;
 
     const upper = part.toUpperCase();
-    if (["TIP", "WARNING", "INFO", "EMERGENCY", "SUCCESS"].includes(upper)) {
+    if (["TIP", "WARNING", "IMPORMASYON", "EMERGENCY", "SUCCESS"].includes(upper)) {
       const nextPart = parts[i + 1];
       if (nextPart && nextPart.trim()) {
         blocks.push({ type: upper.toLowerCase(), text: nextPart.trim() });
