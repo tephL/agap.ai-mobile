@@ -59,9 +59,8 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
                 onPress={onAskPreparedness}
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.white} />
-                  <Text style={[styles.buttonText, styles.primaryButtonText]}>Magtanong ng Preparedness</Text>
-                </Pressable>
-              </View>
+                <Text style={[styles.buttonText, styles.primaryButtonText]}>Magtanong ng Preparedness</Text>
+              </Pressable>
             </View>
           ) : (
             <View style={styles.detailsSection}>
