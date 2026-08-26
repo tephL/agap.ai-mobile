@@ -330,7 +330,11 @@ export default function ReportScreen() {
         await attachReportDescription(description);
       }
 
-      closeForm();
+      Alert.alert(
+        "SOS Sent Successfully",
+        "Your emergency report has been submitted. Help is on the way.",
+        [{ text: "OK", onPress: closeForm }]
+      );
     } catch (err) {
       const message = err?.response
         ? err?.response?.data?.message ||
@@ -366,7 +370,11 @@ export default function ReportScreen() {
         return;
       }
 
-      closeForm();
+      Alert.alert(
+        "SOS Sent Successfully",
+        "Your emergency text message with your location has been sent. Help is on the way.",
+        [{ text: "OK", onPress: closeForm }]
+      );
     } catch (err) {
       if (err?.code === "SERVICES_DISABLED") {
         Alert.alert(
@@ -416,11 +424,11 @@ export default function ReportScreen() {
       );
     } else {
       Alert.alert(
-        "Send text message?",
-        "This opens your messaging app with your location pre-filled. You'll still need to tap Send there.",
+        "Send SOS via text message?",
+        "This will open your messaging app with an SOS text message pre-filled with your location and description. Tap Send in the text composer to deliver it to emergency services.",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Confirm", onPress: handleOfflineSubmit },
+          { text: "Send", onPress: handleOfflineSubmit },
         ]
       );
     }
@@ -451,10 +459,13 @@ export default function ReportScreen() {
 
           {!isOnline && (
             <View style={styles.offlineNotice}>
-              <Ionicons name="cloud-offline-outline" size={16} color={colors.text} />
+              <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
               <Text style={styles.offlineNoticeText}>
-                You're offline. We'll open a text message with your location
-                instead — photos aren't available right now.
+                You're offline. When you tap Send, we'll open your messaging
+                app with an SOS text message containing your location. The
+                message will be sent to emergency services — you'll just
+                need to tap Send in the text composer. Photos aren't
+                available in offline mode.
               </Text>
             </View>
           )}
@@ -578,7 +589,7 @@ export default function ReportScreen() {
               <ActivityIndicator color={colors.text} />
             ) : (
               <Text style={styles.submitText}>
-                {isOnline ? "SUBMIT DETAILS" : "SEND TEXT MESSAGE"}
+                {isOnline ? "SUBMIT DETAILS" : "SEND SOS VIA TEXT"}
               </Text>
             )}
           </TouchableOpacity>
