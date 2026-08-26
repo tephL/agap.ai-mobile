@@ -22,6 +22,7 @@ export default function RootLayout() {
         options={{
           title: "Create Family",
           headerShadowVisible: false,
+          headerShown: false,
           headerTintColor: "#182033",
           headerStyle: { backgroundColor: "#FFFFFF" },
           headerTitleStyle: { fontWeight: "700" },
@@ -64,6 +65,17 @@ export default function RootLayout() {
         options={{
           title: "Team Detail",
           headerShadowVisible: false,
+          headerTintColor: "#182033",
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTitleStyle: { fontWeight: "700" },
+        }}
+      />
+      <Stack.Screen
+        name="create-team"
+        options={{
+          title: "Create Team",
+          headerShadowVisible: false,
+          headerShown: false,
           headerTintColor: "#182033",
           headerStyle: { backgroundColor: "#FFFFFF" },
           headerTitleStyle: { fontWeight: "700" },
