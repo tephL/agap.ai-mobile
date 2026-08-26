@@ -41,7 +41,23 @@ function fetchCurrentCoordsWithTimeout() {
 
 export default function useLiveLocation() {
   const [locationGranted, setLocationGranted] = useState(false);
+  // Reactive mirror of the ref below — consumers that render from the
+  // position (hazard corridors/routes) subscribe to this; promise-based
+  // consumers keep using getCachedCoords/resolveCoords.
+  const [coords, setCoords] = useState(null);
   const latestCoordsRef = useRef(null);
+
+  const updateCoords = useCallback((next) => {
+    if (!next) return;
+    latestCoordsRef.current = next;
+    setCoords((prev) =>
+      prev &&
+      prev.latitude === next.latitude &&
+      prev.longitude === next.longitude
+        ? prev
+        : next
+    );
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,17 +76,14 @@ export default function useLiveLocation() {
 
       const seeded = await fetchLastKnownCoords();
       if (!cancelled && seeded) {
-        latestCoordsRef.current = seeded;
+        updateCoords(seeded);
       }
 
       subscription = await Location.watchPositionAsync(
         WATCH_OPTIONS,
         (location) => {
           if (cancelled) return;
-          const coords = toCoords(location);
-          if (coords) {
-            latestCoordsRef.current = coords;
-          }
+          updateCoords(toCoords(location));
         }
       );
     })();
@@ -79,7 +92,7 @@ export default function useLiveLocation() {
       cancelled = true;
       subscription?.remove();
     };
-  }, []);
+  }, [updateCoords]);
 
   const getCachedCoords = useCallback(() => latestCoordsRef.current, []);
 
@@ -90,18 +103,18 @@ export default function useLiveLocation() {
 
     const lastKnown = await fetchLastKnownCoords();
     if (lastKnown) {
-      latestCoordsRef.current = lastKnown;
+      updateCoords(lastKnown);
       return lastKnown;
     }
 
     const fresh = await fetchCurrentCoordsWithTimeout();
     if (fresh) {
-      latestCoordsRef.current = fresh;
+      updateCoords(fresh);
     } else {
       console.log("no location available");
     }
     return fresh;
-  }, []);
+  }, [updateCoords]);
 
-  return { locationGranted, getCachedCoords, resolveCoords };
+  return { locationGranted, coords, getCachedCoords, resolveCoords };
 }

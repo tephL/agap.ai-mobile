@@ -20,14 +20,12 @@ const SMS_SEGMENT_LIMIT = 160;
 
 // --- Location cache ---
 // In-memory cache so the offline SMS flow doesn't pay for two full GPS fixes
-// (once for the character counter on mount, again at submit time).  The hold
-// gesture pre-fetches location via getDeviceLocation() in the background
-// (CustomTabBar.onHoldComplete), warming this cache before the report screen
-// even mounts.  The 5-minute TTL covers the entire SOS typing session so
-// no second GPS fix is needed.
+// (once for the character counter on mount, again at submit time).  The first
+// getDeviceLocation() call warms the cache; subsequent calls within the TTL
+// return instantly without touching the GPS hardware or re-checking permissions.
 let _cachedLocation = null;    // { latitude, longitude }
 let _cachedTimestamp = 0;      // Date.now() when _cachedLocation was set
-const LOCATION_CACHE_TTL_MS = 300_000; // 5 minutes — covers the full SOS typing session
+const LOCATION_CACHE_TTL_MS = 30_000; // 30 seconds — fresh enough for an SOS
 
 // Permission / services status cached after the first successful check so
 // subsequent calls within the same session skip the async checks entirely.
@@ -84,16 +82,6 @@ export async function uploadReportPhoto(uri) {
   return response.data;
 }
 
-export async function getReportById(reportId) {
-  const response = await api.get(`/api/reports/${reportId}`);
-  return response.data;
-}
-
-export async function updateReportStatus(reportId, status) {
-  const { data } = await api.patch(`/api/reports/${reportId}/status`, { status });
-  return data.report;
-}
-
 export async function attachReportDescription(description) {
   const response = await api.post("/api/reports/description", {
     description,
@@ -143,9 +131,15 @@ export async function requestReportLocation() {
       );
     }
 
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+    // Try a cached fix first — instant, no GPS cold-start delay.
+    // Only use it if it's fresh (< 30 s old); otherwise fall through
+    // to a live fix which is slower but more accurate.
+    let position = await Location.getLastKnownPositionAsync();
+    if (!position || Date.now() - position.timestamp > 30_000) {
+      position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+    }
 
     await api.post("/api/reports/location", {
       latitude: position.coords.latitude,
@@ -168,10 +162,9 @@ export async function requestReportLocation() {
  * requestReportLocation(), reusing the same `code`s so the report screen's
  * existing error handling (open Settings / retry copy) still applies.
  *
- * Results are cached for LOCATION_CACHE_TTL_MS (5 minutes) so the offline
- * SMS flow (character counter on mount → actual send on submit) doesn't pay
- * for two full GPS fixes.  The hold gesture in CustomTabBar fires this in
- * the background so the cache is already warm when the report screen mounts.
+ * Results are cached for LOCATION_CACHE_TTL_MS so the offline SMS flow
+ * (character counter on mount → actual send on submit) doesn't pay for
+ * two full GPS fixes.
  */
 export async function getDeviceLocation() {
   // Return cached location instantly when still fresh — no GPS hardware

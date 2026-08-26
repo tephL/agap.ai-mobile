@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import colors from "../constants/colors";
 import { cameraStore, useCameraStore } from "../store/cameraStore";
-import { requestReportLocation, getDeviceLocation } from "../services/reportService";
+import { requestReportLocation } from "../services/reportService";
 import useNetworkStatus from "../hooks/useNetworkStatus";
 import ReportHoldButton from "./ReportHoldButton";
 
@@ -59,13 +59,6 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
     // when it builds the offline SMS instead.
     if (isOnline) {
       cameraStore.setLocationRequest(requestReportLocation());
-    } else {
-      // Fire a background GPS fix in parallel with navigating to the report
-      // screen.  The result is cached by getDeviceLocation(), so when the
-      // report screen mounts and needs coordinates for the SMS character
-      // counter — or when the user hits Submit — the location is already
-      // warm and no second GPS fix is needed.
-      getDeviceLocation().catch(() => {});
     }
     navigation.navigate("report");
   };
