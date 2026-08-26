@@ -153,6 +153,16 @@ export async function requestReportLocation() {
   }
 }
 
+export async function getReportById(reportId) {
+  const response = await api.get(`/api/reports/${reportId}`);
+  return response.data;
+}
+
+export async function updateReportStatus(reportId, status) {
+  const { data } = await api.patch(`/api/reports/${reportId}/status`, { status });
+  return data.report;
+}
+
 // --- Offline fallback (no backend reachable) ---
 
 /**
