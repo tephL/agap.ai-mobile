@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -131,115 +132,137 @@ export default function RegisterScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brandHeader}>
-            <Logo size={48} />
+            <Logo size={52} />
           </View>
 
-          <View style={styles.form}>
+          <View style={styles.card}>
             <View style={styles.headerBlock}>
               <Text style={styles.title}>Create your account</Text>
               <Text style={styles.subtitle}>
-                Create an account to stay connected, prepared, and informed
-                during emergencies.
+                Stay connected, prepared, and informed during disasters.
               </Text>
             </View>
 
-            <FormInput
-              label="Phone Number"
-              prefix={{
-                icon: (
-                  <MaterialIcons
-                    name="phone"
-                    color={colors.placeholder}
-                    size={20}
-                  />
-                ),
-                text: "+63",
-              }}
-              placeholder="917 123 4567"
-              keyboardType="phone-pad"
-              maxLength={10}
-              value={phone}
-              onChangeText={(text) =>
-                updateField("phone", text.replace(/\D/g, "").slice(0, 10))
-              }
-              autoComplete="tel"
-              helper="Used for emergency alerts and SMS fallback."
-              error={fieldErrors.phone}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-            />
+            <View style={styles.form}>
+              <FormInput
+                label="Phone Number"
+                prefix={{
+                  icon: (
+                    <MaterialIcons
+                      name="phone"
+                      color={colors.placeholder}
+                      size={20}
+                    />
+                  ),
+                  text: "+63",
+                }}
+                placeholder="917 123 4567"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={phone}
+                onChangeText={(text) =>
+                  updateField("phone", text.replace(/\D/g, "").slice(0, 10))
+                }
+                autoComplete="tel"
+                helper="Used for emergency alerts and SMS fallback."
+                error={fieldErrors.phone}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+              />
 
-            <FormInput
-              label="Password"
-              icon={
-                <MaterialIcons
-                  name="lock"
-                  color={colors.placeholder}
-                  size={20}
-                />
-              }
-              placeholder="Create your password"
-              value={password}
-              onChangeText={(text) => updateField("password", text)}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="new-password"
-              returnKeyType="next"
-              onSubmitEditing={() => confirmPasswordRef.current?.focus()}
-              accessory={
-                <TouchableOpacity
-                  onPress={() => setShowPassword((prev) => !prev)}
-                  hitSlop={8}
-                  activeOpacity={0.7}
-                >
+              <FormInput
+                label="Password"
+                icon={
                   <MaterialIcons
-                    name={showPassword ? "visibility-off" : "visibility"}
+                    name="lock"
                     color={colors.placeholder}
                     size={20}
                   />
-                </TouchableOpacity>
-              }
-              error={fieldErrors.password}
-              inputRef={passwordRef}
-              style={styles.passwordField}
-            />
+                }
+                placeholder="Create your password"
+                value={password}
+                onChangeText={(text) => updateField("password", text)}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="new-password"
+                returnKeyType="next"
+                onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                accessory={
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    hitSlop={8}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons
+                      name={showPassword ? "visibility-off" : "visibility"}
+                      color={colors.placeholder}
+                      size={20}
+                    />
+                  </TouchableOpacity>
+                }
+                error={fieldErrors.password}
+                inputRef={passwordRef}
+                style={styles.passwordField}
+              />
 
-            <FormInput
-              label="Confirm Password"
-              icon={
-                <MaterialIcons
-                  name="lock"
-                  color={colors.placeholder}
-                  size={20}
-                />
-              }
-              placeholder="Re-enter your password"
-              value={confirmPassword}
-              onChangeText={(text) => updateField("confirmPassword", text)}
-              secureTextEntry={!showConfirmPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="new-password"
-              returnKeyType="done"
-              onSubmitEditing={handleRegister}
-              accessory={
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword((prev) => !prev)}
-                  hitSlop={8}
-                  activeOpacity={0.7}
-                >
+              <FormInput
+                label="Confirm Password"
+                icon={
                   <MaterialIcons
-                    name={showConfirmPassword ? "visibility-off" : "visibility"}
+                    name="lock"
                     color={colors.placeholder}
                     size={20}
                   />
-                </TouchableOpacity>
-              }
-              error={fieldErrors.confirmPassword}
-              inputRef={confirmPasswordRef}
-              style={styles.passwordField}
-            />
+                }
+                placeholder="Re-enter your password"
+                value={confirmPassword}
+                onChangeText={(text) => updateField("confirmPassword", text)}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="new-password"
+                returnKeyType="done"
+                onSubmitEditing={handleRegister}
+                accessory={
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword((prev) => !prev)}
+                    hitSlop={8}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons
+                      name={
+                        showConfirmPassword ? "visibility-off" : "visibility"
+                      }
+                      color={colors.placeholder}
+                      size={20}
+                    />
+                  </TouchableOpacity>
+                }
+                error={fieldErrors.confirmPassword}
+                inputRef={confirmPasswordRef}
+                style={styles.passwordField}
+              />
+            </View>
+
+            <View style={styles.legal}>
+              <Text style={styles.legalText}>
+                By signing up, you agree to our{" "}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => Linking.openURL("#")}
+                >
+                  Terms of Service
+                </Text>{" "}
+                and{" "}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => Linking.openURL("#")}
+                >
+                  Privacy Policy
+                </Text>
+              </Text>
+            </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -252,7 +275,7 @@ export default function RegisterScreen() {
               {loading ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={styles.buttonText}>Create Account</Text>
+                <Text style={styles.buttonText}>Sign Up</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -275,67 +298,91 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
   },
   flex: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
   brandHeader: {
     alignItems: "center",
-    marginTop: 32,
-    marginBottom: 40,
+    marginTop: 24,
+    marginBottom: 20,
   },
-  form: {
-    gap: 20,
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 12,
+    elevation: 2,
   },
   headerBlock: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   title: {
     fontSize: 24,
     fontWeight: "700",
     color: colors.text,
     lineHeight: 30,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
     color: colors.muted,
   },
+  form: {
+    gap: 14,
+  },
   passwordField: {
-    marginTop: 4,
+    marginTop: 2,
+  },
+  legal: {
+    marginTop: 12,
+    alignItems: "center",
+  },
+  legalText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.muted,
+    textAlign: "center",
+  },
+  legalLink: {
+    color: colors.primary,
+    fontWeight: "600",
   },
   errorText: {
     fontSize: 13,
     color: colors.primary,
     textAlign: "center",
-    marginTop: 12,
+    marginTop: 8,
   },
   button: {
-    marginTop: 16,
-    height: 46,
-    borderRadius: 10,
+    marginTop: 10,
+    height: 50,
+    borderRadius: 12,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: colors.primary,
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
     elevation: 4,
   },
   buttonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: colors.white,
   },
   loginPrompt: {
-    marginTop: 32,
+    marginTop: 20,
     flexDirection: "row",
     justifyContent: "center",
   },

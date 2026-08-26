@@ -171,80 +171,85 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brandHeader}>
-            <Logo size={48} />
+            <Logo size={52} />
           </View>
 
-          <View style={styles.form}>
+          <View style={styles.card}>
             <View style={styles.headerBlock}>
               <Text style={styles.title}>Welcome back</Text>
               <Text style={styles.subtitle}>
                 Log in to stay connected, prepared, and informed during
-                emergencies.
+                disasters.
               </Text>
             </View>
 
-            <FormInput
-              label="Phone Number"
-              prefix={{
-                icon: (
+            <View style={styles.form}>
+              <FormInput
+                label="Phone Number"
+                prefix={{
+                  icon: (
+                    <MaterialIcons
+                      name="phone"
+                      color={colors.placeholder}
+                      size={20}
+                    />
+                  ),
+                  text: "+63",
+                }}
+                placeholder="917 123 4567"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={phone}
+                onChangeText={(text) => updateField("phone", text)}
+                autoComplete="tel"
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+                error={fieldErrors.phone}
+              />
+
+              <FormInput
+                label="Password"
+                icon={
                   <MaterialIcons
-                    name="phone"
+                    name="lock"
                     color={colors.placeholder}
                     size={20}
                   />
-                ),
-                text: "+63",
-              }}
-              placeholder="917 123 4567"
-              keyboardType="phone-pad"
-              maxLength={10}
-              value={phone}
-              onChangeText={(text) => updateField("phone", text)}
-              autoComplete="tel"
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-              error={fieldErrors.phone}
-            />
+                }
+                placeholder="Enter your password"
+                value={password}
+                onChangeText={(text) => updateField("password", text)}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="current-password"
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
+                accessory={
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    hitSlop={8}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons
+                      name={showPassword ? "visibility-off" : "visibility"}
+                      color={colors.placeholder}
+                      size={20}
+                    />
+                  </TouchableOpacity>
+                }
+                error={fieldErrors.password}
+                inputRef={passwordRef}
+                style={styles.passwordField}
+              />
 
-            <FormInput
-              label="Password"
-              icon={
-                <MaterialIcons
-                  name="lock"
-                  color={colors.placeholder}
-                  size={20}
-                />
-              }
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={(text) => updateField("password", text)}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="current-password"
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-              accessory={
-                <TouchableOpacity
-                  onPress={() => setShowPassword((prev) => !prev)}
-                  hitSlop={8}
-                  activeOpacity={0.7}
-                >
-                  <MaterialIcons
-                    name={showPassword ? "visibility-off" : "visibility"}
-                    color={colors.placeholder}
-                    size={20}
-                  />
-                </TouchableOpacity>
-              }
-              error={fieldErrors.password}
-              inputRef={passwordRef}
-              style={styles.passwordField}
-            />
-
-            <TouchableOpacity style={styles.forgotButton} activeOpacity={0.7}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.forgotButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotText}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -282,44 +287,56 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
   },
   flex: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    flexGrow: 1, 
+    justifyContent: 'center', 
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
   brandHeader: {
     alignItems: "center",
-    marginTop: 32,
-    marginBottom: 40,
+    marginTop: 24,
+    marginBottom: 20,
   },
-  form: {
-    gap: 20,
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 12,
+    elevation: 2,
   },
   headerBlock: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   title: {
     fontSize: 24,
     fontWeight: "700",
     color: colors.text,
     lineHeight: 30,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
     color: colors.muted,
   },
+  form: {
+    gap: 14,
+  },
   passwordField: {
-    marginTop: 4,
+    marginTop: 2,
   },
   forgotButton: {
     alignSelf: "flex-end",
-    marginTop: -8,
+    marginTop: -4,
   },
   forgotText: {
     fontSize: 13,
@@ -330,28 +347,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.primary,
     textAlign: "center",
-    marginTop: 12,
+    marginTop: 8,
   },
   button: {
-    marginTop: 16,
-    height: 46,
-    borderRadius: 10,
+    marginTop: 10,
+    height: 50,
+    borderRadius: 12,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: colors.primary,
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
     elevation: 4,
   },
   buttonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: colors.white,
   },
   signupPrompt: {
-    marginTop: 32,
+    marginTop: 20,
     flexDirection: "row",
     justifyContent: "center",
   },
