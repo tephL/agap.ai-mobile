@@ -1,6 +1,6 @@
 import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Linking, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../
 import { getMyFamily } from '../../services/familyService.js';
 import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
 import { getActiveTyphoon } from '../../services/typhoonService.js';
+import { getRouteCoordinates } from '../../services/routeService';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
@@ -50,6 +51,25 @@ const SELECTED_PERSON_FLY_ZOOM = 15;
 const SELECTED_PERSON_FLY_DURATION_MS = 1000;
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PERSON_CARD_HEIGHT_ESTIMATE = SCREEN_HEIGHT * 0.4;
+
+// marching-ants steps for planned-route lines: cycling through these dash
+// patterns makes the dashes flow along each line's direction, i.e. from
+// the team base toward its assigned cluster
+const ROUTE_DASH_TICK_MS = 55;
+const ROUTE_DASH_STEP = 0.06;
+const ROUTE_DASH_SEQUENCE = [
+  [0, 4, 3],
+  [0.5, 4, 2.5],
+  [1, 4, 2],
+  [1.5, 4, 1.5],
+  [2, 4, 1],
+  [2.5, 4, 0.5],
+  [3, 4, 0],
+  [0, 0.5, 3, 3.5],
+];
+
+// teams dispatched to the citizen's cluster appear orange (same as dispatcher busy status)
+const TEAM_DISPATCH_COLOR = '#f97316';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -107,6 +127,48 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
 
   return pack;
 }
+
+// ---------------------------------------------------------------------------
+// RouteDashLayer — animated marching-ants dashes for dispatched team routes
+// ---------------------------------------------------------------------------
+
+const RouteDashLayer = React.memo(function RouteDashLayer() {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setPhase((p) => (p + ROUTE_DASH_STEP) % 1), ROUTE_DASH_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const dashArray =
+    ROUTE_DASH_SEQUENCE[Math.floor(phase * ROUTE_DASH_SEQUENCE.length) % ROUTE_DASH_SEQUENCE.length];
+
+  return (
+    <>
+      <Layer
+        type="line"
+        id="citizenRoutesCasingLayer"
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{
+          'line-color': '#ffffff',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 4, 14, 7],
+          'line-opacity': 0.6,
+        }}
+      />
+      <Layer
+        type="line"
+        id="citizenRoutesLayer"
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{
+          'line-color': TEAM_DISPATCH_COLOR,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 14, 4],
+          'line-dasharray': dashArray,
+          'line-opacity': 0.9,
+        }}
+      />
+    </>
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Component
@@ -424,6 +486,110 @@ export default function Index() {
       })),
   };
 
+  // ---- planned routes for dispatched teams: team base -> cluster ----------
+  const [teamRoutes, setTeamRoutes] = useState({});
+
+  const activeDispatches = useMemo(() => {
+    return dispatches
+      .filter(
+        (d) =>
+          d.team?.lat != null &&
+          d.team?.lng != null &&
+          !Number.isNaN(d.team.lat) &&
+          !Number.isNaN(d.team.lng) &&
+          d.cluster?.lat != null &&
+          d.cluster?.lng != null &&
+          !Number.isNaN(d.cluster.lat) &&
+          !Number.isNaN(d.cluster.lng)
+      )
+      .map((d) => ({
+        teamId: d.team_id,
+        from: [d.team.lng, d.team.lat],
+        to: [d.cluster.lng, d.cluster.lat],
+      }));
+  }, [dispatches]);
+
+  const dispatchSignature = useMemo(
+    () =>
+      activeDispatches
+        .map((d) => `${d.teamId}:${d.from.join(',')}=>${d.to.join(',')}`)
+        .sort()
+        .join('|'),
+    [activeDispatches]
+  );
+  const fetchedDispatchSigRef = useRef(null);
+
+  useEffect(() => {
+    if (dispatchSignature === fetchedDispatchSigRef.current) return;
+    fetchedDispatchSigRef.current = dispatchSignature;
+
+    let cancelled = false;
+    (async () => {
+      if (activeDispatches.length === 0) {
+        setTeamRoutes({});
+        return;
+      }
+      const entries = await Promise.all(
+        activeDispatches.map(async (d) => [
+          d.teamId,
+          await getRouteCoordinates(d.from, d.to),
+        ])
+      );
+      if (cancelled) return;
+
+      const next = {};
+      for (const [teamId, coords] of entries) {
+        if (coords) next[teamId] = coords;
+      }
+      setTeamRoutes(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatchSignature, activeDispatches]);
+
+  // ---- routes GeoJSON for marching-ants lines ----------------------------
+  const routesGeojson = useMemo(
+    () => ({
+      type: 'FeatureCollection',
+      features: Object.entries(teamRoutes).map(([teamId, coordinates]) => ({
+        type: 'Feature',
+        id: `citizen-route-${teamId}`,
+        geometry: { type: 'LineString', coordinates },
+        properties: { team_id: Number(teamId) },
+      })),
+    }),
+    [teamRoutes]
+  );
+
+  // ---- team starting point markers (base location, dispatcher icon style) -
+  const teamStartingPointGeojson = useMemo(
+    () => ({
+      type: 'FeatureCollection',
+      features: dispatches
+        .filter(
+          (d) =>
+            d.team?.lat != null &&
+            d.team?.lng != null &&
+            !Number.isNaN(d.team.lat) &&
+            !Number.isNaN(d.team.lng)
+        )
+        .map((d) => ({
+          type: 'Feature',
+          id: `team-start-${d.team_id}`,
+          geometry: {
+            type: 'Point',
+            coordinates: [d.team.lng, d.team.lat],
+          },
+          properties: {
+            team_id: d.team_id,
+            name: d.team?.name ?? 'Response Team',
+          },
+        })),
+    }),
+    [dispatches]
+  );
+
   // ---- pulsing "dih" effect ----------------------------------------------
   useEffect(() => {
     let raf;
@@ -644,6 +810,67 @@ export default function Index() {
                     'text-color': '#1e40af',
                     'text-halo-color': '#ffffff',
                     'text-halo-width': 1.5,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {/* marching-ants route lines from team base to cluster */}
+            {routesGeojson.features.length > 0 && (
+              <GeoJSONSource id="citizenRoutesSource" data={routesGeojson}>
+                <RouteDashLayer />
+              </GeoJSONSource>
+            )}
+
+            {/* team starting point markers — shelter icon, orange (busy), with name label */}
+            {teamStartingPointGeojson.features.length > 0 && (
+              <GeoJSONSource id="teamStartingPointSource" data={teamStartingPointGeojson}>
+                <Layer
+                  type="circle"
+                  id="teamStartCircle"
+                  paint={{
+                    'circle-color': '#ffffff',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 8,
+                      12, 12,
+                      16, 16,
+                      20, 20,
+                    ],
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': TEAM_DISPATCH_COLOR,
+                    'circle-opacity': 0.9,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="teamStartIcon"
+                  layout={{
+                    'icon-image': 'shelter',
+                    'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1, 16, 1.2, 20, 1.4],
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true,
+                  }}
+                  paint={{
+                    'icon-color': TEAM_DISPATCH_COLOR,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="teamStartLabel"
+                  layout={{
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.8],
+                    'text-anchor': 'top',
+                    'text-allow-overlap': false,
+                  }}
+                  paint={{
+                    'text-color': TEAM_DISPATCH_COLOR,
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 1.5,
+                    'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
                   }}
                 />
               </GeoJSONSource>
