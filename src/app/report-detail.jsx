@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -41,6 +41,8 @@ export default function ReportDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [locationLabel, setLocationLabel] = useState(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     if (!reportId) return;
@@ -79,6 +81,16 @@ export default function ReportDetailScreen() {
     };
   }, [report?.latitude, report?.longitude]);
 
+  const onScroll = useCallback(
+    (e) => {
+      const index = Math.round(
+        e.nativeEvent.contentOffset.x / SCREEN_WIDTH
+      );
+      setActiveIndex(index);
+    },
+    []
+  );
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -109,20 +121,35 @@ export default function ReportDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {images.length > 0 ? (
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            style={styles.imageCarousel}
-          >
-            {images.map((img) => (
-              <Image
-                key={img.image_id}
-                source={{ uri: img.public_url }}
-                style={styles.carouselImage}
-              />
-            ))}
-          </ScrollView>
+          <View>
+            <ScrollView
+              ref={scrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
+              style={styles.imageCarousel}
+            >
+              {images.map((img) => (
+                <Image
+                  key={img.image_id}
+                  source={{ uri: img.public_url }}
+                  style={styles.carouselImage}
+                />
+              ))}
+            </ScrollView>
+            {images.length > 1 ? (
+              <View style={styles.dotsRow}>
+                {images.map((img, i) => (
+                  <View
+                    key={img.image_id}
+                    style={[styles.dot, i === activeIndex && styles.dotActive]}
+                  />
+                ))}
+              </View>
+            ) : null}
+          </View>
         ) : (
           <View style={styles.noImage}>
             <Ionicons
@@ -188,6 +215,55 @@ export default function ReportDetailScreen() {
             {report.description || "No description provided."}
           </Text>
         </View>
+
+        {report.reporter ? (
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="person-outline" size={14} color={colors.muted} />
+              <Text style={styles.sectionTitle}>Reporter Details</Text>
+            </View>
+            <View style={styles.detailGrid}>
+              {report.reporter.age != null ? (
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Age</Text>
+                  <Text style={styles.detailValue}>{report.reporter.age}</Text>
+                </View>
+              ) : null}
+              {report.reporter.gender ? (
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Gender</Text>
+                  <Text style={styles.detailValue}>{report.reporter.gender}</Text>
+                </View>
+              ) : null}
+            </View>
+            {report.reporter.city || report.reporter.barangay || report.reporter.street ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="home-outline" size={14} color={colors.muted} />
+                <Text style={styles.detailInline}>
+                  {[report.reporter.street, report.reporter.barangay, report.reporter.city]
+                    .filter(Boolean)
+                    .join(", ")}
+                </Text>
+              </View>
+            ) : null}
+            {report.reporter.disabilities?.length > 0 ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="medkit-outline" size={14} color={colors.muted} />
+                <Text style={styles.detailInline}>
+                  {report.reporter.disabilities.join(", ")}
+                </Text>
+              </View>
+            ) : null}
+            {report.reporter.pets?.length > 0 ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="paw-outline" size={14} color={colors.muted} />
+                <Text style={styles.detailInline}>
+                  {report.reporter.pets.join(", ")}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -298,5 +374,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     color: colors.text,
+  },
+  dotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 10,
+    gap: 6,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.border,
+  },
+  dotActive: {
+    backgroundColor: colors.primary,
+    width: 20,
+  },
+  detailGrid: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  detailItem: {
+    gap: 2,
+  },
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.placeholder,
+    textTransform: "uppercase",
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  detailInline: {
+    fontSize: 13,
+    color: colors.text,
+    flex: 1,
   },
 });
