@@ -1,4 +1,4 @@
-import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
@@ -442,8 +442,9 @@ export default function Index() {
     setSelectedPerson(null);
   };
 
-  const handleCallPerson = (phone_number, user_id) => {
-    // TODO: implement (e.g. Linking.openURL(`tel:${phone_number}`))
+  const handleCallPerson = (phone_number) => {
+    if (!phone_number) return;
+    Linking.openURL(`tel:${phone_number.replace(/\s+/g, "")}`);
   };
 
   const handleLocatePress = async () => {
