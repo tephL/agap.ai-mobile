@@ -50,6 +50,25 @@ const RESPONSE_TYPES = {
   },
 };
 
+function stripMarkdown(text) {
+  let t = text;
+  t = t.replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?/g, "").replace(/```/g, ""));
+  t = t.replace(/`([^`]+)`/g, "$1");
+  t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  t = t.replace(/^#{1,6}\s+/gm, "");
+  t = t.replace(/\*\*(.+?)\*\*/g, "$1");
+  t = t.replace(/__(.+?)__/g, "$1");
+  t = t.replace(/\*(.+?)\*/g, "$1");
+  t = t.replace(/_(.+?)_/g, "$1");
+  t = t.replace(/~~(.+?)~~/g, "$1");
+  t = t.replace(/^>\s?/gm, "");
+  t = t.replace(/^---+$/gm, "");
+  t = t.replace(/^\*{3,}$/gm, "");
+  t = t.replace(/^-\s+/gm, "• ");
+  t = t.replace(/\n{3,}/g, "\n\n");
+  return t.trim();
+}
+
 function parseResponseBlocks(text) {
   const blocks = [];
   const tagPattern = /\[(TIP|WARNING|INFO|EMERGENCY|SUCCESS)\]\s*/gi;
@@ -134,7 +153,7 @@ export default function ChatBubble({ message, isUser }) {
   }
 
   const clean = stripSuggestions(message.content);
-  const blocks = parseResponseBlocks(clean);
+  const blocks = parseResponseBlocks(stripMarkdown(clean));
 
   return (
     <View style={styles.assistantRow}>
