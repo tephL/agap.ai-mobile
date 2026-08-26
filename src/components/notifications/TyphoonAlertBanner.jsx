@@ -155,7 +155,7 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    top: 12,
+    top: 30,
     left: 12,
     right: 12,
     zIndex: 25,
