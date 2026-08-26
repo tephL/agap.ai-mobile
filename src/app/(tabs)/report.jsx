@@ -124,8 +124,14 @@ export default function ReportScreen() {
   // know the actual coordinates (see handleOfflineSubmit / the effect
   // below), since the SMS's fixed "SOS <lon> | <lat>" prefix eats into the
   // 160-char budget by a few characters depending on the digits involved.
-  const [offlineDescLimit, setOfflineDescLimit] = useState(OFFLINE_DESCRIPTION_MAX);
-  const [offlineCoords, setOfflineCoords] = useState(null);
+  const [offlineCoords, setOfflineCoords] = useState(() => {
+    if (!isOnline) return getCachedLocation();
+    return null;
+  });
+  const [offlineDescLimit, setOfflineDescLimit] = useState(() => {
+    if (offlineCoords) return getOfflineDescriptionLimit(offlineCoords);
+    return OFFLINE_DESCRIPTION_MAX;
+  });
 
   useEffect(() => {
     setNotes("");
@@ -135,10 +141,9 @@ export default function ReportScreen() {
   }, [sentAt]);
 
   // Offline mode has no photo/network round trip to kick off location
-  // fetching, so grab it as soon as the screen mounts offline purely to
-  // give the description counter an accurate limit.  If a fresh cached
-  // location already exists (from a prior call within the same session)
-  // use it immediately — otherwise fetch and cache it.
+  // fetching, so the hold gesture pre-fetches location in the background
+  // (see CustomTabBar.onHoldComplete). This effect uses the cached result
+  // for the character counter — or fetches if the cache was empty.
   useEffect(() => {
     if (isOnline || offlineCoords) return;
 
@@ -325,7 +330,11 @@ export default function ReportScreen() {
         await attachReportDescription(description);
       }
 
-      closeForm();
+      Alert.alert(
+        "SOS Sent Successfully",
+        "Your emergency report has been submitted. Help is on the way.",
+        [{ text: "OK", onPress: closeForm }]
+      );
     } catch (err) {
       const message = err?.response
         ? err?.response?.data?.message ||
@@ -361,7 +370,11 @@ export default function ReportScreen() {
         return;
       }
 
-      closeForm();
+      Alert.alert(
+        "SOS Sent Successfully",
+        "Your emergency text message with your location has been sent. Help is on the way.",
+        [{ text: "OK", onPress: closeForm }]
+      );
     } catch (err) {
       if (err?.code === "SERVICES_DISABLED") {
         Alert.alert(
@@ -411,11 +424,11 @@ export default function ReportScreen() {
       );
     } else {
       Alert.alert(
-        "Send text message?",
-        "This opens your messaging app with your location pre-filled. You'll still need to tap Send there.",
+        "Send SOS via text message?",
+        "This will open your messaging app with an SOS text message pre-filled with your location and description. Tap Send in the text composer to deliver it to emergency services.",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Confirm", onPress: handleOfflineSubmit },
+          { text: "Send", onPress: handleOfflineSubmit },
         ]
       );
     }
@@ -446,10 +459,13 @@ export default function ReportScreen() {
 
           {!isOnline && (
             <View style={styles.offlineNotice}>
-              <Ionicons name="cloud-offline-outline" size={16} color={colors.text} />
+              <Ionicons name="chatbubble-outline" size={16} color={colors.text} />
               <Text style={styles.offlineNoticeText}>
-                You're offline. We'll open a text message with your location
-                instead — photos aren't available right now.
+                You're offline. When you tap Send, we'll open your messaging
+                app with an SOS text message containing your location. The
+                message will be sent to emergency services — you'll just
+                need to tap Send in the text composer. Photos aren't
+                available in offline mode.
               </Text>
             </View>
           )}
@@ -573,7 +589,7 @@ export default function ReportScreen() {
               <ActivityIndicator color={colors.text} />
             ) : (
               <Text style={styles.submitText}>
-                {isOnline ? "SUBMIT DETAILS" : "SEND TEXT MESSAGE"}
+                {isOnline ? "SUBMIT DETAILS" : "SEND SOS VIA TEXT"}
               </Text>
             )}
           </TouchableOpacity>
