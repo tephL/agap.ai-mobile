@@ -340,6 +340,32 @@ export default function Index() {
     })),
   };
 
+  // ---- geojson for dispatched team markers ------------------------------
+  const teamGeojson = {
+    type: 'FeatureCollection',
+    features: dispatches
+      .filter(
+        (d) =>
+          d.team?.lat != null &&
+          d.team?.lng != null &&
+          !Number.isNaN(d.team.lat) &&
+          !Number.isNaN(d.team.lng)
+      )
+      .map((d) => ({
+        type: 'Feature',
+        id: `dispatch-team-${d.team_id}`,
+        geometry: {
+          type: 'Point',
+          coordinates: [d.team.lng, d.team.lat],
+        },
+        properties: {
+          team_id: d.team_id,
+          name: d.team?.name ?? 'Response Team',
+          assignment_id: d.assignment_id,
+        },
+      })),
+  };
+
   // ---- pulsing "dih" effect ----------------------------------------------
   useEffect(() => {
     let raf;
@@ -493,6 +519,45 @@ export default function Index() {
                 }}
               />
             </GeoJSONSource>
+
+            {/* dispatched response team markers — blue with white outline */}
+            {teamGeojson.features.length > 0 && (
+              <GeoJSONSource id="dispatchTeamSource" data={teamGeojson}>
+                <Layer
+                  type="circle"
+                  id="dispatchTeamLayer"
+                  paint={{
+                    'circle-color': '#3b82f6',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 4,
+                      12, 6,
+                      16, 8,
+                    ],
+                    'circle-stroke-width': 2.5,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-opacity': 0.95,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="dispatchTeamLabel"
+                  layout={{
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.8],
+                    'text-anchor': 'top',
+                    'text-allow-overlap': false,
+                  }}
+                  paint={{
+                    'text-color': '#1e40af',
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 1.5,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
           </>
         )}
 
