@@ -1,10 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import Animated, {
+  FadeInDown,
+  FadeOutUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 
@@ -12,6 +22,22 @@ const ASSUMED_SIGNAL = 3;
 
 export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, onAskPreparedness }) {
   const [expanded, setExpanded] = useState(false);
+  const pulseAnim = useSharedValue(1);
+
+  useEffect(() => {
+    pulseAnim.value = withRepeat(
+      withSequence(
+        withTiming(0.55, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, [pulseAnim]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: pulseAnim.value,
+  }));
 
   if (!typhoon) return null;
 
@@ -20,12 +46,13 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.headerLeft}>
-            <View style={styles.iconWrap}>
+            <Animated.View style={[styles.iconWrap, pulseStyle]}>
               <Ionicons name="thunderstorm" size={18} color={colors.white} />
-            </View>
+            </Animated.View>
             <View style={styles.headerTextWrap}>
-              <Text style={styles.title}>Alerto sa Bagyo</Text>
+              <Text style={styles.title}>Typhoon Alert</Text>
               <Text style={styles.subtitle}>Signal No. {ASSUMED_SIGNAL}</Text>
+              <Text style={styles.typhoonName}>{typhoon.name}</Text>
             </View>
           </View>
           <Pressable
@@ -40,10 +67,58 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
         </View>
 
         <View style={styles.cardBody}>
-          <Text style={styles.typhoonName}>{typhoon.name}</Text>
+          {expanded && (
+            <Animated.View
+              entering={FadeInDown.duration(250)}
+              exiting={FadeOutUp.duration(150)}
+              style={styles.detailsSection}
+            >
+              <View style={styles.detailRow}>
+                <View style={styles.detailLabelCapsule}>
+                  <Ionicons name="warning-outline" size={12} color="#B91C1C" />
+                  <Text style={styles.detailLabel}>NAME</Text>
+                </View>
+                <Text style={styles.detailValue}>{typhoon.name}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <View style={styles.detailLabelCapsule}>
+                  <Ionicons name="pricetag-outline" size={12} color="#B91C1C" />
+                  <Text style={styles.detailLabel}>CATEGORY</Text>
+                </View>
+                <Text style={styles.detailValue}>{typhoon.category ?? "N/A"}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <View style={styles.detailLabelCapsule}>
+                  <Ionicons name="speedometer-outline" size={12} color="#B91C1C" />
+                  <Text style={styles.detailLabel}>SIGNAL</Text>
+                </View>
+                <Text style={styles.detailValue}>No. {ASSUMED_SIGNAL} (your area)</Text>
+              </View>
+              {typhoon.source ? (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLabelCapsule}>
+                    <Ionicons name="information-circle-outline" size={12} color="#B91C1C" />
+                    <Text style={styles.detailLabel}>SOURCE</Text>
+                  </View>
+                  <Text style={styles.detailValue}>{typhoon.source}</Text>
+                </View>
+              ) : null}
+              {typhoon.created_at ? (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLabelCapsule}>
+                    <Ionicons name="time-outline" size={12} color="#B91C1C" />
+                    <Text style={styles.detailLabel}>POSTED</Text>
+                  </View>
+                  <Text style={styles.detailValue}>
+                    {new Date(typhoon.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+              ) : null}
+            </Animated.View>
+          )}
 
-          {!expanded ? (
-            <View style={styles.buttonRow}>
+          <View style={styles.buttonRow}>
+            {!expanded ? (
               <Pressable
                 style={styles.button}
                 onPress={() => {
@@ -52,68 +127,25 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
                 }}
               >
                 <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
-                <Text style={styles.buttonText}>Tingnan ang Detalye</Text>
+                <Text style={styles.buttonText}>View Details</Text>
               </Pressable>
+            ) : (
               <Pressable
-                style={[styles.button, styles.primaryButton]}
-                onPress={onAskPreparedness}
+                style={styles.button}
+                onPress={() => setExpanded(false)}
               >
-                <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.white} />
-                <Text style={[styles.buttonText, styles.primaryButtonText]}>Magtanong ng Preparedness</Text>
+                <Ionicons name="chevron-up" size={16} color={colors.primary} />
+                <Text style={styles.buttonText}>Collapse</Text>
               </Pressable>
-            </View>
-          ) : (
-            <View style={styles.detailsSection}>
-              <View style={styles.detailRow}>
-                <Ionicons name="name-outline" size={14} color={colors.muted} />
-                <Text style={styles.detailLabel}>Pangalan</Text>
-                <Text style={styles.detailValue}>{typhoon.name}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Ionicons name="ribbon-outline" size={14} color={colors.muted} />
-                <Text style={styles.detailLabel}>Kategorya</Text>
-                <Text style={styles.detailValue}>{typhoon.category ?? "N/A"}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Ionicons name="signal" size={14} color={colors.muted} />
-                <Text style={styles.detailLabel}>Signal</Text>
-                <Text style={styles.detailValue}>No. {ASSUMED_SIGNAL} (your area)</Text>
-              </View>
-              {typhoon.source ? (
-                <View style={styles.detailRow}>
-                  <Ionicons name="information-circle-outline" size={14} color={colors.muted} />
-                  <Text style={styles.detailLabel}>Pinagmulan</Text>
-                  <Text style={styles.detailValue}>{typhoon.source}</Text>
-                </View>
-              ) : null}
-              {typhoon.created_at ? (
-                <View style={styles.detailRow}>
-                  <Ionicons name="time-outline" size={14} color={colors.muted} />
-                  <Text style={styles.detailLabel}>Inilathala</Text>
-                  <Text style={styles.detailValue}>
-                    {new Date(typhoon.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-              ) : null}
-
-              <View style={styles.buttonRow}>
-                <Pressable
-                  style={styles.button}
-                  onPress={() => setExpanded(false)}
-                >
-                  <Ionicons name="chevron-up" size={16} color={colors.primary} />
-                  <Text style={styles.buttonText}>I-collapse</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.button, styles.primaryButton]}
-                  onPress={onAskPreparedness}
-                >
-                  <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.white} />
-                <Text style={[styles.buttonText, styles.primaryButtonText]}>Magtanong ng Preparedness</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
+            )}
+            <Pressable
+              style={[styles.button, styles.primaryButton]}
+              onPress={onAskPreparedness}
+            >
+              <Ionicons name="sparkles-outline" size={16} color={colors.white} />
+              <Text style={[styles.buttonText, styles.primaryButtonText]}>AI Tips</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </View>
@@ -192,25 +224,39 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   typhoonName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: "#991B1B",
+    marginTop: 2,
   },
   detailsSection: {
-    gap: 6,
+    gap: 0,
   },
   detailRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FECACA",
+  },
+  detailLabelCapsule: {
+    width: 100,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: "#FEE2E2",
   },
   detailLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.muted,
-    width: 80,
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#B91C1C",
   },
   detailValue: {
+    flex: 1,
     fontSize: 13,
     fontWeight: "600",
     color: colors.text,
