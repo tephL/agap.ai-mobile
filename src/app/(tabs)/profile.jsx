@@ -176,7 +176,7 @@ export default function ProfileScreen() {
       <View style={styles.card}>
         <View style={styles.sectionHeader}>
           <Ionicons name="location" size={20} color={colors.primary} />
-          <Text style={styles.sectionTitle}>LOCATION</Text>
+          <Text style={styles.sectionTitle}>HOME ADDRESS</Text>
         </View>
 
         <FieldRow label="CITY" value={p.city} />
