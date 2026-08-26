@@ -151,8 +151,8 @@ export default function ClusterDetailsWindow({
           activeOpacity={0.8}
           onPress={handleSeeDetails}
         >
-          <Ionicons name="document-text-outline" size={18} color={colors.primary} />
-          <Text style={styles.seeDetailsText}>See Details</Text>
+          <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+          <Text style={styles.seeDetailsText}>Details</Text>
         </TouchableOpacity>
 
         {!assignedTeam ? (
@@ -161,8 +161,8 @@ export default function ClusterDetailsWindow({
             activeOpacity={0.8}
             onPress={onAssignTeam}
           >
-            <Ionicons name="people-circle-outline" size={18} color={colors.white} />
-            <Text style={styles.assignButtonText}>Assign a Team</Text>
+            <Ionicons name="people-circle-outline" size={16} color={colors.white} />
+            <Text style={styles.assignButtonText}>Assign</Text>
           </TouchableOpacity>
         ) : null}
 
@@ -175,9 +175,9 @@ export default function ClusterDetailsWindow({
           {resolving ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Ionicons name="checkmark-circle-outline" size={18} color={colors.white} />
+            <Ionicons name="checkmark-circle-outline" size={16} color={colors.white} />
           )}
-          <Text style={styles.resolveButtonText}>Resolved</Text>
+          <Text style={styles.resolveButtonText}>Resolve</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -328,14 +328,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     borderWidth: 1.5,
     borderColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 11,
   },
   seeDetailsText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: colors.primary,
   },
@@ -344,28 +344,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 11,
   },
   assignButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: colors.white,
   },
   resolveButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     backgroundColor: "#15803D",
     borderRadius: 12,
     paddingVertical: 11,
-    paddingHorizontal: 14,
   },
   resolveButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: colors.white,
   },
