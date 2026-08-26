@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 const COPY = {
   received: {
     title: "We have received your report",
-    sub: "Help is on the way.",
+    sub: "Help will be on its way.",
     icon: "checkmark",
     iconColor: "#16A34A",
   },
