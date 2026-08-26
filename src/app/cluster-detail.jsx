@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import PriorityChip from "@/components/ui/PriorityChip";
@@ -47,6 +47,7 @@ function trimDescription(text) {
 }
 
 export default function ClusterDetailScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams();
 
   const clusterId = Number(params.clusterId);
@@ -250,7 +251,17 @@ export default function ClusterDetailScreen() {
               const thumbnail = report.images?.[0];
 
               return (
-                <View key={report.report_id} style={styles.reportCard}>
+                <TouchableOpacity
+                  key={report.report_id}
+                  style={styles.reportCard}
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/report-detail",
+                      params: { reportId: report.report_id },
+                    })
+                  }
+                >
                   {thumbnail ? (
                     <Image
                       source={{ uri: thumbnail }}
@@ -307,7 +318,7 @@ export default function ClusterDetailScreen() {
                       </Text>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           ) : (

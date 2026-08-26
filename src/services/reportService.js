@@ -82,6 +82,11 @@ export async function uploadReportPhoto(uri) {
   return response.data;
 }
 
+export async function getReportById(reportId) {
+  const response = await api.get(`/api/reports/${reportId}`);
+  return response.data;
+}
+
 export async function attachReportDescription(description) {
   const response = await api.post("/api/reports/description", {
     description,
