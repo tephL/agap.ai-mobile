@@ -12,9 +12,13 @@ import { getMyFamily } from '../../services/familyService.js';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
+import DispatchNotificationBar from "@/components/notifications/DispatchNotificationBar";
 import { PersonCard } from '@/components/PersonCard';
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
 import HazardLayersPanel from '@/components/HazardLayersPanel';
+
+// hooks
+import useActiveDispatches from '../../hooks/useActiveDispatches';
 
 // hazard layer selection prefs
 import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
@@ -121,6 +125,9 @@ export default function Index() {
   const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
 
+  // active dispatch notifications
+  const { dispatches, dismiss, resetDismissed } = useActiveDispatches();
+
   // family markers state
   const [familyMembers, setFamilyMembers] = useState([]);
   const [selectedPerson, setSelectedPerson] = useState(null);
@@ -159,6 +166,13 @@ export default function Index() {
 
   // staleness re-check clock
   const [now, setNow] = useState(Date.now());
+
+  // ---- reset dismissed dispatch notifications on tab focus -----------
+  useFocusEffect(
+    useCallback(() => {
+      resetDismissed();
+    }, [resetDismissed])
+  );
 
   // ---- location sending + family fetch loop (runs while screen focused) ---
   const refreshFamilyLocations = useCallback(async () => {
@@ -545,6 +559,11 @@ export default function Index() {
           onCall={handleCallPerson}
         />
       )}
+
+      <DispatchNotificationBar
+        dispatches={dispatches}
+        onDismiss={dismiss}
+      />
     </View>
   );
 }
