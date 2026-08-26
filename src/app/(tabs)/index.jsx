@@ -12,9 +12,13 @@ import { getMyFamily } from '../../services/familyService.js';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
+import DispatchNotificationBar from "@/components/notifications/DispatchNotificationBar";
 import { PersonCard } from '@/components/PersonCard';
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
 import HazardLayersPanel from '@/components/HazardLayersPanel';
+
+// hooks
+import useActiveDispatches from '../../hooks/useActiveDispatches';
 
 // hazard layer selection prefs
 import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
@@ -121,6 +125,9 @@ export default function Index() {
   const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
 
+  // active dispatch notifications
+  const { dispatches, dismiss, resetDismissed } = useActiveDispatches();
+
   // family markers state
   const [familyMembers, setFamilyMembers] = useState([]);
   const [selectedPerson, setSelectedPerson] = useState(null);
@@ -152,6 +159,7 @@ export default function Index() {
 
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
+  const [teamPulse, setTeamPulse] = useState(0);
 
   // hazard overlay selection (persisted, single-select) + layers sheet state
   const { activeId, select: selectHazardLayer } = useActiveHazardLayer();
@@ -159,6 +167,13 @@ export default function Index() {
 
   // staleness re-check clock
   const [now, setNow] = useState(Date.now());
+
+  // ---- reset dismissed dispatch notifications on tab focus -----------
+  useFocusEffect(
+    useCallback(() => {
+      resetDismissed();
+    }, [resetDismissed])
+  );
 
   // ---- location sending + family fetch loop (runs while screen focused) ---
   const refreshFamilyLocations = useCallback(async () => {
@@ -326,6 +341,32 @@ export default function Index() {
     })),
   };
 
+  // ---- geojson for dispatched team markers ------------------------------
+  const teamGeojson = {
+    type: 'FeatureCollection',
+    features: dispatches
+      .filter(
+        (d) =>
+          d.team?.lat != null &&
+          d.team?.lng != null &&
+          !Number.isNaN(d.team.lat) &&
+          !Number.isNaN(d.team.lng)
+      )
+      .map((d) => ({
+        type: 'Feature',
+        id: `dispatch-team-${d.team_id}`,
+        geometry: {
+          type: 'Point',
+          coordinates: [d.team.lng, d.team.lat],
+        },
+        properties: {
+          team_id: d.team_id,
+          name: d.team?.name ?? 'Response Team',
+          assignment_id: d.assignment_id,
+        },
+      })),
+  };
+
   // ---- pulsing "dih" effect ----------------------------------------------
   useEffect(() => {
     let raf;
@@ -334,6 +375,22 @@ export default function Index() {
     const tick = () => {
       const elapsed = (Date.now() - start) % PULSE_DURATION_MS;
       setPulse(elapsed / PULSE_DURATION_MS); // 0 to 1
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // ---- faster pulse for dispatched team markers -------------------------
+  const TEAM_PULSE_DURATION_MS = 1200;
+  useEffect(() => {
+    let raf;
+    const start = Date.now();
+
+    const tick = () => {
+      const elapsed = (Date.now() - start) % TEAM_PULSE_DURATION_MS;
+      setTeamPulse(elapsed / TEAM_PULSE_DURATION_MS);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -479,6 +536,60 @@ export default function Index() {
                 }}
               />
             </GeoJSONSource>
+
+            {/* dispatched response team markers — blue with white outline */}
+            {teamGeojson.features.length > 0 && (
+              <GeoJSONSource id="dispatchTeamSource" data={teamGeojson}>
+                <Layer
+                  type="circle"
+                  id="dispatchTeamPulse"
+                  paint={{
+                    'circle-color': '#3b82f6',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 6 + teamPulse * 30,
+                      12, 9 + teamPulse * 30,
+                      16, 12 + teamPulse * 30,
+                    ],
+                    'circle-opacity': Math.max(0.6 - teamPulse * 0.6, 0),
+                    'circle-stroke-width': 0,
+                  }}
+                />
+                <Layer
+                  type="circle"
+                  id="dispatchTeamLayer"
+                  paint={{
+                    'circle-color': '#3b82f6',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 4,
+                      12, 6,
+                      16, 8,
+                    ],
+                    'circle-stroke-width': 2.5,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-opacity': 0.95,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="dispatchTeamLabel"
+                  layout={{
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.8],
+                    'text-anchor': 'top',
+                    'text-allow-overlap': false,
+                  }}
+                  paint={{
+                    'text-color': '#1e40af',
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 1.5,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
           </>
         )}
 
@@ -545,6 +656,11 @@ export default function Index() {
           onCall={handleCallPerson}
         />
       )}
+
+      <DispatchNotificationBar
+        dispatches={dispatches}
+        onDismiss={dismiss}
+      />
     </View>
   );
 }

@@ -15,17 +15,13 @@ const CACHE_LIMIT = 100;
 
 /** teamId/cluster pair -> LineString coordinates ([lng, lat, ...]) */
 const cache = new Map();
+const etaCache = new Map();
 
 function cacheKey(from, to) {
   return `${from[0].toFixed(5)},${from[1].toFixed(5)}|${to[0].toFixed(5)},${to[1].toFixed(5)}`;
 }
 
-/**
- * @param {number[]} from - [lng, lat] team base
- * @param {number[]} to   - [lng, lat] cluster position
- * @returns {Promise<number[][]|null>} road geometry coordinates, null on failure
- */
-export async function getRouteCoordinates(from, to) {
+async function fetchOsrmRoute(from, to) {
   if (
     !Array.isArray(from) ||
     !Array.isArray(to) ||
@@ -37,7 +33,6 @@ export async function getRouteCoordinates(from, to) {
 
   const key = cacheKey(from, to);
   if (cache.has(key)) {
-    // bump to most-recently-used position
     const hit = cache.get(key);
     cache.delete(key);
     cache.set(key, hit);
@@ -50,16 +45,68 @@ export async function getRouteCoordinates(from, to) {
     if (!res.ok) throw new Error(`OSRM HTTP ${res.status}`);
 
     const data = await res.json();
-    const coords = data?.routes?.[0]?.geometry?.coordinates;
+    const route = data?.routes?.[0];
+    const coords = route?.geometry?.coordinates;
     if (!Array.isArray(coords) || coords.length < 2) return null;
 
+    const result = { coords, duration: route.duration ?? null };
     cache.set(key, coords);
+    etaCache.set(key, route.duration ?? null);
     if (cache.size > CACHE_LIMIT) {
-      cache.delete(cache.keys().next().value);
+      const oldest = cache.keys().next().value;
+      cache.delete(oldest);
+      etaCache.delete(oldest);
     }
-    return coords;
+    return result;
   } catch (err) {
     console.log("route fetch failed:", err?.message || err);
     return null;
   }
+}
+
+/**
+ * @param {number[]} from - [lng, lat] team base
+ * @param {number[]} to   - [lng, lat] cluster position
+ * @returns {Promise<number[][]|null>} road geometry coordinates, null on failure
+ */
+export async function getRouteCoordinates(from, to) {
+  const result = await fetchOsrmRoute(from, to);
+  return result?.coords ?? null;
+}
+
+/**
+ * @param {number[]} from - [lng, lat] team position
+ * @param {number[]} to   - [lng, lat] cluster position
+ * @returns {Promise<number|null>} duration in seconds, null on failure
+ */
+export async function getRouteETA(from, to) {
+  if (
+    !Array.isArray(from) ||
+    !Array.isArray(to) ||
+    from.length < 2 ||
+    to.length < 2
+  ) {
+    return null;
+  }
+
+  const key = cacheKey(from, to);
+  if (etaCache.has(key)) {
+    return etaCache.get(key);
+  }
+
+  const result = await fetchOsrmRoute(from, to);
+  return result?.duration ?? null;
+}
+
+/**
+ * Format OSRM duration (seconds) into a human-readable ETA string.
+ * @param {number|null} seconds
+ * @returns {string}
+ */
+export function formatETA(seconds) {
+  if (seconds == null) return "Calculating...";
+  const mins = Math.ceil(seconds / 60);
+  if (mins < 1) return "Arriving now";
+  if (mins === 1) return "1 min away";
+  return `${mins} min away`;
 }
