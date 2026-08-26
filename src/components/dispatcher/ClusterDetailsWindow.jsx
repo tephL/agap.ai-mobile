@@ -157,7 +157,9 @@ export default function ClusterDetailsWindow({
               <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
               <Text style={styles.sectionTitle}>AI Summary</Text>
             </View>
-            <Text style={styles.summaryText}>{cluster.ai_summary}</Text>
+            <Text style={styles.summaryText} numberOfLines={3} ellipsizeMode="tail">
+              {cluster.ai_summary}
+            </Text>
           </View>
         ) : null}
       </View>
@@ -301,6 +303,7 @@ const styles = StyleSheet.create({
   },
   body: {
     gap: 8,
+    flexShrink: 1,
   },
   infoRowWrap: {
     flexDirection: "row",
