@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -57,18 +58,31 @@ export default function ClusterDetailsWindow({
     });
   };
 
-  const handleResolve = async () => {
-    if (resolving) return;
-    setResolving(true);
-    try {
-      await updateClusterStatus(cluster.cluster_id, "resolved");
-      onResolved?.();
-      onClose?.();
-    } catch (e) {
-      console.log("resolve cluster error:", e);
-    } finally {
-      setResolving(false);
-    }
+  const handleResolve = () => {
+    Alert.alert(
+      "Resolve Cluster",
+      "Are you sure you want to mark this cluster as resolved? This will release all assigned teams.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Resolve",
+          style: "destructive",
+          onPress: async () => {
+            if (resolving) return;
+            setResolving(true);
+            try {
+              await updateClusterStatus(cluster.cluster_id, "resolved");
+              onResolved?.();
+              onClose?.();
+            } catch (e) {
+              console.log("resolve cluster error:", e);
+            } finally {
+              setResolving(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (

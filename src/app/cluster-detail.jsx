@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -118,18 +119,31 @@ export default function ClusterDetailScreen() {
 
   const reportList = useMemo(() => reports ?? [], [reports]);
 
-  const handleResolve = async () => {
-    if (resolving) return;
-    setResolving(true);
-    try {
-      await updateClusterStatus(clusterId, "resolved");
-      invalidateClusters();
-      router.back();
-    } catch (e) {
-      console.log("resolve cluster error:", e);
-    } finally {
-      setResolving(false);
-    }
+  const handleResolve = () => {
+    Alert.alert(
+      "Resolve Cluster",
+      "Are you sure you want to mark this cluster as resolved? This will release all assigned teams.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Resolve",
+          style: "destructive",
+          onPress: async () => {
+            if (resolving) return;
+            setResolving(true);
+            try {
+              await updateClusterStatus(clusterId, "resolved");
+              invalidateClusters();
+              router.back();
+            } catch (e) {
+              console.log("resolve cluster error:", e);
+            } finally {
+              setResolving(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (

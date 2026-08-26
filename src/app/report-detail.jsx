@@ -3,9 +3,11 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -90,6 +92,12 @@ export default function ReportDetailScreen() {
     },
     []
   );
+
+  const handleCall = () => {
+    const phone = report?.reporter?.phone_number;
+    if (!phone) return;
+    Linking.openURL(`tel:${phone.replace(/\s+/g, "")}`);
+  };
 
   if (loading) {
     return (
@@ -262,6 +270,16 @@ export default function ReportDetailScreen() {
                 </Text>
               </View>
             ) : null}
+            {report.reporter.phone_number ? (
+              <TouchableOpacity
+                style={styles.callButton}
+                activeOpacity={0.8}
+                onPress={handleCall}
+              >
+                <Ionicons name="call-outline" size={16} color={colors.white} />
+                <Text style={styles.callButtonText}>Call Reporter</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
@@ -420,5 +438,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
     flex: 1,
+  },
+  callButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  callButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.white,
   },
 });
