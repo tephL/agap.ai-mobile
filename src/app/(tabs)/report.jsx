@@ -447,14 +447,14 @@ export default function ReportScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.sentAt}>
-            request sent: {formatSentAt(sentAt)}
+            Request sent: {formatSentAt(sentAt)}
           </Text>
 
           <PingingCheckmark />
 
           <Text style={styles.title}>SOS SENT</Text>
           <Text style={styles.subtitle}>
-            help us help you. Add critical details.
+            Help us Help you. Add critical details.
           </Text>
 
           {!isOnline && (
@@ -476,8 +476,8 @@ export default function ReportScreen() {
             onChangeText={(value) => setNotes(value.slice(0, descriptionMax))}
             placeholder={
               isOnline
-                ? "describe your situation in detail (e.g. number of people involved, specific injuries and any hazards) this information is crucial for first responders..."
-                : "add a short description to include in the text (optional)"
+                ? "Describe your situation in detail (e.g. number of people involved, specific injuries and any hazards) this information is crucial for first responders."
+                : "Add a short description to include in the text (optional)"
             }
             placeholderTextColor={colors.placeholder}
             multiline
@@ -532,7 +532,7 @@ export default function ReportScreen() {
                     atLimit && styles.takePhotoLabelDisabled,
                   ]}
                 >
-                  take photo
+                  Take Photo
                 </Text>
               </TouchableOpacity>
 
@@ -575,7 +575,7 @@ export default function ReportScreen() {
             </View>
           </View>
 
-          <Text style={styles.caption}>attach up to {MAX_PHOTOS} images only</Text>
+          <Text style={styles.caption}>Attach up to {MAX_PHOTOS} images only</Text>
           </>
           )}
 
