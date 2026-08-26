@@ -76,6 +76,10 @@ export async function removeMember(familyId, memberId) {
   await api.delete(`/api/families/${familyId}/members/${memberId}`);
 }
 
+export async function leaveFamily(familyId) {
+  await api.post(`/api/families/${familyId}/leave`);
+}
+
 export async function getMyInvitations() {
   const { data } = await api.get("/api/invitations");
   if (Array.isArray(data)) return data;
