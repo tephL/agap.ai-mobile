@@ -849,19 +849,50 @@ export default function Index() {
           >
             <Layer
               type="circle"
-              id="teamsLayer"
+              id="teamsCircle"
               paint={{
-                'circle-color': TEAM_STATUS_COLOR_EXPR,
+                'circle-color': '#ffffff',
                 'circle-radius': [
                   'interpolate', ['linear'], ['zoom'],
-                  8, 3.5,
-                  12, 5,
-                  16, 7,
-                  20, 9,
+                  8, 8,
+                  12, 12,
+                  16, 16,
+                  20, 20,
                 ],
                 'circle-stroke-width': 2,
-                'circle-stroke-color': '#ffffff',
-                'circle-opacity': 0.95,
+                'circle-stroke-color': TEAM_STATUS_COLOR_EXPR,
+                'circle-opacity': 0.9,
+              }}
+            />
+            <Layer
+              type="symbol"
+              id="teamsLayer"
+              layout={{
+                'icon-image': 'shelter',
+                'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1, 16, 1.2, 20, 1.4],
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+              }}
+              paint={{
+                'icon-color': TEAM_STATUS_COLOR_EXPR,
+              }}
+            />
+            <Layer
+              type="symbol"
+              id="teamsLabel"
+              layout={{
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': 11,
+                'text-offset': [0, 1.8],
+                'text-anchor': 'top',
+                'text-allow-overlap': false,
+              }}
+              paint={{
+                'text-color': TEAM_STATUS_COLOR_EXPR,
+                'text-halo-color': '#ffffff',
+                'text-halo-width': 1.5,
+                'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
               }}
             />
           </GeoJSONSource>
