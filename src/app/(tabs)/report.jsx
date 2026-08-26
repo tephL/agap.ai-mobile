@@ -233,7 +233,25 @@ export default function ReportScreen() {
 
   const handleSkip = () => {
     if (submitting) return;
-    closeForm("active");
+    if (isOnline) {
+      Alert.alert(
+        "Send without details?",
+        "Your SOS report will be sent without additional details or photos.",
+        [
+          { text: "Go back", style: "cancel" },
+          { text: "Send", onPress: () => handleSubmit(true) },
+        ]
+      );
+    } else {
+      Alert.alert(
+        "Cancel report?",
+        "This will discard your SOS report. No message will be sent.",
+        [
+          { text: "Keep editing", style: "cancel" },
+          { text: "Discard", style: "destructive", onPress: () => closeForm("active") },
+        ]
+      );
+    }
   };
 
   // Re-fires the location request if the first attempt failed (e.g. the
@@ -293,11 +311,11 @@ export default function ReportScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationStatus, locationError]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (skipValidation = false) => {
     if (submitting) return;
 
     const description = notes.trim();
-    if (photos.length === 0 && !description) {
+    if (!skipValidation && photos.length === 0 && !description) {
       Alert.alert(
         "Add a detail",
         "Add at least a photo or a description before submitting."
@@ -398,11 +416,23 @@ export default function ReportScreen() {
 
   const confirmSubmit = () => {
     if (submitting) return;
-    if (isOnline) {
-      handleSubmit();
-    } else {
-      handleOfflineSubmit();
-    }
+    Alert.alert(
+      "Submit report?",
+      "This will send your SOS report to emergency responders.",
+      [
+        { text: "Not yet", style: "cancel" },
+        {
+          text: "Submit",
+          onPress: () => {
+            if (isOnline) {
+              handleSubmit();
+            } else {
+              handleOfflineSubmit();
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -569,7 +599,7 @@ export default function ReportScreen() {
             disabled={submitting}
             hitSlop={8}
           >
-            <Text style={styles.skip}>CANCEL</Text>
+            <Text style={styles.skip}>{isOnline ? "SKIP" : "CANCEL"}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

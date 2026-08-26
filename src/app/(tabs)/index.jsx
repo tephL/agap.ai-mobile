@@ -1,7 +1,7 @@
 import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
+import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer } from '@maplibre/maplibre-react-native';
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 
@@ -27,6 +27,7 @@ import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import HazardTabs from '@/components/hazards/HazardTabs';
+import DamMarker from '@/components/hazards/DamMarker';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
 
 
@@ -55,8 +56,6 @@ const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PERSON_CARD_HEIGHT_ESTIMATE = SCREEN_HEIGHT * 0.4;
 const DAM_SHEET_COLLAPSED_ESTIMATE = SCREEN_HEIGHT * 0.45;
 const DAM_MARKER_COLOR = '#4287f5';
-const DAM_HALO_RADIUS_M = 1500;
-const HALO_SEGMENTS = 64;
 // Pulse cycle lengths per severity — the closer to spilling, the faster
 // the marker ring throbs.
 const DAM_PULSE_PERIODS = { normal: 3500, caution: 2000, danger: 1100 };
@@ -79,23 +78,6 @@ function boundsAroundPoint(latitude, longitude, radiusKm = 5) {
     longitude + lngDelta, // east
     latitude + latDelta,  // north
   ];
-}
-
-// Approximates a ground-radius circle as a closed polygon ring in [lng, lat]
-// pairs — MapLibre can't dash circle strokes, so halos are real geometry.
-function circleRingCoordinates(centerLat, centerLng, radiusMeters, segments = HALO_SEGMENTS) {
-  const latDelta = radiusMeters / 111320;
-  const lngDelta = radiusMeters / (111320 * Math.cos((centerLat * Math.PI) / 180));
-  const ring = [];
-  for (let i = 0; i < segments; i++) {
-    const angle = (i / segments) * 2 * Math.PI;
-    ring.push([
-      centerLng + lngDelta * Math.cos(angle),
-      centerLat + latDelta * Math.sin(angle),
-    ]);
-  }
-  ring.push(ring[0]);
-  return ring;
 }
 
 async function downloadOfflineMapForCurrentArea(userLocation) {
@@ -456,29 +438,6 @@ export default function Index() {
       })),
   }), [dams]);
 
-  // Dashed warning-zone halos around each dam; the nearest dam's ring is
-  // emphasized via the isNearest property in the layer paint expressions.
-  const damHalosGeojson = useMemo(() => ({
-    type: 'FeatureCollection',
-    features: dams
-      .filter((dam) => dam.coordinates)
-      .map((dam) => ({
-        type: 'Feature',
-        id: `dam-halo-${dam.slug}`,
-        geometry: {
-          type: 'Polygon',
-          coordinates: [
-            circleRingCoordinates(dam.coordinates.lat, dam.coordinates.lng, DAM_HALO_RADIUS_M),
-          ],
-        },
-        properties: {
-          slug: dam.slug,
-          isInfluencing: influencingBySlug[dam.slug] != null,
-          severity: resolveDamSeverity(dam).level,
-        },
-      })),
-  }), [dams, influencingBySlug]);
-
   // Broken lines from the user to each influencing dam. Uses the coarse
   // location so the dashed corridors don't rebuild on every GPS tick.
   const nearestRouteGeojson = useMemo(() => {
@@ -491,7 +450,7 @@ export default function Index() {
     }
     return {
       type: 'FeatureCollection',
-      features: influencingDams
+      features: influencingDams.slice(0, 1)
         .filter(({ dam }) => dam.coordinates)
         .map(({ dam, distanceMeters }, index) => ({
           type: 'Feature',
@@ -536,14 +495,6 @@ export default function Index() {
   }, []);
 
   const ageMs = ['-', now, ['get', 'last_seen']];
-
-  // Dam severity color shared by markers, halos, and pulse rings.
-  const damSeverityColorExpr = [
-    'match', ['get', 'severity'],
-    'danger', SEVERITY_LEVELS.danger.color,
-    'caution', SEVERITY_LEVELS.caution.color,
-    SEVERITY_LEVELS.normal.color,
-  ];
 
   // Stop value for the pulse radius: severity picks the phase, so only ONE
   // zoom-based interpolate exists in the whole expression (style-spec rule).
@@ -606,7 +557,9 @@ export default function Index() {
   }, []);
 
   const handleDamPress = (event) => {
-    const feature = event?.nativeEvent?.features?.[0];
+    // GeoJSONSource onPress wraps in nativeEvent.features[0]; Marker onPress
+    // passes the feature object directly as event.properties / event directly.
+    const feature = event?.nativeEvent?.features?.[0] ?? event;
     if (!feature?.properties?.slug) return;
 
     // Keep the drawer's list in sync with the latest backend data so it can
@@ -616,7 +569,10 @@ export default function Index() {
     setSelectedDam(feature.properties);
     setSheetExpanded(false);
 
-    const [lng, lat] = feature.geometry?.coordinates ?? [];
+    const coords = feature.geometry?.coordinates ?? (feature.properties?.coordinates
+      ? [feature.properties.coordinates.lng, feature.properties.coordinates.lat]
+      : []);
+    const [lng, lat] = coords;
     if (typeof lng === 'number' && typeof lat === 'number') {
       flyToDam(lng, lat);
     }
@@ -624,12 +580,7 @@ export default function Index() {
 
   const handleSelectDamFromList = useCallback((dam) => {
     if (!dam?.slug) return;
-    setSelectedDam({
-      slug: dam.slug,
-      name: dam.name,
-      reservoirWaterLevel: dam.reservoirWaterLevel,
-      deviationFromNHWL: dam.deviationFromNHWL,
-    });
+    setSelectedDam(dam);
     setSheetExpanded(false);
 
     if (dam.coordinates) {
@@ -655,12 +606,7 @@ export default function Index() {
       },
     );
 
-    setSelectedDam({
-      slug: target.slug,
-      name: target.name,
-      reservoirWaterLevel: target.reservoirWaterLevel,
-      deviationFromNHWL: target.deviationFromNHWL,
-    });
+    setSelectedDam(target);
     setHazardsOpen(true);
     setSheetExpanded(false);
     refreshDams();
@@ -779,29 +725,6 @@ export default function Index() {
 
             {visibleLayers.dams && (
               <>
-                <GeoJSONSource id="damHalosSource" data={damHalosGeojson}>
-                  <Layer
-                    type="fill"
-                    id="damHaloFillLayer"
-                    paint={{
-                      'fill-color': damSeverityColorExpr,
-                      'fill-opacity': [
-                        'case', ['get', 'isInfluencing'], 0.12, 0.05,
-                      ],
-                    }}
-                  />
-                  <Layer
-                    type="line"
-                    id="damHaloBorderLayer"
-                    paint={{
-                      'line-color': damSeverityColorExpr,
-                      'line-width': ['case', ['get', 'isInfluencing'], 3.5, 2],
-                      'line-opacity': ['case', ['get', 'isInfluencing'], 1, 0.75],
-                      'line-dasharray': [2, 1.5],
-                    }}
-                  />
-                </GeoJSONSource>
-
                 <GeoJSONSource id="nearestRouteSource" data={nearestRouteGeojson} onPress={handleRoutePress}>
                   <Layer
                     type="line"
@@ -815,48 +738,30 @@ export default function Index() {
                   />
                 </GeoJSONSource>
 
-                {/* Expanding ring per dam; cycle speed scales with severity */}
+                {/* Expanding ring for danger dams only */}
                 <GeoJSONSource id="damsPulseSource" data={damsGeojson}>
                   <Layer
                     type="circle"
                     id="damsPulseLayer"
+                    filter={['==', ['get', 'severity'], 'danger']}
                     paint={{
-                      'circle-color': damSeverityColorExpr,
+                      'circle-color': SEVERITY_LEVELS.danger.color,
                       'circle-radius': [
                         'interpolate', ['linear'], ['zoom'],
                         5, damPulseStop(2.5, 14),
                         10, damPulseStop(4, 20),
                         16, damPulseStop(5, 24),
                       ],
-                      'circle-opacity': [
-                        'match', ['get', 'severity'],
-                        'danger', Math.max(0.45 - damPulse.danger * 0.45, 0),
-                        'caution', Math.max(0.45 - damPulse.caution * 0.45, 0),
-                        Math.max(0.45 - damPulse.normal * 0.45, 0),
-                      ],
+                      'circle-opacity': Math.max(0.45 - damPulse.danger * 0.45, 0),
                       'circle-stroke-width': 0,
                     }}
                   />
                 </GeoJSONSource>
 
-                <GeoJSONSource id="damsSource" data={damsGeojson} onPress={handleDamPress}>
-                  <Layer
-                    type="circle"
-                    id="damsLayer"
-                    paint={{
-                      'circle-color': damSeverityColorExpr,
-                      'circle-radius': [
-                        'interpolate', ['linear'], ['zoom'],
-                        5, 2.5,
-                        10, 4,
-                        16, 5,
-                      ],
-                      'circle-stroke-width': 2,
-                      'circle-stroke-color': '#ffffff',
-                      'circle-opacity': 0.95,
-                    }}
-                  />
-                </GeoJSONSource>
+                {/* Icon markers for each dam */}
+                {dams.filter((d) => d.coordinates).map((dam) => (
+                  <DamMarker key={dam.slug} dam={dam} onPress={handleDamPress} />
+                ))}
               </>
             )}
           </>
@@ -1011,21 +916,6 @@ const styles = StyleSheet.create({
     color: 'blue'
   },
   map: { flex: 1 },
-  marker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#4287f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3, // Android shadow
-  }, 
   locateButton: {
     position: 'absolute',
     bottom: 32,

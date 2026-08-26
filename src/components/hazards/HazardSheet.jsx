@@ -620,6 +620,7 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     alignItems: "center",
     position: "relative",
+    zIndex: 10,
   },
   handleHit: {
     alignSelf: "stretch",
