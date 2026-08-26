@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -151,6 +152,33 @@ export default function FamilyScreen() {
         },
       ]
     );
+  };
+
+  // Show an action sheet with options for the tapped member.
+  const handleMemberPress = (member) => {
+    const displayName = memberDisplayName(member);
+    const hasPhone = Boolean(member.phone_number);
+
+    const buttons = [
+      {
+        text: "View on Map",
+        onPress: () => goToMemberOnMap(member),
+      },
+      ...(hasPhone
+        ? [
+            {
+              text: `Call ${displayName}`,
+              onPress: () =>
+                Linking.openURL(
+                  `tel:${member.phone_number.replace(/\s+/g, "")}`
+                ),
+            },
+          ]
+        : []),
+      { text: "Cancel", style: "cancel" },
+    ];
+
+    Alert.alert(displayName, "Choose an action", buttons);
   };
 
   // Navigate to the map tab with this member pre-selected so it can
@@ -351,7 +379,7 @@ export default function FamilyScreen() {
       const CardWrapper = isFirst ? View : TouchableOpacity;
       const wrapperProps = isFirst
         ? {}
-        : { activeOpacity: 0.7, onPress: () => goToMemberOnMap(item) };
+        : { activeOpacity: 0.7, onPress: () => handleMemberPress(item) };
       return (
         <CardWrapper style={styles.memberCard} {...wrapperProps}>
           <View style={styles.memberAvatar}>
