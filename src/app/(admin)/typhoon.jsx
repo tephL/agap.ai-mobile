@@ -22,7 +22,13 @@ import {
   deleteTyphoon,
 } from "../../services/typhoonService";
 
-const SIGNAL_LEVELS = [1, 2, 3, 4, 5];
+const CATEGORIES = [
+  "Tropical Depression",
+  "Tropical Storm",
+  "Severe Tropical Storm",
+  "Typhoon",
+  "Super Typhoon",
+];
 
 export default function TyphoonScreen() {
   const [typhoons, setTyphoons] = useState([]);
@@ -32,8 +38,9 @@ export default function TyphoonScreen() {
 
   const [editingId, setEditingId] = useState(null);
   const [formName, setFormName] = useState("");
-  const [formSignal, setFormSignal] = useState(2);
-  const [formActive, setFormActive] = useState(true);
+  const [formCategory, setFormCategory] = useState("Super Typhoon");
+  const [formStatus, setFormStatus] = useState("active");
+  const [formSource, setFormSource] = useState("PAGASA");
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async ({ refreshing: isRefresh = false } = {}) => {
@@ -59,15 +66,17 @@ export default function TyphoonScreen() {
   const resetForm = () => {
     setEditingId(null);
     setFormName("");
-    setFormSignal(2);
-    setFormActive(true);
+    setFormCategory("Super Typhoon");
+    setFormStatus("active");
+    setFormSource("PAGASA");
   };
 
   const startEdit = (typhoon) => {
-    setEditingId(typhoon.id);
+    setEditingId(typhoon.typhoon_id);
     setFormName(typhoon.name ?? "");
-    setFormSignal(typhoon.signal_number ?? 2);
-    setFormActive(typhoon.is_active ?? false);
+    setFormCategory(typhoon.category ?? "Super Typhoon");
+    setFormStatus(typhoon.status ?? "active");
+    setFormSource(typhoon.source ?? "");
   };
 
   const handleSave = async () => {
@@ -79,8 +88,9 @@ export default function TyphoonScreen() {
     try {
       const payload = {
         name: formName.trim(),
-        signal_number: formSignal,
-        is_active: formActive,
+        category: formCategory,
+        status: formStatus,
+        source: formSource.trim() || undefined,
       };
       if (editingId) {
         await updateTyphoon(editingId, payload);
@@ -107,8 +117,8 @@ export default function TyphoonScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await deleteTyphoon(typhoon.id);
-              if (editingId === typhoon.id) resetForm();
+              await deleteTyphoon(typhoon.typhoon_id);
+              if (editingId === typhoon.typhoon_id) resetForm();
               loadData();
             } catch (e) {
               Alert.alert("Error", e?.response?.data?.error ?? "Failed to delete.");
@@ -120,11 +130,13 @@ export default function TyphoonScreen() {
   };
 
   const handleToggleActive = async (typhoon) => {
+    const newStatus = typhoon.status === "active" ? "inactive" : "active";
     try {
-      await updateTyphoon(typhoon.id, {
+      await updateTyphoon(typhoon.typhoon_id, {
         name: typhoon.name,
-        signal_number: typhoon.signal_number,
-        is_active: !typhoon.is_active,
+        category: typhoon.category,
+        status: newStatus,
+        source: typhoon.source,
       });
       loadData();
     } catch (e) {
@@ -159,44 +171,57 @@ export default function TyphoonScreen() {
           <Text style={styles.fieldLabel}>Name</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. Typhoon Karina"
+            placeholder="e.g. Odette"
             placeholderTextColor={colors.placeholder}
             value={formName}
             onChangeText={setFormName}
           />
 
-          <Text style={styles.fieldLabel}>Signal Level</Text>
-          <View style={styles.signalRow}>
-            {SIGNAL_LEVELS.map((level) => (
+          <Text style={styles.fieldLabel}>Category</Text>
+          <View style={styles.chipRow}>
+            {CATEGORIES.map((cat) => (
               <TouchableOpacity
-                key={level}
+                key={cat}
                 style={[
-                  styles.signalChip,
-                  formSignal === level && styles.signalChipActive,
+                  styles.chip,
+                  formCategory === cat && styles.chipActive,
                 ]}
-                onPress={() => setFormSignal(level)}
+                onPress={() => setFormCategory(cat)}
               >
                 <Text
                   style={[
-                    styles.signalChipText,
-                    formSignal === level && styles.signalChipTextActive,
+                    styles.chipText,
+                    formCategory === cat && styles.chipTextActive,
                   ]}
+                  numberOfLines={1}
                 >
-                  {level}
+                  {cat}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
+          <Text style={styles.fieldLabel}>Status</Text>
           <View style={styles.switchRow}>
-            <Text style={styles.fieldLabel}>Active (visible to citizens)</Text>
+            <Text style={styles.statusText}>
+              {formStatus === "active" ? "Active (shows alert)" : "Inactive (hidden)"}
+            </Text>
             <Switch
-              value={formActive}
-              onValueChange={setFormActive}
+              value={formStatus === "active"}
+              onValueChange={(v) => setFormStatus(v ? "active" : "inactive")}
               trackColor={{ false: "#D1D5DB", true: "#FCA5A5" }}
-              thumbColor={formActive ? colors.primary : "#9CA3AF"}
+              thumbColor={formStatus === "active" ? colors.primary : "#9CA3AF"}
             />
           </View>
+
+          <Text style={styles.fieldLabel}>Source</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. PAGASA"
+            placeholderTextColor={colors.placeholder}
+            value={formSource}
+            onChangeText={setFormSource}
+          />
 
           <View style={styles.formActions}>
             {editingId && (
@@ -249,19 +274,19 @@ export default function TyphoonScreen() {
           </View>
         ) : (
           typhoons.map((t) => (
-            <View key={t.id} style={styles.typhoonCard}>
+            <View key={t.typhoon_id} style={styles.typhoonCard}>
               <View style={styles.typhoonRow}>
                 <View style={styles.typhoonInfo}>
                   <Text style={styles.typhoonName}>{t.name}</Text>
                   <Text style={styles.typhoonMeta}>
-                    Signal No. {t.signal_number ?? "N/A"}
+                    {t.category ?? "N/A"} · {t.source ?? "Unknown source"}
                   </Text>
                 </View>
                 <Switch
-                  value={t.is_active}
+                  value={t.status === "active"}
                   onValueChange={() => handleToggleActive(t)}
                   trackColor={{ false: "#D1D5DB", true: "#FCA5A5" }}
-                  thumbColor={t.is_active ? colors.primary : "#9CA3AF"}
+                  thumbColor={t.status === "active" ? colors.primary : "#9CA3AF"}
                 />
               </View>
               <View style={styles.typhoonActions}>
@@ -345,36 +370,40 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.surface,
   },
-  signalRow: {
+  chipRow: {
     flexDirection: "row",
-    gap: 8,
+    flexWrap: "wrap",
+    gap: 6,
   },
-  signalChip: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+  chip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  signalChipActive: {
+  chipActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  signalChipText: {
-    fontSize: 14,
-    fontWeight: "700",
+  chipText: {
+    fontSize: 12,
+    fontWeight: "600",
     color: colors.text,
   },
-  signalChipTextActive: {
+  chipTextActive: {
     color: colors.white,
   },
   switchRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
   },
   formActions: {
     flexDirection: "row",

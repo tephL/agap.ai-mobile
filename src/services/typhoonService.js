@@ -10,20 +10,22 @@ export async function getAllTyphoons() {
   return response.data;
 }
 
-export async function createTyphoon({ name, signal_number, is_active }) {
+export async function createTyphoon({ name, category, status, source }) {
   const response = await api.post("/api/typhoons", {
     name,
-    signal_number,
-    is_active,
+    category,
+    status,
+    source,
   });
   return response.data;
 }
 
-export async function updateTyphoon(id, { name, signal_number, is_active }) {
+export async function updateTyphoon(id, { name, category, status, source }) {
   const response = await api.patch(`/api/typhoons/${id}`, {
     name,
-    signal_number,
-    is_active,
+    category,
+    status,
+    source,
   });
   return response.data;
 }

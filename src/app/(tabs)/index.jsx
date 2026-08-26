@@ -129,16 +129,13 @@ export default function Index() {
   );
 
   const handleTyphoonAskPreparedness = useCallback(() => {
-    const signalText = activeTyphoon?.signal_number
-      ? `Signal No. ${activeTyphoon.signal_number}`
-      : "unknown signal level";
     router.push({
       pathname: "/assistant",
       params: {
-        question: `There's an active typhoon (${signalText} in my area) — what disaster preparedness tips should I follow?`,
+        question: "There's an active typhoon (Signal No. 3 in my area) — what disaster preparedness tips should I follow?",
       },
     });
-  }, [router, activeTyphoon]);
+  }, [router]);
 
   const handleTyphoonDismiss = useCallback(() => {
     setTyphoonDismissed(true);

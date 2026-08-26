@@ -8,14 +8,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 
+const ASSUMED_SIGNAL = 3;
+
 export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, onAskPreparedness }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!typhoon) return null;
-
-  const signalLabel = typhoon.signal_number
-    ? `Signal No. ${typhoon.signal_number}`
-    : "";
 
   return (
     <View style={styles.container}>
@@ -27,9 +25,7 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
             </View>
             <View style={styles.headerTextWrap}>
               <Text style={styles.title}>Typhoon Alert</Text>
-              {signalLabel ? (
-                <Text style={styles.subtitle}>{signalLabel}</Text>
-              ) : null}
+              <Text style={styles.subtitle}>Signal No. {ASSUMED_SIGNAL}</Text>
             </View>
           </View>
           <Pressable
@@ -74,10 +70,22 @@ export default function TyphoonAlertBanner({ typhoon, onDismiss, onViewDetails, 
                 <Text style={styles.detailValue}>{typhoon.name}</Text>
               </View>
               <View style={styles.detailRow}>
-                <Ionicons name="signal" size={14} color={colors.muted} />
-                <Text style={styles.detailLabel}>Signal Level</Text>
-                <Text style={styles.detailValue}>{signalLabel || "N/A"}</Text>
+                <Ionicons name="ribbon-outline" size={14} color={colors.muted} />
+                <Text style={styles.detailLabel}>Category</Text>
+                <Text style={styles.detailValue}>{typhoon.category ?? "N/A"}</Text>
               </View>
+              <View style={styles.detailRow}>
+                <Ionicons name="signal" size={14} color={colors.muted} />
+                <Text style={styles.detailLabel}>Signal</Text>
+                <Text style={styles.detailValue}>No. {ASSUMED_SIGNAL} (your area)</Text>
+              </View>
+              {typhoon.source ? (
+                <View style={styles.detailRow}>
+                  <Ionicons name="information-circle-outline" size={14} color={colors.muted} />
+                  <Text style={styles.detailLabel}>Source</Text>
+                  <Text style={styles.detailValue}>{typhoon.source}</Text>
+                </View>
+              ) : null}
               {typhoon.created_at ? (
                 <View style={styles.detailRow}>
                   <Ionicons name="time-outline" size={14} color={colors.muted} />
