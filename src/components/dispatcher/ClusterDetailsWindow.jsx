@@ -295,6 +295,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 11,
+    backgroundColor: colors.background,
   },
   seeDetailsText: {
     fontSize: 13,
