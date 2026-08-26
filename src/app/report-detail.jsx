@@ -298,17 +298,18 @@ export default function ReportDetailScreen() {
                 </Text>
               </View>
             ) : null}
-            {report.reporter.phone_number ? (
-              <TouchableOpacity
-                style={styles.callButton}
-                activeOpacity={0.8}
-                onPress={handleCall}
-              >
-                <Ionicons name="call-outline" size={16} color={colors.white} />
-                <Text style={styles.callButtonText}>Call Reporter</Text>
-              </TouchableOpacity>
-            ) : null}
           </View>
+        ) : null}
+
+        {report.reporter?.phone_number ? (
+          <TouchableOpacity
+            style={styles.callButton}
+            activeOpacity={0.8}
+            onPress={handleCall}
+          >
+            <Ionicons name="call-outline" size={16} color={colors.white} />
+            <Text style={styles.callButtonText}>Call Reporter</Text>
+          </TouchableOpacity>
         ) : null}
 
         {report.status !== "resolved" ? (
@@ -487,14 +488,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
     backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 10,
-    marginTop: 10,
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginHorizontal: 16,
+    marginTop: 12,
   },
   callButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: colors.white,
   },
