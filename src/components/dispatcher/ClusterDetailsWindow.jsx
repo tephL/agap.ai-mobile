@@ -132,6 +132,36 @@ export default function ClusterDetailsWindow({
         </View>
       ) : null}
 
+      {/* Body */}
+      <View style={styles.body}>
+        <View style={styles.infoRowWrap}>
+          <View style={styles.infoStat}>
+            <Ionicons name="people-outline" size={16} color={colors.muted} />
+            <Text style={styles.infoStatLabel}>Affected</Text>
+            <Text style={styles.infoStatValue}>{cluster.people_affected ?? 0}</Text>
+          </View>
+          {cluster.ai_severity ? (
+            <View style={styles.infoStat}>
+              <Ionicons name="pulse-outline" size={16} color={colors.muted} />
+              <Text style={styles.infoStatLabel}>Severity</Text>
+              <Text style={[styles.infoStatValue, { textTransform: "capitalize" }]}>
+                {cluster.ai_severity}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {cluster.ai_summary ? (
+          <View style={styles.summaryCard}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
+              <Text style={styles.sectionTitle}>AI Summary</Text>
+            </View>
+            <Text style={styles.summaryText}>{cluster.ai_summary}</Text>
+          </View>
+        ) : null}
+      </View>
+
       {/* Buttons */}
       <View style={styles.buttonRow}>
         <TouchableOpacity
@@ -167,36 +197,6 @@ export default function ClusterDetailsWindow({
           )}
           <Text style={styles.resolveButtonText}>Resolve</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Body */}
-      <View style={styles.body}>
-        <View style={styles.infoRowWrap}>
-          <View style={styles.infoStat}>
-            <Ionicons name="people-outline" size={16} color={colors.muted} />
-            <Text style={styles.infoStatLabel}>Affected</Text>
-            <Text style={styles.infoStatValue}>{cluster.people_affected ?? 0}</Text>
-          </View>
-          {cluster.ai_severity ? (
-            <View style={styles.infoStat}>
-              <Ionicons name="pulse-outline" size={16} color={colors.muted} />
-              <Text style={styles.infoStatLabel}>Severity</Text>
-              <Text style={[styles.infoStatValue, { textTransform: "capitalize" }]}>
-                {cluster.ai_severity}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {cluster.ai_summary ? (
-          <View style={styles.summaryCard}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
-              <Text style={styles.sectionTitle}>AI Summary</Text>
-            </View>
-            <Text style={styles.summaryText}>{cluster.ai_summary}</Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 12,
+    marginTop: 12,
   },
   seeDetailsButton: {
     flex: 1,
