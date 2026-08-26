@@ -159,6 +159,7 @@ export default function Index() {
 
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
+  const [teamPulse, setTeamPulse] = useState(0);
 
   // hazard overlay selection (persisted, single-select) + layers sheet state
   const { activeId, select: selectHazardLayer } = useActiveHazardLayer();
@@ -381,6 +382,22 @@ export default function Index() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  // ---- faster pulse for dispatched team markers -------------------------
+  const TEAM_PULSE_DURATION_MS = 1200;
+  useEffect(() => {
+    let raf;
+    const start = Date.now();
+
+    const tick = () => {
+      const elapsed = (Date.now() - start) % TEAM_PULSE_DURATION_MS;
+      setTeamPulse(elapsed / TEAM_PULSE_DURATION_MS);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   // ---- color staleness ----------------------------------------------------
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), NOW_TICK_INTERVAL_MS);
@@ -523,6 +540,21 @@ export default function Index() {
             {/* dispatched response team markers — blue with white outline */}
             {teamGeojson.features.length > 0 && (
               <GeoJSONSource id="dispatchTeamSource" data={teamGeojson}>
+                <Layer
+                  type="circle"
+                  id="dispatchTeamPulse"
+                  paint={{
+                    'circle-color': '#3b82f6',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 6 + teamPulse * 30,
+                      12, 9 + teamPulse * 30,
+                      16, 12 + teamPulse * 30,
+                    ],
+                    'circle-opacity': Math.max(0.6 - teamPulse * 0.6, 0),
+                    'circle-stroke-width': 0,
+                  }}
+                />
                 <Layer
                   type="circle"
                   id="dispatchTeamLayer"
