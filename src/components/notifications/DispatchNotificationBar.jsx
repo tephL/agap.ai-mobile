@@ -24,7 +24,7 @@ const PULSE_DURATION_MS = 2000;
  *   }>
  * - onDismiss(assignmentId)
  */
-export default function DispatchNotificationBar({ dispatches, onDismiss }) {
+export default function DispatchNotificationBar({ dispatches, onDismiss, style }) {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export default function DispatchNotificationBar({ dispatches, onDismiss }) {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       {dispatches.map((d) => (
         <DispatchCard
           key={d.assignment_id}

@@ -9,10 +9,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { uploadUserLocation } from '../../services/usersService.js';
 import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
 import { getMyFamily } from '../../services/familyService.js';
+import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
+import { getActiveTyphoon } from '../../services/typhoonService.js';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import DispatchNotificationBar from "@/components/notifications/DispatchNotificationBar";
+import TyphoonAlertBanner from "@/components/notifications/TyphoonAlertBanner";
 import { PersonCard } from '@/components/PersonCard';
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
 import HazardLayersPanel from '@/components/HazardLayersPanel';
@@ -111,6 +114,10 @@ export default function Index() {
   const { selectedUserId } = useLocalSearchParams();
   const router = useRouter();
 
+  // typhoon alert state (session-only dismissal)
+  const [activeTyphoon, setActiveTyphoon] = useState(null);
+  const [typhoonDismissed, setTyphoonDismissed] = useState(false);
+
   const handleAskAI = useCallback(
     (layerLabel) => {
       router.push({
@@ -120,6 +127,23 @@ export default function Index() {
     },
     [router]
   );
+
+  const handleTyphoonAskPreparedness = useCallback(() => {
+    router.push({
+      pathname: "/assistant",
+      params: {
+        question: "There's an active typhoon (Signal No. 3 in my area) — what disaster preparedness tips should I follow?",
+      },
+    });
+  }, [router]);
+
+  const handleTyphoonDismiss = useCallback(() => {
+    setTyphoonDismissed(true);
+  }, []);
+
+  const handleTyphoonViewDetails = useCallback(() => {
+    // details expanded inline by the banner component
+  }, []);
 
   // location / permissions
   const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
@@ -153,6 +177,20 @@ export default function Index() {
         }
       } catch (e) {
         console.log("auto-download flood_25yr failed", e);
+      }
+    })();
+  }, []);
+
+  // fetch active typhoon for alert banner (citizens only)
+  useEffect(() => {
+    (async () => {
+      try {
+        const session = await getStoredSession();
+        if (!session || session.role_id !== CITIZEN_ROLE_ID) return;
+        const data = await getActiveTyphoon();
+        setActiveTyphoon(data?.typhoon ?? null);
+      } catch (e) {
+        console.log("Failed to fetch active typhoon", e);
       }
     })();
   }, []);
@@ -658,9 +696,19 @@ export default function Index() {
         />
       )}
 
+      {!typhoonDismissed && activeTyphoon && (
+        <TyphoonAlertBanner
+          typhoon={activeTyphoon}
+          onDismiss={handleTyphoonDismiss}
+          onViewDetails={handleTyphoonViewDetails}
+          onAskPreparedness={handleTyphoonAskPreparedness}
+        />
+      )}
+
       <DispatchNotificationBar
         dispatches={dispatches}
         onDismiss={dismiss}
+        style={activeTyphoon && !typhoonDismissed ? { top: 160 } : undefined}
       />
     </View>
   );
