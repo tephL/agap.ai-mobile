@@ -2,8 +2,8 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 
-export default function SuggestionChips({ suggestions, onSelect, visible }) {
-  if (!visible || !suggestions || suggestions.length === 0) return null;
+export default function SuggestionChips({ suggestions, onSelect }) {
+  if (!suggestions || suggestions.length === 0) return null;
 
   return (
     <View style={styles.container}>
@@ -21,7 +21,7 @@ export default function SuggestionChips({ suggestions, onSelect, visible }) {
             key={index}
             style={styles.chip}
             activeOpacity={0.7}
-            onPress={() => onSelect(item.text)}
+            onPress={() => onSelect(item.text, index)}
           >
             <Ionicons name={item.icon || "chatbubble-ellipses"} size={14} color={colors.primary} />
             <Text style={styles.chipText} numberOfLines={2}>

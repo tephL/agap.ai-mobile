@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -18,12 +18,22 @@ import colors from "@/constants/colors";
 import ChatBubble, { parseSuggestions } from "@/components/ai/ChatBubble";
 import SuggestionChips from "@/components/ai/SuggestionChips";
 import TypingIndicator from "@/components/ai/TypingIndicator";
+import useNetworkStatus from "@/hooks/useNetworkStatus";
 import {
   sendChatMessage,
   getChatHistory,
   clearChatHistory,
   getSuggestions,
 } from "@/services/aiService";
+
+const SYSTEM_SUGGESTIONS = [
+  { text: "What should I do during a typhoon?", icon: "thunderstorm" },
+  { text: "How do I prepare an emergency go bag?", icon: "bag-check" },
+  { text: "What are the nearest evacuation centers?", icon: "location" },
+  { text: "How do I check hazard maps for my area?", icon: "map" },
+  { text: "What emergency supplies do I need?", icon: "water" },
+  { text: "How do I set up my family emergency plan?", icon: "people" },
+];
 
 const WELCOME_MESSAGE = {
   role: "assistant",
@@ -34,6 +44,7 @@ const WELCOME_MESSAGE = {
 export default function Assistant() {
   const insets = useSafeAreaInsets();
   const { question } = useLocalSearchParams();
+  const { isOnline, isConnected, isInternetReachable } = useNetworkStatus();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,13 +53,35 @@ export default function Assistant() {
   const inputRef = useRef(null);
   const initialized = useRef(false);
   const pendingQuestion = useRef(null);
+  const wasOnlineRef = useRef(isOnline);
+
+  const netInfoLabel = useMemo(() => {
+    if (isConnected && isInternetReachable) return "Online";
+    if (isConnected && isInternetReachable === null) return "Checking...";
+    if (!isConnected) return "No connection";
+    return "Offline";
+  }, [isConnected, isInternetReachable]);
+
+  useEffect(() => {
+    if (wasOnlineRef.current && !isOnline) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `[WARNING] You are offline.\n\nConnection: ${isConnected ? "Connected to network" : "No network interface"}\nInternet: ${isInternetReachable === null ? "Unknown" : isInternetReachable ? "Reachable" : "Not reachable"}\n\nI can't reach the AI service without internet. Please check your connection and try again.`,
+        },
+      ]);
+    }
+    wasOnlineRef.current = isOnline;
+  }, [isOnline, isConnected, isInternetReachable]);
 
   const loadSuggestions = useCallback(async () => {
     try {
       const data = await getSuggestions();
-      setSuggestions(data.suggestions || []);
+      const apiSuggestions = data.suggestions || [];
+      setSuggestions(apiSuggestions.length > 0 ? apiSuggestions : SYSTEM_SUGGESTIONS);
     } catch {
-      setSuggestions([]);
+      setSuggestions(SYSTEM_SUGGESTIONS);
     }
   }, []);
 
@@ -103,6 +136,17 @@ export default function Assistant() {
       const msg = (text || input).trim();
       if (!msg || loading) return;
 
+      if (!isOnline) {
+        const offlineMsg = {
+          role: "assistant",
+          content: `[WARNING] You are offline.\n\nConnection: ${isConnected ? "Connected to network" : "No network interface"}\nInternet: ${isInternetReachable === null ? "Unknown" : isInternetReachable ? "Reachable" : "Not reachable"}\n\nI can't send messages without internet. Please check your connection and try again.`,
+        };
+        setMessages((prev) => [...prev, { role: "user", content: msg }, offlineMsg]);
+        setInput("");
+        scrollToBottom();
+        return;
+      }
+
       const userMessage = { role: "user", content: msg };
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
@@ -133,7 +177,7 @@ export default function Assistant() {
         scrollToBottom();
       }
     },
-    [input, loading, scrollToBottom, loadSuggestions]
+    [input, loading, scrollToBottom, loadSuggestions, isOnline, isConnected, isInternetReachable]
   );
 
   useEffect(() => {
@@ -242,8 +286,8 @@ export default function Assistant() {
             <View>
               <Text style={styles.headerTitle}>AGAP.ai</Text>
               <View style={styles.statusRow}>
-                <View style={styles.statusDot} />
-                <Text style={styles.headerStatus}>Online</Text>
+                <View style={[styles.statusDot, !isOnline && styles.statusDotOffline]} />
+                <Text style={styles.headerStatus}>{netInfoLabel}</Text>
               </View>
             </View>
           </View>
@@ -284,33 +328,41 @@ export default function Assistant() {
               onSelect={handleSuggestionSelect}
             />
           )}
-          <View style={styles.inputWrap}>
+          {!isOnline && (
+            <View style={styles.offlineBar}>
+              <Ionicons name="cloud-offline" size={14} color="#B45309" />
+              <Text style={styles.offlineBarText}>
+                You are offline — AI responses unavailable
+              </Text>
+            </View>
+          )}
+          <View style={[styles.inputWrap, !isOnline && styles.inputWrapOffline]}>
             <TextInput
               ref={inputRef}
               style={styles.textInput}
-              placeholder="Ask me anything..."
+              placeholder={isOnline ? "Ask me anything..." : "No internet connection..."}
               placeholderTextColor={colors.placeholder}
               value={input}
               onChangeText={setInput}
               multiline
               maxLength={2000}
-              editable={!loading}
+              editable={!loading && isOnline}
               selectionColor={colors.primary}
             />
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!input.trim() || loading) && styles.sendButtonDisabled,
+                (!input.trim() || loading || !isOnline) && styles.sendButtonDisabled,
               ]}
               onPress={() => handleSend()}
-              disabled={!input.trim() || loading}
+              disabled={!input.trim() || loading || !isOnline}
               activeOpacity={0.7}
             >
               <Ionicons
                 name="arrow-up"
                 size={22}
                 fontWeight="bold"
-                color={!input.trim() || loading ? colors.muted : colors.white}
+                color={!input.trim() || loading || !isOnline ? colors.muted : colors.white}
               />
             </TouchableOpacity>
           </View>
@@ -372,6 +424,9 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     backgroundColor: "#34D399",
+  },
+  statusDotOffline: {
+    backgroundColor: "#F59E0B",
   },
   headerStatus: {
     fontSize: 11,
@@ -491,5 +546,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E7EB",
     shadowOpacity: 0,
     elevation: 0,
+  },
+  offlineBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  offlineBarText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#92400E",
+  },
+  inputWrapOffline: {
+    borderColor: "#FDE68A",
+    backgroundColor: "#FFFBEB",
   },
 });
