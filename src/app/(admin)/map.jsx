@@ -212,6 +212,7 @@ export default function Index() {
     setActiveClusterId,
     focusNonce,
     clustersNonce,
+    invalidateClusters,
     focusTeamId,
     focusTeamNonce,
   } = useCluster();
@@ -895,6 +896,7 @@ export default function Index() {
           assignedExtraCount={selectedAssignedTeam?.extraCount ?? 0}
           onClose={collapseCluster}
           onAssignTeam={() => setAssignOpen(true)}
+          onResolved={invalidateClusters}
         />
       )}
 

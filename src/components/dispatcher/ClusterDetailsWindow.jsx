@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,7 @@ import PriorityChip from "../ui/PriorityChip";
 import DisasterTypeChip from "../ui/DisasterTypeChip";
 import StatusBadge from "../ui/StatusBadge";
 import { reverseGeocode } from "../../services/geocodingService";
+import { updateClusterStatus } from "../../services/teamService";
 
 const TABS = [
   { key: "plan", label: "Action Plan" },
@@ -58,10 +60,12 @@ export default function ClusterDetailsWindow({
   assignedExtraCount = 0,
   onClose,
   onAssignTeam,
+  onResolved,
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("plan");
   const [barangay, setBarangay] = useState(null);
+  const [resolving, setResolving] = useState(false);
 
   // Rebuild only when a different set of reports arrives.
   const reportList = useMemo(() => reports ?? [], [reports]);
@@ -101,6 +105,33 @@ export default function ClusterDetailsWindow({
     });
   };
 
+  const handleResolve = () => {
+    Alert.alert(
+      "Resolve Cluster",
+      "Are you sure you want to mark this cluster as resolved? This will release all assigned teams.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Resolve",
+          style: "destructive",
+          onPress: async () => {
+            if (resolving) return;
+            setResolving(true);
+            try {
+              await updateClusterStatus(cluster.cluster_id, "resolved");
+              onResolved?.();
+              onClose?.();
+            } catch (e) {
+              console.log("resolve cluster error:", e);
+            } finally {
+              setResolving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.window}>
       {/* Header */}
@@ -137,6 +168,43 @@ export default function ClusterDetailsWindow({
           <StatusBadge status={assignedTeam.status} />
         </View>
       ) : null}
+
+      {/* Buttons */}
+      <View style={styles.buttonRow}>
+        <TouchableOpacity
+          style={styles.seeDetailsButton}
+          activeOpacity={0.8}
+          onPress={handleSeeDetails}
+        >
+          <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+          <Text style={styles.seeDetailsText}>Details</Text>
+        </TouchableOpacity>
+
+        {!assignedTeam ? (
+          <TouchableOpacity
+            style={styles.assignButton}
+            activeOpacity={0.8}
+            onPress={onAssignTeam}
+          >
+            <Ionicons name="people-circle-outline" size={16} color={colors.white} />
+            <Text style={styles.assignButtonText}>Assign</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        <TouchableOpacity
+          style={styles.resolveButton}
+          activeOpacity={0.8}
+          onPress={handleResolve}
+          disabled={resolving}
+        >
+          {resolving ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="checkmark-circle-outline" size={16} color={colors.white} />
+          )}
+          <Text style={styles.resolveButtonText}>Resolve</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Tab toggle */}
       <View style={styles.tabTrack}>
@@ -432,6 +500,11 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.text,
   },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
   tabTrack: {
     flexDirection: "row",
     borderWidth: 1.5,
@@ -462,6 +535,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
+  },
+  seeDetailsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  seeDetailsText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
   },
   tabCount: {
     minWidth: 20,
@@ -577,13 +665,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 11,
   },
   assignButtonText: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  resolveButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#15803D",
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  resolveButtonText: {
+    fontSize: 13,
     fontWeight: "700",
     color: colors.white,
   },

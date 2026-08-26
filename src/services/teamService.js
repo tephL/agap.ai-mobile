@@ -59,6 +59,14 @@ export async function updateAssignmentStatus(assignmentId, status) {
 // The backend reports failures as { error: "..." } (e.g. 409 "Team already
 // has an active assignment"). Axios errors otherwise hide it behind a
 // generic message, so screens should show this instead of err.message.
+export async function updateClusterStatus(clusterId, status) {
+  const { data } = await api.patch(
+    `/api/dispatcher/clusters/${clusterId}/status`,
+    { status }
+  );
+  return data.cluster;
+}
+
 export function assignmentError(err, fallback) {
   return err?.response?.data?.error ?? fallback;
 }
