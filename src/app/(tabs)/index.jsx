@@ -12,6 +12,7 @@ import { getMyFamily } from '../../services/familyService.js';
 import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
 import { getActiveTyphoon } from '../../services/typhoonService.js';
 import { getRouteCoordinates } from '../../services/routeService';
+import { getPublicTeams } from '../../services/teamService';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
@@ -233,6 +234,9 @@ export default function Index() {
   // active dispatch notifications
   const { dispatches, dismiss, resetDismissed } = useActiveDispatches();
 
+  // public teams (is_public = true) shown on citizen map
+  const [publicTeams, setPublicTeams] = useState([]);
+
   // family markers state
   const [familyMembers, setFamilyMembers] = useState([]);
   const [selectedPerson, setSelectedPerson] = useState(null);
@@ -292,6 +296,22 @@ export default function Index() {
     useCallback(() => {
       resetDismissed();
     }, [resetDismissed])
+  );
+
+  // ---- fetch public teams on focus -------------------------------------
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const teams = await getPublicTeams();
+          if (!cancelled) setPublicTeams(teams);
+        } catch (e) {
+          console.log("Failed to load public teams", e);
+        }
+      })();
+      return () => { cancelled = true; };
+    }, [])
   );
 
   // ---- location sending + family fetch loop (runs while screen focused) ---
@@ -590,6 +610,46 @@ export default function Index() {
     [dispatches]
   );
 
+  // ---- public teams (is_public) base markers ---------------------------
+  const PUBLIC_TEAM_COLOR = '#3b82f6';
+  const publicTeamGeojson = useMemo(() => {
+    const dispatchedIds = new Set(
+      dispatches
+        .filter(
+          (d) =>
+            d.team?.lat != null &&
+            d.team?.lng != null &&
+            !Number.isNaN(d.team.lat) &&
+            !Number.isNaN(d.team.lng)
+        )
+        .map((d) => d.team_id)
+    );
+    return {
+      type: 'FeatureCollection',
+      features: publicTeams
+        .filter(
+          (t) =>
+            !dispatchedIds.has(t.team_id) &&
+            typeof t.lat === 'number' &&
+            typeof t.lng === 'number' &&
+            !Number.isNaN(t.lat) &&
+            !Number.isNaN(t.lng)
+        )
+        .map((t) => ({
+          type: 'Feature',
+          id: `public-team-${t.team_id}`,
+          geometry: {
+            type: 'Point',
+            coordinates: [t.lng, t.lat],
+          },
+          properties: {
+            team_id: t.team_id,
+            name: t.name,
+          },
+        })),
+    };
+  }, [publicTeams, dispatches]);
+
   // ---- pulsing "dih" effect ----------------------------------------------
   useEffect(() => {
     let raf;
@@ -868,6 +928,60 @@ export default function Index() {
                   }}
                   paint={{
                     'text-color': TEAM_DISPATCH_COLOR,
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 1.5,
+                    'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {/* public team markers — blue circle with shelter icon */}
+            {publicTeamGeojson.features.length > 0 && (
+              <GeoJSONSource id="publicTeamSource" data={publicTeamGeojson}>
+                <Layer
+                  type="circle"
+                  id="publicTeamCircle"
+                  paint={{
+                    'circle-color': '#ffffff',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 8,
+                      12, 12,
+                      16, 16,
+                      20, 20,
+                    ],
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': PUBLIC_TEAM_COLOR,
+                    'circle-opacity': 0.9,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="publicTeamIcon"
+                  layout={{
+                    'icon-image': 'shelter',
+                    'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1, 16, 1.2, 20, 1.4],
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true,
+                  }}
+                  paint={{
+                    'icon-color': PUBLIC_TEAM_COLOR,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="publicTeamLabel"
+                  layout={{
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.8],
+                    'text-anchor': 'top',
+                    'text-allow-overlap': false,
+                  }}
+                  paint={{
+                    'text-color': PUBLIC_TEAM_COLOR,
                     'text-halo-color': '#ffffff',
                     'text-halo-width': 1.5,
                     'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
