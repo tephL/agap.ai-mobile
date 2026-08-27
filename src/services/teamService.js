@@ -70,3 +70,23 @@ export async function updateClusterStatus(clusterId, status) {
 export function assignmentError(err, fallback) {
   return err?.response?.data?.error ?? fallback;
 }
+
+export async function updateTeamVisibility(teamId, is_public) {
+  const { data } = await api.patch(`/api/dispatcher/teams/${teamId}`, {
+    is_public,
+  });
+  return data.team;
+}
+
+export async function relocateTeam(teamId, latitude, longitude) {
+  const { data } = await api.patch(`/api/dispatcher/teams/${teamId}/relocate`, {
+    latitude,
+    longitude,
+  });
+  return data.team;
+}
+
+export async function getPublicTeams() {
+  const { data } = await api.get("/api/public-teams");
+  return data.teams ?? [];
+}

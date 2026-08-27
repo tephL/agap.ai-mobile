@@ -27,6 +27,7 @@ import {
   assignTeamToCluster,
   assignmentError,
   updateAssignmentStatus,
+  updateTeamVisibility,
 } from "@/services/teamService";
 import { useCluster } from "@/context/ClusterContext";
 
@@ -83,6 +84,7 @@ export default function TeamDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [togglingPublic, setTogglingPublic] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -219,6 +221,28 @@ export default function TeamDetailScreen() {
     router.navigate("/(admin)/map");
   };
 
+  const handleTogglePublic = async () => {
+    if (togglingPublic || !team) return;
+    setTogglingPublic(true);
+    setError(null);
+    try {
+      const updated = await updateTeamVisibility(team.team_id, !team.is_public);
+      setTeam((prev) => (prev ? { ...prev, is_public: updated.is_public } : prev));
+    } catch (err) {
+      setError(assignmentError(err, "Failed to update visibility."));
+    } finally {
+      setTogglingPublic(false);
+    }
+  };
+
+  const handleRelocate = () => {
+    if (!team) return;
+    router.push({
+      pathname: "/relocate-team",
+      params: { teamId: team.team_id, teamName: team.name },
+    });
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -284,6 +308,45 @@ export default function TeamDetailScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+
+        {/* Visibility toggle */}
+        <View style={styles.sectionCard}>
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleInfo}>
+              <Ionicons name="eye" size={18} color={colors.text} />
+              <View>
+                <Text style={styles.toggleLabel}>Visible to Citizens</Text>
+                <Text style={styles.toggleHint}>
+                  Show this team&rsquo;s base on the citizen map
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.toggleSwitch, team.is_public && styles.toggleSwitchOn]}
+              activeOpacity={0.7}
+              onPress={handleTogglePublic}
+              disabled={togglingPublic}
+            >
+              {togglingPublic ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <View
+                  style={[styles.toggleKnob, team.is_public && styles.toggleKnobOn]}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Relocate */}
+        <TouchableOpacity
+          style={styles.relocateButton}
+          activeOpacity={0.8}
+          onPress={handleRelocate}
+        >
+          <MaterialIcons name="place" size={18} color={colors.white} />
+          <Text style={styles.relocateButtonText}>Relocate Team</Text>
+        </TouchableOpacity>
 
         {/* Assignment */}
         {activeAssignment?.cluster ? (
@@ -492,6 +555,64 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: colors.primary,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  toggleInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  toggleHint: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  toggleSwitch: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 2,
+  },
+  toggleSwitchOn: {
+    backgroundColor: colors.primary,
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    alignSelf: "flex-start",
+  },
+  toggleKnobOn: {
+    alignSelf: "flex-end",
+  },
+  relocateButton: {
+    backgroundColor: "#f97316",
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 14,
+  },
+  relocateButtonText: {
+    color: colors.white,
+    fontWeight: "700",
+    fontSize: 15,
   },
   sectionCard: {
     borderWidth: 1,
