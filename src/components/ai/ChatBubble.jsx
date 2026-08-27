@@ -69,20 +69,34 @@ function stripMarkdown(text) {
   return t.trim();
 }
 
+const TAG_ALIASES = {
+  TIP: "tip",
+  WARNING: "warning",
+  IMPORMASYON: "impormasyon",
+  EMERGENCY: "emergency",
+  EMERHERSYA: "emergency",
+  EMERHENSYA: "emergency",
+  EMERHANCY: "emergency",
+  EMERHENCY: "emergency",
+  SUCCESS: "success",
+  TAGUMPAY: "success",
+};
+
+const TAG_PATTERN = new RegExp(`\\[(${Object.keys(TAG_ALIASES).join("|")})\\]\\s*`, "gi");
+
 function parseResponseBlocks(text) {
   const blocks = [];
-  const tagPattern = /\[(TIP|WARNING|IMPORMASYON|EMERGENCY|SUCCESS)\]\s*/gi;
-  const parts = text.split(tagPattern);
+  const parts = text.split(TAG_PATTERN);
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
     if (!part || !part.trim()) continue;
 
-    const upper = part.toUpperCase();
-    if (["TIP", "WARNING", "IMPORMASYON", "EMERGENCY", "SUCCESS"].includes(upper)) {
+    const type = TAG_ALIASES[part.toUpperCase()];
+    if (type) {
       const nextPart = parts[i + 1];
       if (nextPart && nextPart.trim()) {
-        blocks.push({ type: upper.toLowerCase(), text: nextPart.trim() });
+        blocks.push({ type, text: nextPart.trim() });
         i++;
       } else {
         blocks.push({ type: "normal", text: part });
