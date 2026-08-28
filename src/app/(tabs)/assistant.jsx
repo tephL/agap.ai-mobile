@@ -43,7 +43,7 @@ const WELCOME_MESSAGE = {
 
 export default function Assistant() {
   const insets = useSafeAreaInsets();
-  const { question } = useLocalSearchParams();
+  const { question, hazardLayerId, hazardVar } = useLocalSearchParams();
   const { isOnline, isConnected, isInternetReachable } = useNetworkStatus();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -54,6 +54,17 @@ export default function Assistant() {
   const initialized = useRef(false);
   const pendingQuestion = useRef(null);
   const wasOnlineRef = useRef(isOnline);
+
+  // Hazard context captured from the "?" button on a hazard layer. Router
+  // params are strings, so re-quote the var level. Only sent with the
+  // pre-filled question; typed follow-ups never include it.
+  const currentHazardContext = useMemo(() => {
+    const level = Number(hazardVar);
+    if (hazardLayerId && [1, 2, 3].includes(level)) {
+      return { hazardLayerId, hazardVar: level };
+    }
+    return null;
+  }, [hazardLayerId, hazardVar]);
 
   const netInfoLabel = useMemo(() => {
     if (isConnected && isInternetReachable) return "Online";
@@ -132,7 +143,7 @@ export default function Assistant() {
   }, []);
 
   const handleSend = useCallback(
-    async (text) => {
+    async (text, hazardContext) => {
       const msg = (text || input).trim();
       if (!msg || loading) return;
 
@@ -155,7 +166,7 @@ export default function Assistant() {
       scrollToBottom();
 
       try {
-        const data = await sendChatMessage(msg);
+        const data = await sendChatMessage(msg, hazardContext);
         const assistantMessage = { role: "assistant", content: data.reply };
         setMessages((prev) => [...prev, assistantMessage]);
         const followUps = parseSuggestions(data.reply);
@@ -184,17 +195,17 @@ export default function Assistant() {
     if (pendingQuestion.current && !loading && messages.length > 0) {
       const q = pendingQuestion.current;
       pendingQuestion.current = null;
-      handleSend(q);
+      handleSend(q, currentHazardContext);
     }
-  }, [loading, messages.length, handleSend]);
+  }, [loading, messages.length, handleSend, currentHazardContext]);
 
   const prevQuestion = useRef(question);
   useEffect(() => {
     if (question && question !== prevQuestion.current && !loading) {
-      handleSend(question);
+      handleSend(question, currentHazardContext);
     }
     prevQuestion.current = question;
-  }, [question, loading, handleSend]);
+  }, [question, loading, handleSend, currentHazardContext]);
 
   const handleClearChat = useCallback(() => {
     Alert.alert(

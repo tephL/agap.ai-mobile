@@ -1,7 +1,11 @@
 import { api } from "./api";
 
-export async function sendChatMessage(message) {
-  const response = await api.post("/api/ai/", { message });
+export async function sendChatMessage(message, hazardContext) {
+  const payload = { message };
+  if (hazardContext) {
+    payload.hazardContext = hazardContext;
+  }
+  const response = await api.post("/api/ai/", payload);
   return response.data;
 }
 

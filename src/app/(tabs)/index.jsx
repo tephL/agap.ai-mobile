@@ -28,7 +28,7 @@ import useActiveDispatches from '../../hooks/useActiveDispatches';
 
 // hazard layer selection prefs
 import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
-import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
+import { downloadLayer, getHazardLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
 import { getLegendHidden, setLegendHidden } from '../../services/hazardPrefsDb';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
@@ -202,16 +202,6 @@ export default function Index() {
     }, [sosStatus])
   );
 
-  const handleAskAI = useCallback(
-    (layerLabel) => {
-      router.push({
-        pathname: "/assistant",
-        params: { question: `Ano ang ibig sabihin ng "${layerLabel}" na hazard layer? Ipaliwanag ito nang detalyado.` },
-      });
-    },
-    [router]
-  );
-
   const handleTyphoonAskPreparedness = useCallback(() => {
     router.push({
       pathname: "/assistant",
@@ -247,6 +237,7 @@ export default function Index() {
   const [mapReady, setMapReady] = useState(false);
   const hasRunOnce = useRef(false);
   const cameraRef = useRef(null);
+  const mapRef = useRef(null);
 
   // tracks which selectedUserId param value we've already acted on, so a
   // background family refetch doesn't keep re-flying/re-opening the card
@@ -289,6 +280,61 @@ export default function Index() {
   // hazard overlay selection (persisted, single-select) + layers sheet state
   const { activeId, select: selectHazardLayer } = useActiveHazardLayer();
   const [layersOpen, setLayersOpen] = useState(false);
+
+  /**
+   * Reads the active hazard layer at the user's current position by asking
+   * the rendered map which polygon sits under that pixel. Returns the flood
+   * `Var` value (1 = low, 2 = medium, 3 = high) or null when the point is
+   * not inside a hazard polygon (or nothing is rendered yet).
+   */
+  const resolveCurrentHazardVar = useCallback(
+    async (layerId) => {
+      if (!mapReady || !mapRef.current) return null;
+      try {
+        const coords = getCachedCoords() || (await resolveCoords());
+        if (!coords) return null;
+        const pixel = await mapRef.current.project([
+          coords.longitude,
+          coords.latitude,
+        ]);
+        if (!pixel) return null;
+        const features = await mapRef.current.queryRenderedFeatures(pixel, {
+          layers: [`hazard-source-${layerId}-fill`],
+        });
+        if (!features || features.length === 0) return null;
+        const level = Number(features[0].properties?.Var);
+        return [1, 2, 3].includes(level) ? level : null;
+      } catch (e) {
+        console.log("Failed to resolve hazard at location", e);
+        return null;
+      }
+    },
+    [mapReady, getCachedCoords, resolveCoords]
+  );
+
+  const handleAskAI = useCallback(
+    async (layerId) => {
+      const layer = getHazardLayer(layerId);
+      let hazardParams = {};
+      // Location risk is only resolvable when the tapped layer is the one
+      // actually rendered on the map (queryRenderedFeatures reads drawn
+      // polygons); otherwise just explain the layer in general terms.
+      if (activeId === layerId) {
+        const varLevel = await resolveCurrentHazardVar(layerId);
+        if (varLevel != null) {
+          hazardParams = { hazardLayerId: layerId, hazardVar: String(varLevel) };
+        }
+      }
+      router.push({
+        pathname: "/assistant",
+        params: {
+          question: `Ano ang ibig sabihin ng "${layer.label}" na hazard layer? Ipaliwanag ito nang detalyado.`,
+          ...hazardParams,
+        },
+      });
+    },
+    [router, activeId, resolveCurrentHazardVar]
+  );
 
   // legend visibility (persisted): expands whenever the active layer
   // changes, otherwise restores what the user last chose
@@ -784,6 +830,7 @@ export default function Index() {
     <View style={styles.container}>
 
       <Map
+        ref={mapRef}
         style={styles.map}
         mapStyle={MAP_STYLE_URL}
         logoEnabled={false}

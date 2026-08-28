@@ -26,7 +26,7 @@ interface LayerRowProps {
   config: HazardLayerConfig;
   active: boolean;
   onSelect: () => void;
-  onAskAI: (layerLabel: string) => void;
+  onAskAI: (layerId: string) => void;
 }
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
@@ -106,7 +106,7 @@ function LayerRow({ config, active, onSelect, onAskAI }: LayerRowProps) {
 
       <TouchableOpacity
         style={styles.helpButton}
-        onPress={() => onAskAI(config.label)}
+        onPress={() => onAskAI(config.id)}
         hitSlop={8}
       >
         <Ionicons name="help" size={14} color="#6B7280" />
@@ -139,8 +139,8 @@ interface HazardLayersPanelProps {
    * deselects it. Download state of every layer is unaffected.
    */
   onSelect: (layerId: string | null) => void;
-  /** Called with a layer label when the user taps the ? button. */
-  onAskAI: (layerLabel: string) => void;
+  /** Called with a layer id when the user taps the ? button. */
+  onAskAI: (layerId: string) => void;
 }
 
 export default function HazardLayersPanel({
