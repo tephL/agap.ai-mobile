@@ -174,18 +174,6 @@ export default function CreateTeamScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            activeOpacity={0.8}
-            onPress={() => router.back()}
-            disabled={submitting}
-          >
-            <MaterialIcons name="arrow-back" size={20} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.pageLabel}>Create Team</Text>
-          <View style={styles.backButtonSpacer} />
-        </View>
 
         <View style={styles.fieldsBlock}>
           <FormInput
