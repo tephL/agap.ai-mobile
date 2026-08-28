@@ -21,6 +21,7 @@ import TyphoonAlertBanner from "@/components/notifications/TyphoonAlertBanner";
 import { PersonCard } from '@/components/PersonCard';
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
 import HazardLayersPanel from '@/components/HazardLayersPanel';
+import HazardLayerLegend from '@/components/HazardLayerLegend';
 
 // hooks
 import useActiveDispatches from '../../hooks/useActiveDispatches';
@@ -28,6 +29,7 @@ import useActiveDispatches from '../../hooks/useActiveDispatches';
 // hazard layer selection prefs
 import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
 import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
+import { getLegendHidden, setLegendHidden } from '../../services/hazardPrefsDb';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
@@ -287,6 +289,32 @@ export default function Index() {
   // hazard overlay selection (persisted, single-select) + layers sheet state
   const { activeId, select: selectHazardLayer } = useActiveHazardLayer();
   const [layersOpen, setLayersOpen] = useState(false);
+
+  // legend visibility (persisted): expands whenever the active layer
+  // changes, otherwise restores what the user last chose
+  const [legendHidden, setLegendHiddenState] = useState(false);
+  const prevActiveLayerRef = useRef(activeId);
+  useEffect(() => {
+    const prev = prevActiveLayerRef.current;
+    prevActiveLayerRef.current = activeId;
+    if (prev !== null && activeId !== prev) {
+      // a different layer was picked — always re-show its legend
+      setLegendHiddenState(false);
+      setLegendHidden(false).catch(() => undefined);
+      return;
+    }
+    // same layer (or first mount) — restore the persisted choice
+    getLegendHidden()
+      .then(setLegendHiddenState)
+      .catch(() => undefined);
+  }, [activeId]);
+
+  const handleToggleLegend = useCallback(() => {
+    setLegendHiddenState((hidden) => {
+      setLegendHidden(!hidden).catch(() => undefined);
+      return !hidden;
+    });
+  }, []);
 
   // staleness re-check clock
   const [now, setNow] = useState(Date.now());
@@ -1030,6 +1058,14 @@ export default function Index() {
         </TouchableOpacity>
         {activeId && <View style={styles.layersDot} />}
       </View>
+
+      {/* legend explaining the active overlay's colors — bottom-left, only
+          while a layer is active; collapses to a chip when hidden */}
+      <HazardLayerLegend
+        activeId={activeId}
+        hidden={legendHidden}
+        onToggle={handleToggleLegend}
+      />
 
 
       <HazardLayersPanel
