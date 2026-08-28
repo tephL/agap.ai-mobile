@@ -28,6 +28,7 @@ import {
   assignmentError,
   updateAssignmentStatus,
   updateTeamVisibility,
+  deleteTeam,
 } from "@/services/teamService";
 import { useCluster } from "@/context/ClusterContext";
 
@@ -243,6 +244,36 @@ export default function TeamDetailScreen() {
     });
   };
 
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = () => {
+    if (deleting || !team) return;
+    Alert.alert(
+      "Delete Team",
+      `Are you sure you want to delete ${team.name}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            setError(null);
+            try {
+              await deleteTeam(team.team_id);
+              invalidateClusters();
+              router.back();
+            } catch (err) {
+              setError(assignmentError(err, "Failed to delete team."));
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -337,6 +368,23 @@ export default function TeamDetailScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Delete */}
+        <TouchableOpacity
+          style={styles.deleteButton}
+          activeOpacity={0.8}
+          onPress={handleDelete}
+          disabled={deleting}
+        >
+          {deleting ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <>
+              <MaterialIcons name="delete" size={18} color={colors.white} />
+              <Text style={styles.deleteButtonText}>Delete Team</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
         {/* Relocate */}
         <TouchableOpacity
@@ -610,6 +658,21 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   relocateButtonText: {
+    color: colors.white,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  deleteButton: {
+    backgroundColor: colors.primary,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+  },
+  deleteButtonText: {
     color: colors.white,
     fontWeight: "700",
     fontSize: 15,

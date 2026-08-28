@@ -88,6 +88,11 @@ export async function relocateTeam(teamId, latitude, longitude) {
   return data.team;
 }
 
+export async function deleteTeam(teamId) {
+  const { data } = await api.delete(`/api/dispatcher/teams/${teamId}`);
+  return data;
+}
+
 export async function getPublicTeams() {
   const { data } = await api.get("/api/public-teams");
   return data.teams ?? [];
