@@ -75,6 +75,17 @@ export default function RootLayout() {
         options={{
           title: "Create Team",
           headerShadowVisible: false,
+          headerShown: true,
+          headerTintColor: "#182033",
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTitleStyle: { fontWeight: "700" },
+        }}
+      />
+      <Stack.Screen
+        name="relocate-team"
+        options={{
+          title: "Relocate Team",
+          headerShadowVisible: false,
           headerShown: false,
           headerTintColor: "#182033",
           headerStyle: { backgroundColor: "#FFFFFF" },

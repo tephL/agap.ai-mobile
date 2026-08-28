@@ -133,22 +133,10 @@ export default function RelocateTeamScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <View style={styles.flex}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            activeOpacity={0.8}
-            onPress={() => router.back()}
-            disabled={submitting}
-          >
-            <MaterialIcons name="arrow-back" size={20} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.pageLabel}>Relocate Team</Text>
-          <View style={styles.backButtonSpacer} />
-        </View>
 
         <View style={styles.mapSection}>
           <Text style={styles.fieldHint}>
-            Tap the map to set the new location for {teamName}.
+            Tap the map to set the new location for <Text style={styles.boldText}>{teamName}</Text>.
           </Text>
           <View style={styles.mapWrap}>
             <MapLibreMap
@@ -267,6 +255,9 @@ export default function RelocateTeamScreen() {
 }
 
 const styles = StyleSheet.create({
+  boldText: {
+    fontWeight: 'bold' 
+  }, 
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
