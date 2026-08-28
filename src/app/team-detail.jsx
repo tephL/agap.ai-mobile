@@ -369,32 +369,30 @@ export default function TeamDetailScreen() {
           </View>
         </View>
 
-        {/* Delete */}
-        <TouchableOpacity
-          style={styles.deleteButton}
-          activeOpacity={0.8}
-          onPress={handleDelete}
-          disabled={deleting}
-        >
-          {deleting ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <>
-              <MaterialIcons name="delete" size={18} color={colors.white} />
-              <Text style={styles.deleteButtonText}>Delete Team</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {/* Relocate / Delete */}
+        <View style={styles.updateRow}>
+          <TouchableOpacity
+            style={styles.relocateButton}
+            activeOpacity={0.8}
+            onPress={handleRelocate}
+          >
+            <MaterialIcons name="place" size={18} color={colors.white} />
+            <Text style={styles.relocateButtonText}>Relocate Team</Text>
+          </TouchableOpacity>
 
-        {/* Relocate */}
-        <TouchableOpacity
-          style={styles.relocateButton}
-          activeOpacity={0.8}
-          onPress={handleRelocate}
-        >
-          <MaterialIcons name="place" size={18} color={colors.white} />
-          <Text style={styles.relocateButtonText}>Relocate Team</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.deleteButton}
+            activeOpacity={0.8}
+            onPress={handleDelete}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <MaterialIcons name="delete" size={20} color={colors.white} />
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Assignment */}
         {activeAssignment?.cluster ? (
@@ -647,7 +645,13 @@ const styles = StyleSheet.create({
   toggleKnobOn: {
     alignSelf: "flex-end",
   },
+  updateRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14,
+  },
   relocateButton: {
+    flex: 1,
     backgroundColor: "#f97316",
     height: 48,
     borderRadius: 12,
@@ -655,7 +659,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
-    marginBottom: 14,
   },
   relocateButtonText: {
     color: colors.white,
@@ -663,19 +666,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   deleteButton: {
-    backgroundColor: colors.primary,
+    width: 48,
     height: 48,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 10,
-  },
-  deleteButtonText: {
-    color: colors.white,
-    fontWeight: "700",
-    fontSize: 15,
   },
   sectionCard: {
     borderWidth: 1,
