@@ -68,6 +68,13 @@ export default function ClusterDetailsWindow({
     });
   };
 
+  const handleOpenTeam = () => {
+    router.push({
+      pathname: "/team-detail",
+      params: { teamId: String(assignedTeam.team_id) },
+    });
+  };
+
   const handleResolve = () => {
     Alert.alert(
       "Resolve Cluster",
@@ -117,7 +124,11 @@ export default function ClusterDetailsWindow({
 
       {/* Team currently dispatched to this cluster */}
       {assignedTeam ? (
-        <View style={styles.assignedBanner}>
+        <TouchableOpacity
+          style={styles.assignedBanner}
+          activeOpacity={0.7}
+          onPress={handleOpenTeam}
+        >
           <View style={styles.assignedIconWrap}>
             <Ionicons name="people-circle-outline" size={18} color={colors.white} />
           </View>
@@ -129,7 +140,8 @@ export default function ClusterDetailsWindow({
             </Text>
           </View>
           <StatusBadge status={assignedTeam.status} />
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+        </TouchableOpacity>
       ) : null}
 
       {/* Body */}
