@@ -183,7 +183,7 @@ export default function CreateTeamScreen() {
             value={name}
             onChangeText={(v) => updateField("name", v)}
             error={errors.name}
-            placeholder="e.g. Rescue Alpha"
+            placeholder="   e.g. Rescue Alpha"
             returnKeyType="next"
           />
           <FormInput
@@ -346,7 +346,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingTop: 12,
     paddingBottom: 8,
   },
   backButton: {
@@ -370,7 +369,6 @@ const styles = StyleSheet.create({
   fieldsBlock: {
     gap: 14,
     paddingHorizontal: 20,
-    paddingTop: 4,
   },
   visibilityCard: {
     backgroundColor: colors.surface,
