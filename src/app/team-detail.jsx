@@ -338,6 +338,31 @@ export default function TeamDetailScreen() {
               <Text style={styles.mapButtonText}>Go to location on map</Text>
             </TouchableOpacity>
           ) : null}
+
+          {/* Relocate / Delete */}
+          <View style={styles.updateRow}>
+            <TouchableOpacity
+              style={styles.relocateButton}
+              activeOpacity={0.8}
+              onPress={handleRelocate}
+            >
+              <MaterialIcons name="place" size={18} color="#f97316" />
+              <Text style={styles.relocateButtonText}>Relocate Team</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteButton}
+              activeOpacity={0.8}
+              onPress={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <MaterialIcons name="delete" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Visibility toggle */}
@@ -367,31 +392,6 @@ export default function TeamDetailScreen() {
               )}
             </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Relocate / Delete */}
-        <View style={styles.updateRow}>
-          <TouchableOpacity
-            style={styles.relocateButton}
-            activeOpacity={0.8}
-            onPress={handleRelocate}
-          >
-            <MaterialIcons name="place" size={18} color={colors.white} />
-            <Text style={styles.relocateButtonText}>Relocate Team</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.deleteButton}
-            activeOpacity={0.8}
-            onPress={handleDelete}
-            disabled={deleting}
-          >
-            {deleting ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <MaterialIcons name="delete" size={20} color={colors.white} />
-            )}
-          </TouchableOpacity>
         </View>
 
         {/* Assignment */}
@@ -648,30 +648,31 @@ const styles = StyleSheet.create({
   updateRow: {
     flexDirection: "row",
     gap: 10,
-    marginBottom: 14,
   },
   relocateButton: {
     flex: 1,
-    backgroundColor: "#f97316",
     height: 48,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
+    borderWidth: 1.5,
+    borderColor: "#f97316",
   },
   relocateButtonText: {
-    color: colors.white,
+    color: "#f97316",
     fontWeight: "700",
     fontSize: 15,
   },
   deleteButton: {
     width: 48,
     height: 48,
-    backgroundColor: colors.primary,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
   sectionCard: {
     borderWidth: 1,
