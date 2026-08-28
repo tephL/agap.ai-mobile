@@ -99,8 +99,8 @@ function DispatchCard({ dispatch, opacity, onDismiss }) {
       <View style={styles.cardBody}>
         <View style={styles.infoRow}>
           <Ionicons name="people" size={14} color={colors.primary} />
-          <Text style={styles.teamName} numberOfLines={1}>
-            {team?.name ?? "Response Team"}
+          <Text style={styles.teamName} numberOfLines={2}>
+            {`A team from ${team?.name} is on the way` ?? "Response Team"}
           </Text>
           <View style={styles.statusBadge}>
             <Text style={styles.statusText}>
