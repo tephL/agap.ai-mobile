@@ -16,12 +16,14 @@ export async function createTeam({
   contact_number,
   latitude,
   longitude,
+  is_public = false,
 }) {
   const { data } = await api.post("/api/dispatcher/teams", {
     name,
     contact_number,
     latitude,
     longitude,
+    is_public,
   });
   return data.team;
 }

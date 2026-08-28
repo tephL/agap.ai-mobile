@@ -42,6 +42,7 @@ export default function CreateTeamScreen() {
 
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
   const [location, setLocation] = useState(null);
   const [mapReady, setMapReady] = useState(false);
   const [errors, setErrors] = useState({});
@@ -156,6 +157,7 @@ export default function CreateTeamScreen() {
         contact_number: normalizePhoneForLogin(contact),
         latitude: location.latitude,
         longitude: location.longitude,
+        is_public: isPublic,
       });
       Alert.alert("Success", "Team created!", [
         { text: "OK", onPress: () => router.back() },
@@ -204,6 +206,28 @@ export default function CreateTeamScreen() {
             autoComplete="tel"
             error={errors.contact}
           />
+          <View style={styles.visibilityCard}>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleInfo}>
+                <Ionicons name="eye" size={18} color={colors.text} />
+                <View>
+                  <Text style={styles.toggleLabel}>Visible to Citizens</Text>
+                  <Text style={styles.toggleHint}>
+                    Show this team&rsquo;s base on the citizen map
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.toggleSwitch, isPublic && styles.toggleSwitchOn]}
+                activeOpacity={0.7}
+                onPress={() => setIsPublic((prev) => !prev)}
+              >
+                <View
+                  style={[styles.toggleKnob, isPublic && styles.toggleKnobOn]}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         <View style={styles.mapField}>
@@ -347,6 +371,56 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingHorizontal: 20,
     paddingTop: 4,
+  },
+  visibilityCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 16,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  toggleInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  toggleHint: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  toggleSwitch: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 2,
+  },
+  toggleSwitchOn: {
+    backgroundColor: colors.primary,
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    alignSelf: "flex-start",
+  },
+  toggleKnobOn: {
+    alignSelf: "flex-end",
   },
   mapField: {
     flex: 1,
