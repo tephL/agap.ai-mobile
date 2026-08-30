@@ -606,6 +606,22 @@ export default function Index() {
     [teams, selectedTeamId]
   );
 
+  // the cluster the selected team is currently dispatched to (its
+  // assigned_to). Shown in the team window as a banner that, when tapped,
+  // expands the cluster and pans the camera to it — mirroring how a
+  // cluster window links to its assigned team.
+  const selectedTeamAssignedCluster = useMemo(() => {
+    if (selectedTeam == null || selectedTeam.assigned_to == null) return null;
+    return (
+      clusters.find((c) => c.cluster_id === selectedTeam.assigned_to) ?? null
+    );
+  }, [selectedTeam, clusters]);
+
+  const handleTeamOpenCluster = useCallback(() => {
+    if (selectedTeamAssignedCluster == null) return;
+    expandCluster(selectedTeamAssignedCluster.cluster_id);
+  }, [selectedTeamAssignedCluster, expandCluster]);
+
   const collapseTeam = useCallback(() => setSelectedTeamId(null), []);
 
   const handleTeamPress = useCallback(
@@ -934,8 +950,10 @@ export default function Index() {
       {selectedTeam && (
         <TeamDetailsWindow
           team={selectedTeam}
+          assignedCluster={selectedTeamAssignedCluster}
           onClose={collapseTeam}
           onSeeDetails={openTeamDetail}
+          onOpenCluster={handleTeamOpenCluster}
         />
       )}
 
