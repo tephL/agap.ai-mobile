@@ -204,11 +204,7 @@ export default function ReportScreen() {
     // "received" (online submit) | "prepared" (offline composer opened) |
     // "active" (skipped the details form).
     router.replace(
-<<<<<<< HEAD
-      sosStatus ? { pathname: "/", params: { sosStatus } } : "/"
-=======
       sosStatus ? { pathname: "/(tabs)", params: { sosStatus } } : "/(tabs)"
->>>>>>> origin/master
     );
   }, [router]);
 
@@ -464,13 +460,8 @@ export default function ReportScreen() {
           <Text style={styles.title}>{isOnline ? "SOS SENT" : "SOS PENDING"}</Text>
           <Text style={styles.subtitle}>
             {isOnline
-<<<<<<< HEAD
-              ? "help us help you. Add critical details."
-              : "Tap submit to send your SOS report as a text message."}
-=======
               ? "Magdagdag ng detalye upang ikaw ay aming matulungan"
               : "Pindutin ang Submit para ipadala ang SOS gamit ang text"}
->>>>>>> origin/master
           </Text>
 
           {!isOnline && (

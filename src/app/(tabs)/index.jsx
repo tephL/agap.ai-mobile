@@ -810,21 +810,6 @@ export default function Index() {
     [influencingBySlug]
   );
 
-  // "Report received" overlay shown once after returning from the report
-  // form (ref-guarded so re-visiting the tab doesn't replay it).
-  const [sosReceivedVariant, setSosReceivedVariant] = useState(null);
-  const handledSosStatusRef = useRef(null);
-  useEffect(() => {
-    if (
-      typeof sosStatus === "string" &&
-      ["received", "prepared", "active"].includes(sosStatus) &&
-      handledSosStatusRef.current !== sosStatus
-    ) {
-      handledSosStatusRef.current = sosStatus;
-      setSosReceivedVariant(sosStatus);
-    }
-  }, [sosStatus]);
-
   const damsGeojson = useMemo(() => ({
     type: 'FeatureCollection',
     features: dams
@@ -964,93 +949,6 @@ export default function Index() {
   const handleClosePersonCard = () => {
     setSelectedPerson(null);
   };
-
-  // ---- hazards handlers ----------------------------------------------------
-  const flyToDam = useCallback((lng, lat) => {
-    cameraRef.current?.flyTo({
-      center: [lng, lat],
-      zoom: DAM_FLY_ZOOM,
-      duration: SELECTED_PERSON_FLY_DURATION_MS,
-      padding: {
-        top: 0,
-        bottom: DAM_SHEET_COLLAPSED_ESTIMATE,
-        left: 0,
-        right: 0,
-      },
-    });
-  }, []);
-
-  const handleDamPress = (event) => {
-    // GeoJSONSource onPress wraps in nativeEvent.features[0]; Marker onPress
-    // passes the feature object directly as event.properties / event directly.
-    const feature = event?.nativeEvent?.features?.[0] ?? event;
-    if (!feature?.properties?.slug) return;
-
-    // Keep the drawer's list in sync with the latest backend data so it can
-    // never render a stale subset after re-opening from a marker tap.
-    refreshDams();
-
-    setSelectedDam(feature.properties);
-    setSheetExpanded(false);
-
-    const coords = feature.geometry?.coordinates ?? (feature.properties?.coordinates
-      ? [feature.properties.coordinates.lng, feature.properties.coordinates.lat]
-      : []);
-    const [lng, lat] = coords;
-    if (typeof lng === 'number' && typeof lat === 'number') {
-      flyToDam(lng, lat);
-    }
-  };
-
-  const handleSelectDamFromList = useCallback((dam) => {
-    if (!dam?.slug) return;
-    setSelectedDam(dam);
-    setSheetExpanded(false);
-
-    if (dam.coordinates) {
-      flyToDam(dam.coordinates.lng, dam.coordinates.lat);
-    }
-  }, [flyToDam]);
-
-  // Tapping a dashed route frames that dam's route and brings up the
-  // drawer pre-loaded with its card.
-  const handleRoutePress = (event) => {
-    const slug = event?.nativeEvent?.features?.[0]?.properties?.slug;
-    if (slug == null || influencingBySlug[slug] == null) return;
-    const target = dams.find((dam) => dam.slug === slug);
-    if (!target?.coordinates || userLocation.latitude == null) return;
-
-    const lngs = [userLocation.longitude, target.coordinates.lng];
-    const lats = [userLocation.latitude, target.coordinates.lat];
-    cameraRef.current?.fitBounds(
-      [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
-      {
-        padding: ROUTE_FIT_PADDING,
-        duration: SELECTED_PERSON_FLY_DURATION_MS,
-      },
-    );
-
-    setSelectedDam(target);
-    setHazardsOpen(true);
-    setSheetExpanded(false);
-    refreshDams();
-  };
-
-  const handleHazardsPress = () => {
-    refreshDams();
-    setSelectedDam(null);
-    setHazardsOpen(true);
-    setSheetExpanded(true);
-  };
-
-  const handleToggleLayer = useCallback((key) => {
-    setVisibleLayers((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
-
-  const handleCloseHazards = useCallback(() => {
-    setSelectedDam(null);
-    setHazardsOpen(false);
-  }, []);
 
   // ---- hazards handlers ----------------------------------------------------
   const flyToDam = useCallback((lng, lat) => {
@@ -1614,19 +1512,6 @@ export default function Index() {
         />
       )}
 
-      {sosReceivedVariant && (
-        <Modal
-          visible
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSosReceivedVariant(null)}
-        >
-          <SosReceivedOverlay
-            variant={sosReceivedVariant}
-            onDone={() => setSosReceivedVariant(null)}
-          />
-        </Modal>
-      )}
     </View>
   );
 }

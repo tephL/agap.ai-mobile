@@ -1,73 +1,39 @@
-<<<<<<< HEAD
-import React from "react";
-import {
-=======
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
->>>>>>> origin/master
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-<<<<<<< HEAD
-
-/**
- * Copy variants:
- *   received — online submit succeeded
- *   prepared — offline: SMS composer was opened, user still taps Send there
- *   active   — user skipped the details form (nothing new submitted)
- */
-=======
 import colors from "../constants/colors";
 
->>>>>>> origin/master
 const COPY = {
   received: {
     title: "We have received your report",
     sub: "Help will be on its way.",
     icon: "checkmark",
-<<<<<<< HEAD
-=======
     iconBg: "#ECFDF5",
->>>>>>> origin/master
     iconColor: "#16A34A",
   },
   prepared: {
     title: "Your SOS message is ready",
     sub: "Tap Send in Messages if you haven't. Help is on the way.",
     icon: "checkmark",
-<<<<<<< HEAD
-=======
     iconBg: "#ECFDF5",
->>>>>>> origin/master
     iconColor: "#16A34A",
   },
   active: {
     title: "You cancelled your offline SOS report",
     sub: "No report was sent.",
     icon: "close",
-<<<<<<< HEAD
-=======
     iconBg: "#FEF2F2",
->>>>>>> origin/master
     iconColor: "#DC2626",
   },
 };
 
-<<<<<<< HEAD
-export default function SosReceivedOverlay({ variant = "received", onDone }) {
-  const copy = COPY[variant] ?? COPY.received;
-
-  return (
-    <View style={styles.backdrop}>
-      <View style={styles.card}>
-        <View style={styles.checkCircle}>
-          <Ionicons name={copy.icon} size={44} color={copy.iconColor} />
-=======
 const AUTO_CLOSE_MS = 10000;
 const RING_SIZE = 90;
 const ICON_BG_SIZE = 68;
@@ -172,24 +138,10 @@ export default function SosReceivedOverlay({ variant = "received", onDone }) {
           >
             <Ionicons name={copy.icon} size={32} color={copy.iconColor} />
           </View>
->>>>>>> origin/master
         </View>
 
         <Text style={styles.title}>{copy.title}</Text>
         <Text style={styles.sub}>{copy.sub}</Text>
-<<<<<<< HEAD
-      </View>
-
-      <TouchableOpacity
-        style={styles.closeButton}
-        onPress={onDone}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel="Close"
-      >
-        <Text style={styles.closeButtonText}>Close</Text>
-      </TouchableOpacity>
-=======
 
         <TouchableOpacity
           style={styles.closeButton}
@@ -199,7 +151,6 @@ export default function SosReceivedOverlay({ variant = "received", onDone }) {
           <Text style={styles.closeButtonText}>CLOSE</Text>
         </TouchableOpacity>
       </Animated.View>
->>>>>>> origin/master
     </View>
   );
 }
@@ -207,31 +158,13 @@ export default function SosReceivedOverlay({ variant = "received", onDone }) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-<<<<<<< HEAD
-    backgroundColor: "rgba(15, 23, 42, 0.55)",
-=======
     backgroundColor: "rgba(24, 32, 51, 0.5)",
->>>>>>> origin/master
     alignItems: "center",
     justifyContent: "center",
   },
   card: {
     width: "85%",
     maxWidth: 340,
-<<<<<<< HEAD
-    borderRadius: 24,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 36,
-    paddingBottom: 28,
-  },
-  checkCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#ECFDF5",
-=======
     backgroundColor: colors.white,
     borderRadius: 16,
     paddingTop: 24,
@@ -304,50 +237,17 @@ const styles = StyleSheet.create({
     width: ICON_BG_SIZE,
     height: ICON_BG_SIZE,
     borderRadius: ICON_BG_SIZE / 2,
->>>>>>> origin/master
     alignItems: "center",
     justifyContent: "center",
   },
   title: {
-<<<<<<< HEAD
-    marginTop: 20,
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#111827",
-=======
     fontSize: 18,
     fontWeight: "700",
     color: colors.text,
->>>>>>> origin/master
     textAlign: "center",
   },
   sub: {
     marginTop: 8,
-<<<<<<< HEAD
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  closeButton: {
-    position: "absolute",
-    bottom: 60,
-    alignSelf: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 64,
-    borderRadius: 28,
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  closeButtonText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#182033",
-=======
     fontSize: 13,
     fontWeight: "500",
     color: colors.muted,
@@ -368,6 +268,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.white,
     letterSpacing: 0.8,
->>>>>>> origin/master
   },
 });

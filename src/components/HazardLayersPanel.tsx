@@ -185,14 +185,11 @@ interface HazardLayersPanelProps {
    * deselects it. Download state of every layer is unaffected.
    */
   onSelect: (layerId: string | null) => void;
-<<<<<<< HEAD
+  /** Called with a layer id when the user taps the ? button. */
+  onAskAI: (layerId: string) => void;
   /** Toggleable map features (dams, fault lines, ...). */
   visibleLayers?: Record<string, boolean>;
   onToggleLayer?: (key: string) => void;
-=======
-  /** Called with a layer id when the user taps the ? button. */
-  onAskAI: (layerId: string) => void;
->>>>>>> origin/master
 }
 
 export default function HazardLayersPanel({
@@ -200,12 +197,9 @@ export default function HazardLayersPanel({
   onClose,
   activeId,
   onSelect,
-<<<<<<< HEAD
+  onAskAI,
   visibleLayers,
   onToggleLayer,
-=======
-  onAskAI,
->>>>>>> origin/master
 }: HazardLayersPanelProps) {
   const [tab, setTab] = React.useState<PanelTab>("hazards");
   if (!visible) return null;
@@ -216,16 +210,11 @@ export default function HazardLayersPanel({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet}>
           <View style={styles.header}>
-<<<<<<< HEAD
             <Text style={styles.title}>Map Layers</Text>
-=======
-            <Text style={styles.title}>Mga Layer ng Hazard Map</Text>
->>>>>>> origin/master
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
           </View>
-<<<<<<< HEAD
 
           <View style={styles.tabBar}>
             <TouchableOpacity
@@ -257,7 +246,12 @@ export default function HazardLayersPanel({
                 be shown at a time to keep performance smooth.
               </Text>
 
-              <ScrollView style={styles.list} nestedScrollEnabled>
+              <ScrollView
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+              >
                 {HAZARD_LAYERS.map((layer) => (
                   <LayerRow
                     key={layer.id}
@@ -266,6 +260,7 @@ export default function HazardLayersPanel({
                     onSelect={() =>
                       onSelect(activeId === layer.id ? null : layer.id)
                     }
+                    onAskAI={onAskAI}
                   />
                 ))}
               </ScrollView>
@@ -285,31 +280,6 @@ export default function HazardLayersPanel({
               ))}
             </ScrollView>
           )}
-=======
-          <Text style={styles.subtitle}>
-            Pumili ng hazard overlay para sa mapa. Isang layer lang ang maaaring
-            ipakita sa isang oras para sa maayos na performance.
-          </Text>
-
-            <ScrollView
-              style={styles.list}
-              contentContainerStyle={styles.listContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
-            >
-              {HAZARD_LAYERS.map((layer) => (
-                <LayerRow
-                  key={layer.id}
-                  config={layer}
-                  active={activeId === layer.id}
-                  onSelect={() =>
-                    onSelect(activeId === layer.id ? null : layer.id)
-                  }
-                  onAskAI={onAskAI}
-                />
-              ))}
-            </ScrollView>
->>>>>>> origin/master
         </Pressable>
       </Pressable>
     </Modal>
