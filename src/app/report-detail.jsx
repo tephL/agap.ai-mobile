@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import { getReportById, updateReportStatus } from "@/services/reportService";
 import { reverseGeocode } from "@/services/geocodingService";
+import { useCluster } from "@/context/ClusterContext";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 
@@ -39,6 +40,7 @@ function formatDate(value) {
 export default function ReportDetailScreen() {
   const params = useLocalSearchParams();
   const reportId = Number(params.reportId);
+  const { invalidateClusters } = useCluster();
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -116,6 +118,7 @@ export default function ReportDetailScreen() {
             try {
               await updateReportStatus(reportId, "resolved");
               setReport((prev) => ({ ...prev, status: "resolved" }));
+              invalidateClusters();
             } catch (e) {
               console.log("resolve report error:", e);
             } finally {
