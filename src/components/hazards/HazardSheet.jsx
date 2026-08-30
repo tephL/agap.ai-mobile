@@ -24,6 +24,7 @@ import {
 } from "./damStatus";
 import DamsTab from "./DamsTab";
 import TabPlaceholder from "./TabPlaceholder";
+import StormSignalsTab from "./StormSignalsTab";
 import HazardDisclaimer from "./HazardDisclaimer";
 import ImpactZoneDetail from "./ImpactZoneDetail";
 import SeverityDetail from "./SeverityDetail";
@@ -119,6 +120,11 @@ function HazardSheetInner({
   onExpandedChange,
   onSelectDam,
   onClose,
+  stormSignals,
+  stormSignalsLoading = false,
+  signalByProvince = {},
+  overlayVisible = false,
+  onSelectStormRegion,
 }) {
   const [translateY] = useState(() => new Animated.Value(HIDDEN_Y));
   const [translateYPos, setTranslateYPos] = useState(HIDDEN_Y);
@@ -456,7 +462,16 @@ function HazardSheetInner({
         )}
 
         {/* Placeholder for non-dams tabs */}
-        {!slug && activeTab !== "dams" && (
+        {!slug && activeTab === "weatherBulletins" && (
+          <StormSignalsTab
+            signals={stormSignals}
+            signalByProvince={signalByProvince}
+            loading={stormSignalsLoading}
+            overlayVisible={overlayVisible}
+            onSelectRegion={onSelectStormRegion}
+          />
+        )}
+        {!slug && activeTab !== "dams" && activeTab !== "weatherBulletins" && (
           <TabPlaceholder
             icon={
               activeTab === "nearYou" ? "location-outline"

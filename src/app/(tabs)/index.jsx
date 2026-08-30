@@ -63,6 +63,51 @@ const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
 const PH_CENTER = [121.7740, 12.8797];
 const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MAPTILER_API_KEY}`;
 
+// Demo switch: while true the app uses the bundled Luzon sample instead of
+// the live PAGASA mirror (shared by the map overlay and the Weather tab).
+const USE_SAMPLE_STORM_SIGNALS = true;
+
+function loadStormSignals() {
+  return USE_SAMPLE_STORM_SIGNALS
+    ? Promise.resolve(getSampleStormSignals())
+    : getStormSignals();
+}
+
+// Bounding box [minLng, minLat, maxLng, maxLat] across the given features'
+// polygons, or null. Shared by the overlay auto-fit and region taps.
+function geometryBounds(features) {
+  let bounds = null;
+  for (const feature of features) {
+    if (!feature?.geometry?.coordinates) continue;
+    const polys =
+      feature.geometry.type === "Polygon"
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates;
+    for (const poly of polys) {
+      for (const ring of poly) {
+        for (const [x, y] of ring) {
+          if (bounds == null) {
+            bounds = [x, y, x, y];
+          } else {
+            if (x < bounds[0]) bounds[0] = x;
+            if (y < bounds[1]) bounds[1] = y;
+            if (x > bounds[2]) bounds[2] = x;
+            if (y > bounds[3]) bounds[3] = y;
+          }
+        }
+      }
+    }
+  }
+  return bounds;
+}
+
+function provinceBounds(geoJson, name) {
+  const feature = (geoJson?.features ?? []).find(
+    (f) => f.properties?.name === name
+  );
+  return feature ? geometryBounds([feature]) : null;
+}
+
 const FAMILY_FETCH_INTERVAL_MS = 1000 * 60;      // 1 min
 const SEND_LOCATION_INTERVAL_MS = 1000 * 30;     // 30 sec
 const PULSE_DURATION_MS = 3500;                  // ms per pulse cycle
@@ -293,6 +338,7 @@ export default function Index() {
 
   // PAGASA TCWS storm signals overlay
   const [stormSignals, setStormSignals] = useState(null);
+  const [stormSignalsError, setStormSignalsError] = useState(false);
   const [stormLegendHidden, setStormLegendHidden] = useState(false);
   const [stormBannerDismissed, setStormBannerDismissed] = useState(false);
   const [selectedStormProvince, setSelectedStormProvince] = useState(null);
@@ -302,12 +348,15 @@ export default function Index() {
   useEffect(() => {
     if (!visibleLayers.stormSignals) return;
     let cancelled = false;
-    Promise.resolve(getSampleStormSignals())
+    loadStormSignals()
       .then((data) => {
-        if (!cancelled) setStormSignals(data);
+        if (!cancelled) {
+          setStormSignals(data);
+          setStormSignalsError(false);
+        }
       })
       .catch(() => {
-        if (!cancelled) setStormSignals(null);
+        if (!cancelled) setStormSignalsError(true);
       });
     return () => {
       cancelled = true;
@@ -335,34 +384,38 @@ export default function Index() {
     if (stormAutoFitDoneRef.current) return;
     stormAutoFitDoneRef.current = true;
 
-    let bounds = null;
-    for (const feature of stormSignalsGeojson.features) {
-      if (!feature.properties?.signal) continue;
-      const polys =
-        feature.geometry.type === "Polygon"
-          ? [feature.geometry.coordinates]
-          : feature.geometry.coordinates;
-      for (const poly of polys) {
-        for (const ring of poly) {
-          for (const [x, y] of ring) {
-            if (bounds == null) {
-              bounds = [x, y, x, y];
-            } else {
-              if (x < bounds[0]) bounds[0] = x;
-              if (y < bounds[1]) bounds[1] = y;
-              if (x > bounds[2]) bounds[2] = x;
-              if (y > bounds[3]) bounds[3] = y;
-            }
-          }
-        }
-      }
-    }
+    const bounds = geometryBounds(
+      stormSignalsGeojson.features.filter(
+        (f) => (f.properties?.signal ?? 0) > 0
+      )
+    );
     if (bounds == null) return;
     cameraRef.current?.fitBounds(bounds, {
       padding: { top: 180, right: 60, bottom: 200, left: 60 },
       duration: 900,
     });
   }, [visibleLayers.stormSignals, stormSignals, stormSignalsGeojson]);
+
+  // fetch storm-signal data when the Weather tab is opened, even if the map
+  // overlay was never toggled on
+  useEffect(() => {
+    if (activeTab !== "weatherBulletins") return;
+    if (stormSignals != null) return;
+    let cancelled = false;
+    loadStormSignals()
+      .then((data) => {
+        if (!cancelled) {
+          setStormSignals(data);
+          setStormSignalsError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStormSignalsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, stormSignals]);
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -1113,20 +1166,64 @@ export default function Index() {
     const name = feature?.properties?.name;
     if (typeof signal !== "number" || signal < 1 || !name) return;
     setSelectedStormProvince({ name, signal });
+    const bounds = provinceBounds(phProvinces, name);
+    if (bounds) {
+      cameraRef.current?.fitBounds(bounds, {
+        padding: { top: 180, right: 60, bottom: 200, left: 60 },
+        duration: 900,
+      });
+    }
   };
+
+  // Region taps from the hazards sheet's Weather list: only active while the
+  // Storm Signals overlay is toggled on (chip + camera move are map features).
+  const handleSelectStormRegion = useCallback(
+    (name, signal) => {
+      if (!visibleLayers.stormSignals) return;
+      setSelectedStormProvince({ name, signal });
+      const bounds = provinceBounds(phProvinces, name);
+      if (bounds) {
+        cameraRef.current?.fitBounds(bounds, {
+          padding: { top: 180, right: 60, bottom: 200, left: 60 },
+          duration: 900,
+        });
+      }
+    },
+    [visibleLayers.stormSignals]
+  );
 
   const handleHazardsPress = () => {
     refreshDams();
     setSelectedDam(null);
     setHazardsOpen(true);
     setSheetExpanded(true);
+    // overlays are owned by the sheet: opening re-shows only the layer the
+    // active tab cares about (dams on the Dams tab, storm signals on Weather)
+    setVisibleLayers({
+      dams: activeTab === "dams",
+      stormSignals: activeTab === "weatherBulletins",
+    });
+    setSelectedStormProvince(null);
   };
+
+  // Weather pill enables the Storm Signals overlay; every other pill disables
+  // it. Re-pressing Weather always re-enables (even after a manual toggle-off).
+  const handleChangeTab = useCallback((key) => {
+    setActiveTab(key);
+    if (key === "weatherBulletins") {
+      setVisibleLayers((prev) => ({ ...prev, stormSignals: true }));
+      setStormLegendHidden(false);
+      setSelectedStormProvince(null);
+    } else {
+      setVisibleLayers((prev) => ({ ...prev, stormSignals: false }));
+      setSelectedStormProvince(null);
+    }
+  }, []);
 
   const handleToggleLayer = useCallback((key) => {
     setVisibleLayers((prev) => ({ ...prev, [key]: !prev[key] }));
     if (key === "stormSignals") {
       setStormLegendHidden(false);
-      setStormBannerDismissed(false);
       setSelectedStormProvince(null);
     }
   }, []);
@@ -1134,6 +1231,9 @@ export default function Index() {
   const handleCloseHazards = useCallback(() => {
     setSelectedDam(null);
     setHazardsOpen(false);
+    // closing the sheet turns every overlay off
+    setVisibleLayers({ dams: false, stormSignals: false });
+    setSelectedStormProvince(null);
   }, []);
 
   const handleCallPerson = (phone_number) => {
@@ -1668,7 +1768,7 @@ export default function Index() {
       {hazardsOpen && !selectedDam && (
         <HazardTabs
           activeTab={activeTab}
-          onChangeTab={setActiveTab}
+          onChangeTab={handleChangeTab}
           dams={dams}
           userLocation={userLocation}
           nearestSlug={nearestDamSlug}
@@ -1695,6 +1795,11 @@ export default function Index() {
           onExpandedChange={setSheetExpanded}
           onSelectDam={handleSelectDamFromList}
           onClose={handleCloseHazards}
+          stormSignals={stormSignals}
+          stormSignalsLoading={stormSignals == null && !stormSignalsError}
+          signalByProvince={signalByProvince}
+          overlayVisible={visibleLayers.stormSignals}
+          onSelectStormRegion={handleSelectStormRegion}
         />
       )}
 

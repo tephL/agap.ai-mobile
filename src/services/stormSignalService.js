@@ -180,8 +180,9 @@ export async function getStormSignals({ force = false } = {}) {
   }
 }
 
-// Luzon-centric demo fixture: eye over northern Luzon, tapering to Signal #1
-// covering Metro Manila so the user's own province is involved in previews.
+// Central-Luzon demo fixture: landfall over Aurora / Nueva Ecija, capped at
+// Signal #3 so Bulacan sits inside the strongest ring like the scenario that
+// motivated the app's storm-signals preview.
 const SAMPLE_LUZON = {
   bulletin: {
     count: 12,
@@ -195,36 +196,53 @@ const SAMPLE_LUZON = {
     name: "ODETTE",
     internationalName: "RAI",
     category: "TYPHOON",
-    center: "Cardinal points at around the center",
-    movement: "Moving westward across northern Luzon",
+    center: "In the vicinity of Dingalan, Aurora",
+    movement: "Moving west-northwest at 20 km/h across Central Luzon",
   },
   signals: [
     {
       level: 3,
-      areas: [{ name: "Ilocos Norte" }, { name: "Ilocos Sur" }, { name: "Cagayan" }],
+      areas: [
+        { name: "Bulacan" },
+        { name: "Pampanga" },
+        { name: "Nueva Ecija" },
+        { name: "Tarlac" },
+        { name: "Aurora" },
+        { name: "Quezon" },
+      ],
     },
     {
       level: 2,
       areas: [
-        { name: "Abra" },
-        { name: "Isabela" },
-        { name: "La Union" },
+        { name: "Metro Manila" },
+        { name: "Rizal" },
+        { name: "Cavite" },
+        { name: "Laguna" },
+        { name: "Bataan" },
+        { name: "Zambales" },
         { name: "Pangasinan" },
+        { name: "Nueva Vizcaya" },
       ],
     },
     {
       level: 1,
       areas: [
-        { name: "Nueva Ecija" },
-        { name: "Tarlac" },
-        { name: "Bulacan" },
-        { name: "Zambales" },
-        { name: "Aurora" },
-        { name: "Metro Manila" },
+        { name: "Ilocos Norte" },
+        { name: "Ilocos Sur" },
+        { name: "Abra" },
+        { name: "Kalinga" },
+        { name: "Apayao" },
+        { name: "Mountain Province" },
+        { name: "Ifugao" },
+        { name: "Benguet" },
+        { name: "La Union" },
+        { name: "Isabela" },
+        { name: "Cagayan" },
+        { name: "Batangas" },
       ],
     },
   ],
-  rawAreaCount: 13,
+  rawAreaCount: 26,
 };
 
 function sampleFromFixture() {
