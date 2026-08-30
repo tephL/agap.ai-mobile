@@ -74,6 +74,14 @@ const ROUTE_DASH_SEQUENCE = [
 // teams dispatched to the citizen's cluster appear orange (same as dispatcher busy status)
 const TEAM_DISPATCH_COLOR = '#f97316';
 
+// maps the flood/susceptibility level resolved from the rendered map to a
+// readable label used in the level-aware AI question
+const HAZARD_LEVEL_LABELS = {
+  1: "MABABA (Low)",
+  2: "KATAMTAMAN (Moderate)",
+  3: "MATAAS (High)",
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -312,10 +320,14 @@ export default function Index() {
     [mapReady, getCachedCoords, resolveCoords]
   );
 
+  // Reused by both the layers panel "?" button and the floating map button:
+  // resolves the user's current hazard level and pre-fills a question in the
+  // AI assistant, attaching the level context so answers are location-aware.
   const handleAskAI = useCallback(
     async (layerId) => {
       const layer = getHazardLayer(layerId);
       let hazardParams = {};
+      let question;
       // Location risk is only resolvable when the tapped layer is the one
       // actually rendered on the map (queryRenderedFeatures reads drawn
       // polygons); otherwise just explain the layer in general terms.
@@ -323,18 +335,26 @@ export default function Index() {
         const varLevel = await resolveCurrentHazardVar(layerId);
         if (varLevel != null) {
           hazardParams = { hazardLayerId: layerId, hazardVar: String(varLevel) };
+          question = `Ang aking kasalukuyang lugar ay nasa ${HAZARD_LEVEL_LABELS[varLevel]} na antas sa "${layer.label}" hazard layer. Ano ang ibig sabihin nito para sa akin, at ano ang dapat kong gawin? Ipaliwanag ito nang detalyado.`;
         }
+      }
+      if (!question) {
+        question = `Ano ang ibig sabihin ng "${layer.label}" na hazard layer? Ipaliwanag ito nang detalyado.`;
       }
       router.push({
         pathname: "/assistant",
-        params: {
-          question: `Ano ang ibig sabihin ng "${layer.label}" na hazard layer? Ipaliwanag ito nang detalyado.`,
-          ...hazardParams,
-        },
+        params: { question, ...hazardParams },
       });
     },
     [router, activeId, resolveCurrentHazardVar]
   );
+
+  // "?" floating button on the map that jumps into the AI assistant with the
+  // active hazard layer + current level — shown only while a layer is on
+  const handleAskAboutActiveLayer = useCallback(() => {
+    if (activeId == null) return;
+    handleAskAI(activeId);
+  }, [activeId, handleAskAI]);
 
   // legend visibility (persisted): expands whenever the active layer
   // changes, otherwise restores what the user last chose
@@ -1124,6 +1144,20 @@ export default function Index() {
         {activeId && <View style={styles.layersDot} />}
       </View>
 
+      {/* "?" button — only while a hazard layer is on. Jumps to the AI
+          assistant with the active layer + the user's current hazard level. */}
+      {activeId != null && (
+        <View style={styles.helpButtonWrap}>
+          <TouchableOpacity
+            style={styles.helpButton}
+            onPress={handleAskAboutActiveLayer}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="help" size={24} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* legend explaining the active overlay's colors — bottom-left, only
           while a layer is active; collapses to a chip when hidden */}
       <HazardLayerLegend
@@ -1249,6 +1283,25 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 92,
     right: 16,
+  },
+  // sits above the layers button (only shown while a hazard layer is on)
+  helpButtonWrap: {
+    position: 'absolute',
+    bottom: 148,
+    right: 16,
+  },
+  helpButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#208AEF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   layersButton: {
     width: 48,
