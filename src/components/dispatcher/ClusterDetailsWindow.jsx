@@ -32,6 +32,7 @@ export default function ClusterDetailsWindow({
   onClose,
   onAssignTeam,
   onResolved,
+  onOpenTeam,
 }) {
   const router = useRouter();
   const [barangay, setBarangay] = useState(null);
@@ -69,10 +70,7 @@ export default function ClusterDetailsWindow({
   };
 
   const handleOpenTeam = () => {
-    router.push({
-      pathname: "/team-detail",
-      params: { teamId: String(assignedTeam.team_id) },
-    });
+    onOpenTeam?.();
   };
 
   const handleResolve = () => {
