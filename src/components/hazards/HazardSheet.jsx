@@ -38,7 +38,8 @@ import {
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const TAB_BAR_HEIGHT = 50;
-const COLLAPSED_HEIGHT = Math.round(SCREEN_HEIGHT * 0.40);
+export const COLLAPSED_HEIGHT = Math.round(SCREEN_HEIGHT * 0.40);
+const HANDLE_AREA_H = 44;
 const DETAIL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.36);
 const EXPANDED_HEIGHT = Math.round(SCREEN_HEIGHT * 0.70);
 const HIDDEN_Y = EXPANDED_HEIGHT + TAB_BAR_HEIGHT;
@@ -302,10 +303,9 @@ function HazardSheetInner({
 
   const scrollEnabled = true;
 
-  // Constrain ScrollView height so content stays within the visible on-screen
+// Constrain ScrollView height so content stays within the visible on-screen
   // area when the sheet is collapsed. Without this, the ScrollView extends
   // below the screen edge and the last dam cards are unreachable.
-  const HANDLE_AREA_H = 28;
   const visibleH = Math.max(0, HIDDEN_Y - translateYPos);
   const scrollViewMaxH = Math.max(0, visibleH - HANDLE_AREA_H);
 
@@ -328,7 +328,6 @@ function HazardSheetInner({
         <TouchableOpacity
           style={styles.closeButton}
           onPress={handleClose}
-          hitSlop={{ top: 20, right: 20, bottom: 20, left: 20 }}
           accessibilityRole="button"
           accessibilityLabel="Close hazards sheet"
         >
@@ -478,6 +477,7 @@ function HazardSheetInner({
               : activeTab === "faultLines" ? "map-outline"
               : activeTab === "volcanoes" ? "flame-outline"
               : activeTab === "typhoons" ? "thunderstorm-outline"
+              : activeTab === "lowPressureArea" ? "cloud-outline"
               : "newspaper-outline"
             }
             title={
@@ -485,6 +485,7 @@ function HazardSheetInner({
               : activeTab === "faultLines" ? "Fault Lines"
               : activeTab === "volcanoes" ? "Volcanoes"
               : activeTab === "typhoons" ? "Typhoons"
+              : activeTab === "lowPressureArea" ? "Low Pressure Area"
               : "Weather Bulletins"
             }
             subtitle="Coming soon. This feature will be available in a future update."
@@ -631,28 +632,32 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   handleArea: {
-    paddingTop: 10,
-    paddingBottom: 6,
-    alignItems: "center",
+    height: HANDLE_AREA_H,
+    justifyContent: "center",
     position: "relative",
     zIndex: 10,
   },
   handleHit: {
     alignSelf: "stretch",
     alignItems: "center",
+    paddingVertical: 15,
   },
   handleBar: {
-    width: 44,
-    height: 5,
+    width: 56,
+    height: 6,
     borderRadius: 3,
-    backgroundColor: "#E0E2E7",
+    backgroundColor: "#D5D8E0",
   },
   closeButton: {
     position: "absolute",
-    right: 10,
-    top: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    right: 12,
+    top: 2,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F0F1F5",
   },
   scroll: {
     flex: 1,

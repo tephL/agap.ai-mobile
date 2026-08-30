@@ -1197,26 +1197,28 @@ export default function Index() {
     setSelectedDam(null);
     setHazardsOpen(true);
     setSheetExpanded(true);
-    // overlays are owned by the sheet: opening re-shows only the layer the
-    // active tab cares about (dams on the Dams tab, storm signals on Weather)
+    // overlays re-sync to the active tab on open; the storm-signals legend
+    // stays closed (collapsed to its chip) rather than auto-expanding
     setVisibleLayers({
       dams: activeTab === "dams",
       stormSignals: activeTab === "weatherBulletins",
     });
+    if (activeTab === "weatherBulletins") setStormLegendHidden(true);
     setSelectedStormProvince(null);
   };
 
-  // Weather pill enables the Storm Signals overlay; every other pill disables
-  // it. Re-pressing Weather always re-enables (even after a manual toggle-off).
+  // Pressing any top-row pill raises the expanded toast for that tab. The
+  // Weather pill auto-enables the storm-signals overlay (legend stays
+  // collapsed); every other pill turns it off again.
   const handleChangeTab = useCallback((key) => {
     setActiveTab(key);
+    setSheetExpanded(true);
+    setSelectedStormProvince(null);
     if (key === "weatherBulletins") {
       setVisibleLayers((prev) => ({ ...prev, stormSignals: true }));
-      setStormLegendHidden(false);
-      setSelectedStormProvince(null);
+      setStormLegendHidden(true);
     } else {
       setVisibleLayers((prev) => ({ ...prev, stormSignals: false }));
-      setSelectedStormProvince(null);
     }
   }, []);
 
@@ -1906,7 +1908,7 @@ const styles = StyleSheet.create({
   },
   stormProvinceChip: {
     position: 'absolute',
-    bottom: 150,
+    top: 100,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',

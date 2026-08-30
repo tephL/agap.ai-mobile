@@ -222,6 +222,7 @@ const SAMPLE_LUZON = {
         { name: "Zambales" },
         { name: "Pangasinan" },
         { name: "Nueva Vizcaya" },
+        { name: "Quirino" },
       ],
     },
     {
@@ -242,7 +243,7 @@ const SAMPLE_LUZON = {
       ],
     },
   ],
-  rawAreaCount: 26,
+  rawAreaCount: 27,
 };
 
 function sampleFromFixture() {

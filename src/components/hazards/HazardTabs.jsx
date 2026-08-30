@@ -8,6 +8,21 @@ const TABS = [
     label: "Near You",
     icon: "location-outline",
   },
+  {
+    key: "weatherBulletins",
+    label: "Weather",
+    icon: "newspaper-outline",
+  },
+  {
+    key: "typhoons",
+    label: "Typhoons",
+    icon: "thunderstorm-outline",
+  },
+  {
+    key: "lowPressureArea",
+    label: "Low Pressure Area",
+    icon: "cloud-outline",
+  },
   { key: "dams", label: "Dams", icon: "water-outline" },
   {
     key: "faultLines",
@@ -18,16 +33,6 @@ const TABS = [
     key: "volcanoes",
     label: "Volcanoes",
     icon: "flame-outline",
-  },
-  {
-    key: "typhoons",
-    label: "Typhoons",
-    icon: "thunderstorm-outline",
-  },
-  {
-    key: "weatherBulletins",
-    label: "Weather",
-    icon: "newspaper-outline",
   },
 ];
 
