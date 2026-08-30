@@ -606,6 +606,47 @@ export default function Index() {
     [teams, selectedTeamId]
   );
 
+  // the cluster the selected team is currently dispatched to (its
+  // assigned_to). Shown in the team window as a banner that, when tapped,
+  // expands the cluster and pans the camera to it — mirroring how a
+  // cluster window links to its assigned team.
+  const selectedTeamAssignedCluster = useMemo(() => {
+    if (selectedTeam == null || selectedTeam.assigned_to == null) return null;
+    return (
+      clusters.find((c) => c.cluster_id === selectedTeam.assigned_to) ?? null
+    );
+  }, [selectedTeam, clusters]);
+
+  const handleTeamOpenCluster = useCallback(() => {
+    if (selectedTeamAssignedCluster == null) return;
+    expandCluster(selectedTeamAssignedCluster.cluster_id);
+  }, [selectedTeamAssignedCluster, expandCluster]);
+
+  // "assigned team" banner on an expanded cluster: instead of opening the
+  // team detail, drop the cluster and fly the camera to the team's current
+  // location (mirrors the team -> cluster pan described above).
+  const handleClusterOpenTeam = useCallback(() => {
+    const team = selectedAssignedTeam?.team;
+    if (team == null) return;
+
+    setSelectedTeamId(team.team_id);
+    collapseCluster();
+
+    if (
+      typeof team.lat === "number" &&
+      typeof team.lng === "number" &&
+      !Number.isNaN(team.lat) &&
+      !Number.isNaN(team.lng)
+    ) {
+      setFollowsUser(false);
+      cameraRef.current?.flyTo({
+        center: [team.lng, team.lat],
+        zoom: CLUSTER_FOCUS_ZOOM,
+        duration: CLUSTER_FOCUS_DURATION_MS,
+      });
+    }
+  }, [selectedAssignedTeam, collapseCluster, setFollowsUser]);
+
   const collapseTeam = useCallback(() => setSelectedTeamId(null), []);
 
   const handleTeamPress = useCallback(
@@ -928,14 +969,17 @@ export default function Index() {
           onClose={collapseCluster}
           onAssignTeam={() => setAssignOpen(true)}
           onResolved={invalidateClusters}
+          onOpenTeam={handleClusterOpenTeam}
         />
       )}
 
       {selectedTeam && (
         <TeamDetailsWindow
           team={selectedTeam}
+          assignedCluster={selectedTeamAssignedCluster}
           onClose={collapseTeam}
           onSeeDetails={openTeamDetail}
+          onOpenCluster={handleTeamOpenCluster}
         />
       )}
 
