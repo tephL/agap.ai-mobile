@@ -95,31 +95,52 @@ export function provinceAtPoint(latitude, longitude, features) {
 }
 
 export function buildSignalGeojson(provincesGeoJson, byProvince) {
-  const features = (provincesGeoJson?.features ?? []).map((feature) => {
-    let area = null;
-    try {
-      const ring = feature.geometry?.coordinates?.[0]?.[0];
-      if (ring && ring.length >= 3) {
-        area =
-          Math.abs(
-            ring.reduce((acc, [x1, y1], i, arr) => {
-              const [x2, y2] = arr[(i + 1) % arr.length];
-              return acc + x1 * y2 - x2 * y1;
-            }, 0) / 2
-          ) || null;
-      }
-    } catch {}
-    const name = feature.properties?.name;
-    return {
-      type: "Feature",
-      properties: {
-        name,
-        signal: byProvince?.[name] ?? 0,
-        province: name,
-        ...(area != null ? { area } : {}),
-      },
-      geometry: feature.geometry,
-    };
-  });
+  // MapLibre rejects rings with fewer than 4 points; drop them defensively
+  // so degenerate source data can never crash the source set.
+  function cleanGeometry(geometry) {
+    if (!geometry || !geometry.coordinates) return geometry;
+    if (geometry.type === "Polygon") {
+      const rings = (geometry.coordinates ?? []).filter((r) => r.length >= 4);
+      return rings.length > 0 ? { ...geometry, coordinates: rings } : null;
+    }
+    if (geometry.type === "MultiPolygon") {
+      const polys = (geometry.coordinates ?? [])
+        .map((poly) => poly.filter((r) => r.length >= 4))
+        .filter((poly) => poly.length > 0);
+      return polys.length > 0 ? { ...geometry, coordinates: polys } : null;
+    }
+    return geometry;
+  }
+
+  const features = (provincesGeoJson?.features ?? [])
+    .map((feature) => {
+      const geometry = cleanGeometry(feature.geometry);
+      if (!geometry) return null;
+      let area = null;
+      try {
+        const ring = geometry.coordinates?.[0]?.[0];
+        if (ring && ring.length >= 3) {
+          area =
+            Math.abs(
+              ring.reduce((acc, [x1, y1], i, arr) => {
+                const [x2, y2] = arr[(i + 1) % arr.length];
+                return acc + x1 * y2 - x2 * y1;
+              }, 0) / 2
+            ) || null;
+        }
+      } catch {}
+      const name = feature.properties?.name;
+      return {
+        type: "Feature",
+        properties: {
+          name,
+          signal: byProvince?.[name] ?? 0,
+          province: name,
+          ...(area != null ? { area } : {}),
+        },
+        geometry,
+      };
+    })
+    .filter(Boolean);
   return { type: "FeatureCollection", features };
 }

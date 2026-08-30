@@ -40,9 +40,13 @@ import HazardSheet from '@/components/hazards/HazardSheet';
 import HazardTabs from '@/components/hazards/HazardTabs';
 import DamMarker from '@/components/hazards/DamMarker';
 import StormSignalLegend from '@/components/hazards/StormSignalLegend';
+import StormSignalBanner from '@/components/hazards/StormSignalBanner';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
 import {
   getStormSignals,
+  getSampleStormSignals,
+  PAGASA_TCWS_COLORS,
+  PAGASA_TCWS_LABELS,
 } from '../../services/stormSignalService.js';
 import {
   buildSignalGeojson,
@@ -289,12 +293,16 @@ export default function Index() {
 
   // PAGASA TCWS storm signals overlay
   const [stormSignals, setStormSignals] = useState(null);
+  const [stormLegendHidden, setStormLegendHidden] = useState(false);
+  const [stormBannerDismissed, setStormBannerDismissed] = useState(false);
+  const [selectedStormProvince, setSelectedStormProvince] = useState(null);
+  const stormAutoFitDoneRef = useRef(false);
 
   // fetch when toggled on; stale state is ignored while visibleLayers is off
   useEffect(() => {
     if (!visibleLayers.stormSignals) return;
     let cancelled = false;
-    getStormSignals()
+    Promise.resolve(getSampleStormSignals())
       .then((data) => {
         if (!cancelled) setStormSignals(data);
       })
@@ -315,6 +323,46 @@ export default function Index() {
     () => buildSignalGeojson(phProvinces, signalByProvince),
     [signalByProvince]
   );
+
+  // one-shot camera autofit to the signalled provinces whenever the layer
+  // is (re)activated; falls back to a PH-wide view when nothing is active
+  useEffect(() => {
+    if (!visibleLayers.stormSignals) {
+      stormAutoFitDoneRef.current = false;
+      return;
+    }
+    if (!stormSignals || stormSignals.unavailable) return;
+    if (stormAutoFitDoneRef.current) return;
+    stormAutoFitDoneRef.current = true;
+
+    let bounds = null;
+    for (const feature of stormSignalsGeojson.features) {
+      if (!feature.properties?.signal) continue;
+      const polys =
+        feature.geometry.type === "Polygon"
+          ? [feature.geometry.coordinates]
+          : feature.geometry.coordinates;
+      for (const poly of polys) {
+        for (const ring of poly) {
+          for (const [x, y] of ring) {
+            if (bounds == null) {
+              bounds = [x, y, x, y];
+            } else {
+              if (x < bounds[0]) bounds[0] = x;
+              if (y < bounds[1]) bounds[1] = y;
+              if (x > bounds[2]) bounds[2] = x;
+              if (y > bounds[3]) bounds[3] = y;
+            }
+          }
+        }
+      }
+    }
+    if (bounds == null) return;
+    cameraRef.current?.fitBounds(bounds, {
+      padding: { top: 180, right: 60, bottom: 200, left: 60 },
+      duration: 900,
+    });
+  }, [visibleLayers.stormSignals, stormSignals, stormSignalsGeojson]);
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -1025,16 +1073,6 @@ export default function Index() {
     }
   };
 
-  const handleSelectDamFromList = useCallback((dam) => {
-    if (!dam?.slug) return;
-    setSelectedDam(dam);
-    setSheetExpanded(false);
-
-    if (dam.coordinates) {
-      flyToDam(dam.coordinates.lng, dam.coordinates.lat);
-    }
-  }, [flyToDam]);
-
   // Tapping a dashed route frames that dam's route and brings up the
   // drawer pre-loaded with its card.
   const handleRoutePress = (event) => {
@@ -1059,6 +1097,24 @@ export default function Index() {
     refreshDams();
   };
 
+  const handleSelectDamFromList = useCallback((dam) => {
+    if (!dam?.slug) return;
+    setSelectedDam(dam);
+    setSheetExpanded(false);
+
+    if (dam.coordinates) {
+      flyToDam(dam.coordinates.lng, dam.coordinates.lat);
+    }
+  }, [flyToDam]);
+
+  const handleStormProvincePress = (event) => {
+    const feature = event?.nativeEvent?.features?.[0] ?? event;
+    const signal = feature?.properties?.signal;
+    const name = feature?.properties?.name;
+    if (typeof signal !== "number" || signal < 1 || !name) return;
+    setSelectedStormProvince({ name, signal });
+  };
+
   const handleHazardsPress = () => {
     refreshDams();
     setSelectedDam(null);
@@ -1068,6 +1124,11 @@ export default function Index() {
 
   const handleToggleLayer = useCallback((key) => {
     setVisibleLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+    if (key === "stormSignals") {
+      setStormLegendHidden(false);
+      setStormBannerDismissed(false);
+      setSelectedStormProvince(null);
+    }
   }, []);
 
   const handleCloseHazards = useCallback(() => {
@@ -1134,7 +1195,7 @@ export default function Index() {
             {visibleLayers.stormSignals &&
               stormSignals &&
               !stormSignals.unavailable && (
-              <GeoJSONSource id="stormSignalsSource" data={stormSignalsGeojson}>
+              <GeoJSONSource id="stormSignalsSource" data={stormSignalsGeojson} onPress={handleStormProvincePress}>
                 <Layer
                   type="fill"
                   id="stormSignalsFill"
@@ -1509,7 +1570,35 @@ export default function Index() {
         onToggle={handleToggleLegend}
       />
 
-      {visibleLayers.stormSignals && <StormSignalLegend />}
+      {visibleLayers.stormSignals && (
+        <StormSignalLegend
+          hidden={stormLegendHidden}
+          onToggle={() => setStormLegendHidden((h) => !h)}
+        />
+      )}
+
+      {selectedStormProvince && (
+        <View style={styles.stormProvinceChip}>
+          <View
+            style={[
+              styles.stormProvinceSwatch,
+              { backgroundColor: PAGASA_TCWS_COLORS[selectedStormProvince.signal] },
+            ]}
+          />
+          <Text style={styles.stormProvinceChipText} numberOfLines={1}>
+            {selectedStormProvince.name} - Signal #{selectedStormProvince.signal} (
+            {PAGASA_TCWS_LABELS[selectedStormProvince.signal]})
+          </Text>
+          <TouchableOpacity
+            onPress={() => setSelectedStormProvince(null)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close province details"
+          >
+            <Ionicons name="close" size={14} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      )}
 
 
       <HazardLayersPanel
@@ -1535,6 +1624,15 @@ export default function Index() {
           staleGrayThresholdMs={STALE_GRAY_THRESHOLD_MS}
           onClose={handleClosePersonCard}
           onCall={handleCallPerson}
+        />
+      )}
+
+      {visibleLayers.stormSignals &&
+        !stormBannerDismissed &&
+        stormSignals?.active && (
+        <StormSignalBanner
+          signals={stormSignals}
+          onDismiss={() => setStormBannerDismissed(true)}
         />
       )}
 
@@ -1700,5 +1798,38 @@ const styles = StyleSheet.create({
   locateButtonIcon: {
     fontSize: 22,
     color: '#4287f5',
+  },
+  stormProvinceChip: {
+    position: 'absolute',
+    bottom: 150,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '82%',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  stormProvinceSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+    flexShrink: 0,
+  },
+  stormProvinceChipText: {
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+    includeFontPadding: false,
   },
 });

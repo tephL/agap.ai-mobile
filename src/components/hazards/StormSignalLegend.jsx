@@ -1,5 +1,6 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import {
   PAGASA_TCWS_COLORS,
@@ -8,11 +9,42 @@ import {
 
 const LEVELS = [1, 2, 3, 4, 5];
 
-export default function StormSignalLegend() {
+/**
+ * Bottom-right legend explaining the TCWS signal colors. Collapses into a
+ * compact chip when hidden — tap the chip (or the header chevron) to flip.
+ * Rendered only while the Storm Signals layer is toggled on.
+ */
+export default function StormSignalLegend({ hidden = false, onToggle }) {
+  if (hidden) {
+    return (
+      <View style={styles.wrapper}>
+        <TouchableOpacity
+          style={styles.chip}
+          onPress={onToggle}
+          activeOpacity={0.7}
+          accessibilityLabel="Ipakita ang storm signals legend"
+          hitSlop={8}
+        >
+          <Text style={styles.chipText}>Storm Signals</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.wrapper}>
       <View style={styles.card}>
-        <Text style={styles.title}>Storm Signals (TCWS)</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>Storm Signals (TCWS)</Text>
+          <TouchableOpacity
+            onPress={onToggle}
+            hitSlop={8}
+            style={styles.collapseButton}
+            accessibilityLabel="Itago ang storm signals legend"
+          >
+            <Ionicons name="chevron-down" size={16} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
         {LEVELS.map((level) => (
           <View key={level} style={styles.row}>
             <View
@@ -31,9 +63,30 @@ export default function StormSignalLegend() {
 const styles = StyleSheet.create({
   wrapper: {
     position: "absolute",
-    right: 16,
-    bottom: 40,
-    alignItems: "flex-end",
+    left: 16,
+    bottom: 96,
+    alignItems: "flex-start",
+  },
+  chip: {
+    minWidth: 128,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(0,0,0,0.08)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    textAlign: "center",
+    includeFontPadding: false,
   },
   card: {
     width: 224,
@@ -50,12 +103,31 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+    paddingBottom: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(0,0,0,0.06)",
+  },
   title: {
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: "700",
     color: "#111827",
-    marginBottom: 6,
+    marginRight: 8,
     includeFontPadding: false,
+  },
+  collapseButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+    flexShrink: 0,
   },
   row: {
     flexDirection: "row",

@@ -180,7 +180,9 @@ export async function getStormSignals({ force = false } = {}) {
   }
 }
 
-const SAMPLE_ODETTE_12 = {
+// Luzon-centric demo fixture: eye over northern Luzon, tapering to Signal #1
+// covering Metro Manila so the user's own province is involved in previews.
+const SAMPLE_LUZON = {
   bulletin: {
     count: 12,
     title: "Tropical Cyclone Bulletin #12",
@@ -194,14 +196,35 @@ const SAMPLE_ODETTE_12 = {
     internationalName: "RAI",
     category: "TYPHOON",
     center: "Cardinal points at around the center",
-    movement: "Moving westward",
+    movement: "Moving westward across northern Luzon",
   },
   signals: [
-    { level: 3, areas: [{ name: "Leyte" }, { name: "Cebu" }] },
-    { level: 2, areas: [{ name: "Bohol" }, { name: "Palawan" }] },
-    { level: 1, areas: [{ name: "Masbate" }, { name: "Quezon" }] },
+    {
+      level: 3,
+      areas: [{ name: "Ilocos Norte" }, { name: "Ilocos Sur" }, { name: "Cagayan" }],
+    },
+    {
+      level: 2,
+      areas: [
+        { name: "Abra" },
+        { name: "Isabela" },
+        { name: "La Union" },
+        { name: "Pangasinan" },
+      ],
+    },
+    {
+      level: 1,
+      areas: [
+        { name: "Nueva Ecija" },
+        { name: "Tarlac" },
+        { name: "Bulacan" },
+        { name: "Zambales" },
+        { name: "Aurora" },
+        { name: "Metro Manila" },
+      ],
+    },
   ],
-  rawAreaCount: 6,
+  rawAreaCount: 13,
 };
 
 function sampleFromFixture() {
@@ -209,7 +232,7 @@ function sampleFromFixture() {
     active: true,
     generatedAt: new Date().toISOString(),
     sample: true,
-    ...SAMPLE_ODETTE_12,
+    ...SAMPLE_LUZON,
   };
 }
 
