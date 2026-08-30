@@ -19,12 +19,14 @@ import ChatBubble, { parseSuggestions } from "@/components/ai/ChatBubble";
 import SuggestionChips from "@/components/ai/SuggestionChips";
 import TypingIndicator from "@/components/ai/TypingIndicator";
 import useNetworkStatus from "@/hooks/useNetworkStatus";
+import useLiveLocation from "@/hooks/useLiveLocation";
 import {
   sendChatMessage,
   getChatHistory,
   clearChatHistory,
   getSuggestions,
 } from "@/services/aiService";
+import { getStormSignalsContext } from "@/context/hazardContext";
 
 const SYSTEM_SUGGESTIONS = [
   { text: "Ano ang dapat kong gawin kapag may bagyo?", icon: "thunderstorm" },
@@ -45,6 +47,11 @@ export default function Assistant() {
   const insets = useSafeAreaInsets();
   const { question, hazardLayerId, hazardVar } = useLocalSearchParams();
   const { isOnline, isConnected, isInternetReachable } = useNetworkStatus();
+  const { coords: liveCoords } = useLiveLocation();
+  const coordsRef = useRef(null);
+  useEffect(() => {
+    coordsRef.current = liveCoords;
+  }, [liveCoords]);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -166,7 +173,14 @@ export default function Assistant() {
       scrollToBottom();
 
       try {
-        const data = await sendChatMessage(msg, hazardContext);
+        const signalsContext = await getStormSignalsContext(
+          coordsRef.current ?? null
+        );
+        const outgoing =
+          signalsContext?.active
+            ? `${msg}\n\n[HAZARD CONTEXT] ${signalsContext.summary}`
+            : msg;
+        const data = await sendChatMessage(outgoing, hazardContext);
         const assistantMessage = { role: "assistant", content: data.reply };
         setMessages((prev) => [...prev, assistantMessage]);
         const followUps = parseSuggestions(data.reply);

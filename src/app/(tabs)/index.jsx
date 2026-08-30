@@ -39,7 +39,16 @@ import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import HazardTabs from '@/components/hazards/HazardTabs';
 import DamMarker from '@/components/hazards/DamMarker';
+import StormSignalLegend from '@/components/hazards/StormSignalLegend';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
+import {
+  getStormSignals,
+} from '../../services/stormSignalService.js';
+import {
+  buildSignalGeojson,
+  resolveSignalsToProvinces,
+} from '../../lib/stormSignals/provinceSignals.js';
+import phProvinces from '../../data/phProvinces.json';
 
 
 // ---------------------------------------------------------------------------
@@ -275,8 +284,37 @@ export default function Index() {
   const [selectedDam, setSelectedDam] = useState(null);
   const [hazardsOpen, setHazardsOpen] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
-  const [visibleLayers, setVisibleLayers] = useState({ dams: true });
+  const [visibleLayers, setVisibleLayers] = useState({ dams: true, stormSignals: false });
   const [activeTab, setActiveTab] = useState("dams");
+
+  // PAGASA TCWS storm signals overlay
+  const [stormSignals, setStormSignals] = useState(null);
+
+  // fetch when toggled on; stale state is ignored while visibleLayers is off
+  useEffect(() => {
+    if (!visibleLayers.stormSignals) return;
+    let cancelled = false;
+    getStormSignals()
+      .then((data) => {
+        if (!cancelled) setStormSignals(data);
+      })
+      .catch(() => {
+        if (!cancelled) setStormSignals(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleLayers.stormSignals]);
+
+  const signalByProvince = useMemo(
+    () => resolveSignalsToProvinces(stormSignals?.signals ?? []).byProvince,
+    [stormSignals]
+  );
+
+  const stormSignalsGeojson = useMemo(
+    () => buildSignalGeojson(phProvinces, signalByProvince),
+    [signalByProvince]
+  );
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -1093,6 +1131,54 @@ export default function Index() {
 
         {mapReady && (
           <>
+            {visibleLayers.stormSignals &&
+              stormSignals &&
+              !stormSignals.unavailable && (
+              <GeoJSONSource id="stormSignalsSource" data={stormSignalsGeojson}>
+                <Layer
+                  type="fill"
+                  id="stormSignalsFill"
+                  paint={{
+                    'fill-color': [
+                      'match',
+                      ['get', 'signal'],
+                      1, '#00aaff',
+                      2, '#fff200',
+                      3, '#ffaa00',
+                      4, '#ff0000',
+                      5, '#cd00cd',
+                      'rgba(0,0,0,0)',
+                    ],
+                    'fill-opacity': 0.4,
+                  }}
+                />
+                <Layer
+                  type="line"
+                  id="stormSignalsLine"
+                  paint={{
+                    'line-color': 'rgba(255,255,255,0.8)',
+                    'line-width': 1,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="stormSignalsLabel"
+                  filter={['>', ['get', 'signal'], 0]}
+                  layout={{
+                    'text-field': ['get', 'signal'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 12,
+                    'text-allow-overlap': false,
+                  }}
+                  paint={{
+                    'text-color': '#ffffff',
+                    'text-halo-color': '#111827',
+                    'text-halo-width': 1.5,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
             <GeoJSONSource
               id="userLocationSource"
               data={familyGeojson}
@@ -1422,6 +1508,8 @@ export default function Index() {
         hidden={legendHidden}
         onToggle={handleToggleLegend}
       />
+
+      {visibleLayers.stormSignals && <StormSignalLegend />}
 
 
       <HazardLayersPanel

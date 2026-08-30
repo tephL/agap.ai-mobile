@@ -29,4 +29,10 @@ export const MAP_LAYERS = [
     activeColor: "#0EA5E9",
     description: "Active typhoon tracks and public warnings",
   },
+  {
+    key: "stormSignals",
+    label: "Storm Signals",
+    activeColor: "#E32F31",
+    description: "Bagyong dala-distribute: PAGASA TCWS signal per probinsya",
+  },
 ];

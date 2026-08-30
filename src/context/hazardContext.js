@@ -14,6 +14,15 @@ import {
 } from "../components/hazards/damSeverity";
 import { getInfluencingDams } from "../components/hazards/damInfluence";
 import { getImpactTier } from "../data/hydrology";
+import {
+  getStormSignals,
+  getCachedStormSignals,
+} from "../services/stormSignalService";
+import {
+  resolveSignalsToProvinces,
+  provinceAtPoint,
+} from "../lib/stormSignals/provinceSignals";
+import phProvinces from "../data/phProvinces.json";
 
 function severitySentence(dam) {
   const severity = resolveDamSeverity(dam);
@@ -131,4 +140,116 @@ export async function getNearestDamContext(userLocation, userElevation = null) {
     relevantDams,
     summary: summaryParts.join(" "),
   };
+}
+
+let latestStormSignalContext = null;
+
+export function getLatestStormSignalsContext() {
+  return latestStormSignalContext;
+}
+
+/**
+ * Snapshot of the current PAGASA TCWS (storm signal) situation per the user's
+ * province. Returns null when the live bulletin cannot be fetched; otherwise
+ * a structured context with a model-friendly narrative.
+ * @param {{latitude:number|null, longitude:number|null}} userLocation
+ * @returns {Promise<object|null>}
+ */
+export async function getStormSignalsContext(userLocation) {
+  const signalsData = getCachedStormSignals() ?? (await getStormSignals());
+  if (!signalsData || signalsData.unavailable) {
+    latestStormSignalContext = null;
+    return null;
+  }
+
+  const { byProvince, unmapped } = resolveSignalsToProvinces(signalsData.signals ?? []);
+  const hasOrigin =
+    userLocation?.latitude != null && userLocation?.longitude != null;
+  const userProvince = hasOrigin
+    ? provinceAtPoint(userLocation.latitude, userLocation.longitude, phProvinces.features)
+    : null;
+  const userSignalLevel =
+    userProvince != null ? byProvince[userProvince] ?? null : null;
+
+  const activeLevels = {};
+  for (const [province, level] of Object.entries(byProvince)) {
+    if (!activeLevels[level]) activeLevels[level] = [];
+    activeLevels[level].push(province);
+  }
+  for (const level of Object.keys(activeLevels)) {
+    activeLevels[level].sort();
+  }
+
+  const highestLevel = Math.max(0, ...Object.keys(activeLevels).map(Number));
+  const cyclone = signalsData.cyclone;
+  const bulletin = signalsData.bulletin;
+
+  const summaryParts = [];
+  if (signalsData.active) {
+    const cycloneName = cyclone?.name ?? "a tropical cyclone";
+    summaryParts.push(
+      `PAGASA storm signals are active for ${cycloneName} as of the bulletin issued at ${bulletin?.issuedAt ?? "unknown"} (bulletin #${bulletin?.count ?? "?"}).`
+    );
+    for (const level of Object.keys(activeLevels)
+      .map(Number)
+      .sort((a, b) => b - a)) {
+      summaryParts.push(
+        `Signal #${level} (${activeLevels[level].length} area(s)): ${activeLevels[level].join(", ")}.`
+      );
+    }
+    if (userProvince) {
+      summaryParts.push(
+        userSignalLevel
+          ? `The user is in ${userProvince}, which is under Signal #${userSignalLevel}.`
+          : `The user is in ${userProvince}, which is NOT under any signal.`
+      );
+    } else if (hasOrigin) {
+      summaryParts.push("The user's province could not be determined from GPS.");
+    }
+    if (unmapped.length > 0) {
+      summaryParts.push(
+        `Note: PAGASA also lists ${unmapped.join(", ")} (no polygon geometry available).`
+      );
+    }
+  } else {
+    summaryParts.push(
+      `There are currently no active PAGASA tropical cyclone wind signals. Last bulletin examined: ${bulletin?.title ?? "none"}.`
+    );
+  }
+
+  const context = {
+    generatedAt: new Date().toISOString(),
+    source: signalsData.sample ? "PAGASA (sample demo data)" : "PAGASA (pagasa.chlod.net)",
+    sample: Boolean(signalsData.sample),
+    active: Boolean(signalsData.active),
+    bulletin: bulletin
+      ? {
+          count: bulletin.count,
+          title: bulletin.title,
+          issuedAt: bulletin.issuedAt,
+          expiresAt: bulletin.expiresAt,
+          final: bulletin.final,
+          url: bulletin.url,
+        }
+      : null,
+    cyclone: cyclone
+      ? {
+          name: cyclone.name,
+          internationalName: cyclone.internationalName,
+          category: cyclone.category,
+          center: cyclone.center,
+          movement: cyclone.movement,
+        }
+      : null,
+    activeLevels,
+    highestSignalLevel: highestLevel > 0 ? highestLevel : null,
+    userProvince,
+    userSignalLevel,
+    userLocation: hasOrigin
+      ? { latitude: userLocation.latitude, longitude: userLocation.longitude }
+      : null,
+    summary: summaryParts.join(" "),
+  };
+  latestStormSignalContext = context;
+  return context;
 }
