@@ -876,6 +876,24 @@ export default function Index() {
                   'circle-opacity': 0.9,
                 }}
               />
+              <Layer
+                type="symbol"
+                id="userLocationLabel"
+                layout={{
+                  'text-field': ['get', 'first_name'],
+                  'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                  'text-size': 11,
+                  'text-offset': [0, 1.8],
+                  'text-anchor': 'top',
+                  'text-allow-overlap': false,
+                }}
+                paint={{
+                  'text-color': '#1e40af',
+                  'text-halo-color': '#ffffff',
+                  'text-halo-width': 1.5,
+                  'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
+                }}
+              />
             </GeoJSONSource>
 
             <GeoJSONSource id="pulseSource" data={familyGeojson}>
