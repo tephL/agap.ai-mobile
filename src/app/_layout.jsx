@@ -22,6 +22,7 @@ export default function RootLayout() {
         options={{
           title: "Create Family",
           headerShadowVisible: false,
+          headerShown: false,
           headerTintColor: "#182033",
           headerStyle: { backgroundColor: "#FFFFFF" },
           headerTitleStyle: { fontWeight: "700" },
@@ -70,9 +71,41 @@ export default function RootLayout() {
         }}
       />
       <Stack.Screen
+        name="create-team"
+        options={{
+          title: "Create Team",
+          headerShadowVisible: false,
+          headerShown: true,
+          headerTintColor: "#182033",
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTitleStyle: { fontWeight: "700" },
+        }}
+      />
+      <Stack.Screen
+        name="relocate-team"
+        options={{
+          title: "Relocate Team",
+          headerShadowVisible: false,
+          headerShown: false,
+          headerTintColor: "#182033",
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTitleStyle: { fontWeight: "700" },
+        }}
+      />
+      <Stack.Screen
         name="cluster-detail"
         options={{
           title: "Cluster Detail",
+          headerShadowVisible: false,
+          headerTintColor: "#182033",
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTitleStyle: { fontWeight: "700" },
+        }}
+      />
+      <Stack.Screen
+        name="report-detail"
+        options={{
+          title: "Report Detail",
           headerShadowVisible: false,
           headerTintColor: "#182033",
           headerStyle: { backgroundColor: "#FFFFFF" },

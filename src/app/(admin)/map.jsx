@@ -1,5 +1,5 @@
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Map, Camera, NativeUserLocation, GeoJSONSource, Layer } from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -56,6 +56,7 @@ const ROUTE_DASH_SEQUENCE = [
 const CLUSTER_PRIORITY_COLOR_EXPR = [
   'match',
   ['get', 'priority'],
+  'critical', '#991B1B',
   'high', '#ef4444',
   'medium', '#eab308',
   'low', '#22c55e',
@@ -80,6 +81,84 @@ const TEAM_STATUS_COLOR_EXPR = [
   'busy', '#f97316',
   '#a9a9a9', // fallback for offline/unknown
 ];
+
+// ---------------------------------------------------------------------------
+// PulseClusterLayer — self-contained animated halo, isolated from parent re-renders
+// ---------------------------------------------------------------------------
+
+const PulseClusterLayer = React.memo(function PulseClusterLayer() {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setPhase((p) => (p + PULSE_STEP) % 1), PULSE_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const scale = 1 + 1.6 * phase;
+  const fade = 1 - phase;
+
+  return (
+    <Layer
+      type="circle"
+      id="clustersPulseLayer"
+      paint={{
+        'circle-color': CLUSTER_PRIORITY_COLOR_EXPR,
+        'circle-opacity': 0.3 * fade,
+        'circle-radius': [
+          'interpolate', ['linear'], ['zoom'],
+          5, 4 * scale,
+          10, 8 * scale,
+          16, 14 * scale,
+        ],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': CLUSTER_PRIORITY_COLOR_EXPR,
+        'circle-stroke-opacity': 0.55 * fade,
+      }}
+    />
+  );
+});
+
+// ---------------------------------------------------------------------------
+// RouteDashLayer — animated marching-ants dashes, isolated from parent re-renders
+// ---------------------------------------------------------------------------
+
+const RouteDashLayer = React.memo(function RouteDashLayer() {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setPhase((p) => (p + PULSE_STEP) % 1), PULSE_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const dashArray =
+    ROUTE_DASH_SEQUENCE[Math.floor(phase * ROUTE_DASH_SEQUENCE.length) % ROUTE_DASH_SEQUENCE.length];
+
+  return (
+    <>
+      <Layer
+        type="line"
+        id="routesCasingLayer"
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{
+          'line-color': '#ffffff',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 4, 14, 7],
+          'line-opacity': 0.6,
+        }}
+      />
+      <Layer
+        type="line"
+        id="routesLayer"
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{
+          'line-color': '#f97316',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 14, 4],
+          'line-dasharray': dashArray,
+          'line-opacity': 0.9,
+        }}
+      />
+    </>
+  );
+});
 
 // ---------------------------------------------------------------------------
 // Component
@@ -122,17 +201,7 @@ export default function Index() {
   const hasAutoZoomedRef = useRef(false);
   const handledTeamFocusRef = useRef(0);
 
-  // drives the expanding halo ring around every cluster; a single phase
-  // value is baked into the pulse layer's paint each tick
-  const [pulsePhase, setPulsePhase] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(
-      () => setPulsePhase((p) => (p + PULSE_STEP) % 1),
-      PULSE_TICK_MS
-    );
-    return () => clearInterval(id);
-  }, []);
+  // ---- clusters + teams fetch loop ---------------------------------------
 
   // team.jsx reads the selected cluster across tabs; focusNonce marks
   // explicit focus requests coming from the Reports tab, clustersNonce
@@ -143,6 +212,7 @@ export default function Index() {
     setActiveClusterId,
     focusNonce,
     clustersNonce,
+    invalidateClusters,
     focusTeamId,
     focusTeamNonce,
   } = useCluster();
@@ -250,63 +320,72 @@ export default function Index() {
   }, [dispatchSignature, activeDispatches]);
 
   // ---- derived geojson for cluster markers --------------------------------
-  const clustersGeojson = {
-    type: 'FeatureCollection',
-    features: clusters
-      .filter(
-        (c) =>
-          typeof c.latitude === 'number' &&
-          typeof c.longitude === 'number' &&
-          !Number.isNaN(c.latitude) &&
-          !Number.isNaN(c.longitude)
-      )
-      // empty clusters are cleaned up server-side; hide any stale ones
-      // still cached between refreshes so they never render a pin
-      .filter((c) => (c.report_count ?? 0) > 0)
-      .map((cluster, index) => ({
-        type: 'Feature',
-        id: `cluster-${cluster.city}-${index}`,
-        geometry: {
-          type: 'Point',
-          coordinates: [cluster.longitude, cluster.latitude],
-        },
-        properties: {
-          cluster_id: cluster.cluster_id,
-          city: cluster.city,
-          priority: cluster.priority_level,
-          status: cluster.status,
-          report_count: cluster.report_count,
-          people_affected: cluster.people_affected,
-          ai_summary: cluster.ai_summary,
-          action_plan: cluster.action_plan,
-        },
-      })),
-  };
+  const clustersGeojson = useMemo(
+    () => ({
+      type: 'FeatureCollection',
+      features: clusters
+        .filter(
+          (c) =>
+            typeof c.latitude === 'number' &&
+            typeof c.longitude === 'number' &&
+            !Number.isNaN(c.latitude) &&
+            !Number.isNaN(c.longitude)
+        )
+        // empty clusters are cleaned up server-side; hide any stale ones
+        // still cached between refreshes so they never render a pin
+        .filter((c) => (c.report_count ?? 0) > 0)
+        .map((cluster, index) => ({
+          type: 'Feature',
+          id: `cluster-${cluster.city}-${index}`,
+          geometry: {
+            type: 'Point',
+            coordinates: [cluster.longitude, cluster.latitude],
+          },
+          properties: {
+            cluster_id: cluster.cluster_id,
+            city: cluster.city,
+            priority: cluster.priority_level,
+            status: cluster.status,
+            report_count: cluster.report_count,
+            people_affected: cluster.people_affected,
+            ai_summary: cluster.ai_summary,
+            action_plan: cluster.action_plan,
+            ai_severity: cluster.ai_severity,
+            ai_disaster_type: cluster.ai_disaster_type,
+            ai_analyzed_at: cluster.ai_analyzed_at,
+          },
+        })),
+    }),
+    [clusters]
+  );
 
-  const teamsGeojson = {
-    type: 'FeatureCollection',
-    features: teams
-      .filter(
-        (t) =>
-          typeof t.lat === 'number' &&
-          typeof t.lng === 'number' &&
-          !Number.isNaN(t.lat) &&
-          !Number.isNaN(t.lng)
-      )
-      .map((team, index) => ({
-        type: 'Feature',
-        id: `team-${team.team_id ?? index}`,
-        geometry: {
-          type: 'Point',
-          coordinates: [team.lng, team.lat],
-        },
-        properties: {
-          team_id: team.team_id,
-          name: team.name,
-          status: team.status,
-        },
-      })),
-  };
+  const teamsGeojson = useMemo(
+    () => ({
+      type: 'FeatureCollection',
+      features: teams
+        .filter(
+          (t) =>
+            typeof t.lat === 'number' &&
+            typeof t.lng === 'number' &&
+            !Number.isNaN(t.lat) &&
+            !Number.isNaN(t.lng)
+        )
+        .map((team, index) => ({
+          type: 'Feature',
+          id: `team-${team.team_id ?? index}`,
+          geometry: {
+            type: 'Point',
+            coordinates: [team.lng, team.lat],
+          },
+          properties: {
+            team_id: team.team_id,
+            name: team.name,
+            status: team.status,
+          },
+        })),
+    }),
+    [teams]
+  );
 
   // planned routes as dashed lines under the pins; routes whose team or
   // cluster vanished (resolved/removed) drop out automatically
@@ -374,18 +453,6 @@ export default function Index() {
     if (assigned.length === 0) return null;
     return { team: assigned[0], extraCount: assigned.length - 1 };
   }, [teams, selectedCluster]);
-
-  // radar-style ring: swells outward and fades away over each cycle,
-  // tinted per cluster via the shared priority color expression
-  const pulseScale = 1 + 1.6 * pulsePhase;
-  const pulseFade = 1 - pulsePhase;
-
-  // route dashes march toward the destination using the same clock
-  const routeDashArray =
-    ROUTE_DASH_SEQUENCE[
-      Math.floor(pulsePhase * ROUTE_DASH_SEQUENCE.length) %
-        ROUTE_DASH_SEQUENCE.length
-    ];
 
   // ---- handlers -----------------------------------------------------------
   const handleLocatePress = async () => {
@@ -539,6 +606,47 @@ export default function Index() {
     [teams, selectedTeamId]
   );
 
+  // the cluster the selected team is currently dispatched to (its
+  // assigned_to). Shown in the team window as a banner that, when tapped,
+  // expands the cluster and pans the camera to it — mirroring how a
+  // cluster window links to its assigned team.
+  const selectedTeamAssignedCluster = useMemo(() => {
+    if (selectedTeam == null || selectedTeam.assigned_to == null) return null;
+    return (
+      clusters.find((c) => c.cluster_id === selectedTeam.assigned_to) ?? null
+    );
+  }, [selectedTeam, clusters]);
+
+  const handleTeamOpenCluster = useCallback(() => {
+    if (selectedTeamAssignedCluster == null) return;
+    expandCluster(selectedTeamAssignedCluster.cluster_id);
+  }, [selectedTeamAssignedCluster, expandCluster]);
+
+  // "assigned team" banner on an expanded cluster: instead of opening the
+  // team detail, drop the cluster and fly the camera to the team's current
+  // location (mirrors the team -> cluster pan described above).
+  const handleClusterOpenTeam = useCallback(() => {
+    const team = selectedAssignedTeam?.team;
+    if (team == null) return;
+
+    setSelectedTeamId(team.team_id);
+    collapseCluster();
+
+    if (
+      typeof team.lat === "number" &&
+      typeof team.lng === "number" &&
+      !Number.isNaN(team.lat) &&
+      !Number.isNaN(team.lng)
+    ) {
+      setFollowsUser(false);
+      cameraRef.current?.flyTo({
+        center: [team.lng, team.lat],
+        zoom: CLUSTER_FOCUS_ZOOM,
+        duration: CLUSTER_FOCUS_DURATION_MS,
+      });
+    }
+  }, [selectedAssignedTeam, collapseCluster, setFollowsUser]);
+
   const collapseTeam = useCallback(() => setSelectedTeamId(null), []);
 
   const handleTeamPress = useCallback(
@@ -671,44 +779,7 @@ export default function Index() {
             pin/halo renders on top of the lines */}
         {mapReady && (
           <GeoJSONSource id="routesSource" data={routesGeojson}>
-            {/* soft casing keeps the dashed line readable over roads */}
-            <Layer
-              type="line"
-              id="routesCasingLayer"
-              layout={{
-                'line-cap': 'round',
-                'line-join': 'round',
-              }}
-              paint={{
-                'line-color': '#ffffff',
-                'line-width': [
-                  'interpolate', ['linear'], ['zoom'],
-                  8, 4,
-                  14, 7,
-                ],
-                'line-opacity': 0.6,
-              }}
-            />
-            {/* dashed orange to match the busy-team pin color; dash
-                pattern cycles so the line flows toward the cluster */}
-            <Layer
-              type="line"
-              id="routesLayer"
-              layout={{
-                'line-cap': 'round',
-                'line-join': 'round',
-              }}
-              paint={{
-                'line-color': '#f97316',
-                'line-width': [
-                  'interpolate', ['linear'], ['zoom'],
-                  8, 2,
-                  14, 4,
-                ],
-                'line-dasharray': routeDashArray,
-                'line-opacity': 0.9,
-              }}
-            />
+            <RouteDashLayer />
           </GeoJSONSource>
         )}
 
@@ -720,23 +791,7 @@ export default function Index() {
             onPress={handleClusterPress}
           >
             {/* expanding priority-colored halo behind every cluster dot */}
-            <Layer
-              type="circle"
-              id="clustersPulseLayer"
-              paint={{
-                'circle-color': CLUSTER_PRIORITY_COLOR_EXPR,
-                'circle-opacity': 0.3 * pulseFade,
-                'circle-radius': [
-                  'interpolate', ['linear'], ['zoom'],
-                  5, 4 * pulseScale,
-                  10, 8 * pulseScale,
-                  16, 14 * pulseScale,
-                ],
-                'circle-stroke-width': 1.5,
-                'circle-stroke-color': CLUSTER_PRIORITY_COLOR_EXPR,
-                'circle-stroke-opacity': 0.55 * pulseFade,
-              }}
-            />
+            <PulseClusterLayer />
             <Layer
               type="circle"
               id="clustersLayer"
@@ -764,8 +819,6 @@ export default function Index() {
                   9, 10,
                   16, 14,
                 ],
-                'text-allow-overlap': true,
-                'text-ignore-placement': true,
               }}
               paint={{
                 'text-color': '#ffffff',
@@ -837,19 +890,50 @@ export default function Index() {
           >
             <Layer
               type="circle"
-              id="teamsLayer"
+              id="teamsCircle"
               paint={{
-                'circle-color': TEAM_STATUS_COLOR_EXPR,
+                'circle-color': '#ffffff',
                 'circle-radius': [
                   'interpolate', ['linear'], ['zoom'],
-                  8, 3.5,
-                  12, 5,
-                  16, 7,
-                  20, 9,
+                  8, 8,
+                  12, 12,
+                  16, 16,
+                  20, 20,
                 ],
                 'circle-stroke-width': 2,
-                'circle-stroke-color': '#ffffff',
-                'circle-opacity': 0.95,
+                'circle-stroke-color': TEAM_STATUS_COLOR_EXPR,
+                'circle-opacity': 0.9,
+              }}
+            />
+            <Layer
+              type="symbol"
+              id="teamsLayer"
+              layout={{
+                'icon-image': 'shelter',
+                'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1, 16, 1.2, 20, 1.4],
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+              }}
+              paint={{
+                'icon-color': TEAM_STATUS_COLOR_EXPR,
+              }}
+            />
+            <Layer
+              type="symbol"
+              id="teamsLabel"
+              layout={{
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                'text-size': 11,
+                'text-offset': [0, 1.8],
+                'text-anchor': 'top',
+                'text-allow-overlap': false,
+              }}
+              paint={{
+                'text-color': TEAM_STATUS_COLOR_EXPR,
+                'text-halo-color': '#ffffff',
+                'text-halo-width': 1.5,
+                'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
               }}
             />
           </GeoJSONSource>
@@ -884,14 +968,18 @@ export default function Index() {
           assignedExtraCount={selectedAssignedTeam?.extraCount ?? 0}
           onClose={collapseCluster}
           onAssignTeam={() => setAssignOpen(true)}
+          onResolved={invalidateClusters}
+          onOpenTeam={handleClusterOpenTeam}
         />
       )}
 
       {selectedTeam && (
         <TeamDetailsWindow
           team={selectedTeam}
+          assignedCluster={selectedTeamAssignedCluster}
           onClose={collapseTeam}
           onSeeDetails={openTeamDetail}
+          onOpenCluster={handleTeamOpenCluster}
         />
       )}
 

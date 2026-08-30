@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -26,6 +27,8 @@ import {
   assignTeamToCluster,
   assignmentError,
   updateAssignmentStatus,
+  updateTeamVisibility,
+  deleteTeam,
 } from "@/services/teamService";
 import { useCluster } from "@/context/ClusterContext";
 
@@ -82,6 +85,7 @@ export default function TeamDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [togglingPublic, setTogglingPublic] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -157,7 +161,7 @@ export default function TeamDetailScreen() {
     }
   };
 
-  const handleAdvanceStatus = async () => {
+  const handleAdvanceStatus = () => {
     if (busy || !assignment) return;
     const next =
       assignment.status === "pending"
@@ -167,12 +171,29 @@ export default function TeamDetailScreen() {
           : null;
     if (!next) return;
 
+    if (next === "resolved") {
+      Alert.alert(
+        "Mark as Resolved",
+        "Are you sure you want to mark this assignment as resolved?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Resolve",
+            style: "destructive",
+            onPress: () => advanceStatus(next),
+          },
+        ]
+      );
+    } else {
+      advanceStatus(next);
+    }
+  };
+
+  const advanceStatus = async (next) => {
     setBusy(true);
     setError(null);
     try {
       await updateAssignmentStatus(assignment.assignment_id, next);
-      // resolving deletes the cluster server-side; tell the Map tab so
-      // its pin disappears immediately
       invalidateClusters();
       await refresh();
     } catch (err) {
@@ -199,6 +220,58 @@ export default function TeamDetailScreen() {
     if (!hasCoords) return;
     focusTeam(team.team_id);
     router.navigate("/(admin)/map");
+  };
+
+  const handleTogglePublic = async () => {
+    if (togglingPublic || !team) return;
+    setTogglingPublic(true);
+    setError(null);
+    try {
+      const updated = await updateTeamVisibility(team.team_id, !team.is_public);
+      setTeam((prev) => (prev ? { ...prev, is_public: updated.is_public } : prev));
+    } catch (err) {
+      setError(assignmentError(err, "Failed to update visibility."));
+    } finally {
+      setTogglingPublic(false);
+    }
+  };
+
+  const handleRelocate = () => {
+    if (!team) return;
+    router.push({
+      pathname: "/relocate-team",
+      params: { teamId: team.team_id, teamName: team.name },
+    });
+  };
+
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = () => {
+    if (deleting || !team) return;
+    Alert.alert(
+      "Delete Team",
+      `Are you sure you want to delete ${team.name}? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            setError(null);
+            try {
+              await deleteTeam(team.team_id);
+              invalidateClusters();
+              router.back();
+            } catch (err) {
+              setError(assignmentError(err, "Failed to delete team."));
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -265,6 +338,60 @@ export default function TeamDetailScreen() {
               <Text style={styles.mapButtonText}>Go to location on map</Text>
             </TouchableOpacity>
           ) : null}
+
+          {/* Relocate / Delete */}
+          <View style={styles.updateRow}>
+            <TouchableOpacity
+              style={styles.relocateButton}
+              activeOpacity={0.8}
+              onPress={handleRelocate}
+            >
+              <MaterialIcons name="place" size={18} color="#f97316" />
+              <Text style={styles.relocateButtonText}>Relocate Team</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteButton}
+              activeOpacity={0.8}
+              onPress={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <MaterialIcons name="delete" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Visibility toggle */}
+        <View style={styles.sectionCard}>
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleInfo}>
+              <Ionicons name="eye" size={18} color={colors.text} />
+              <View>
+                <Text style={styles.toggleLabel}>Visible to Citizens</Text>
+                <Text style={styles.toggleHint}>
+                  Show this team&rsquo;s base on the citizen map
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.toggleSwitch, team.is_public && styles.toggleSwitchOn]}
+              activeOpacity={0.7}
+              onPress={handleTogglePublic}
+              disabled={togglingPublic}
+            >
+              {togglingPublic ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <View
+                  style={[styles.toggleKnob, team.is_public && styles.toggleKnobOn]}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Assignment */}
@@ -474,6 +601,78 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: colors.primary,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  toggleInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  toggleHint: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  toggleSwitch: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 2,
+  },
+  toggleSwitchOn: {
+    backgroundColor: colors.primary,
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    alignSelf: "flex-start",
+  },
+  toggleKnobOn: {
+    alignSelf: "flex-end",
+  },
+  updateRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  relocateButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: "#f97316",
+  },
+  relocateButtonText: {
+    color: "#f97316",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  deleteButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
   sectionCard: {
     borderWidth: 1,

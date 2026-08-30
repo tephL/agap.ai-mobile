@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   getMyFamily,
   removeMember,
+  leaveFamily,
   getMyInvitations,
   relationLabel,
 } from "@/services/familyService";
@@ -134,7 +135,7 @@ export default function FamilyScreen() {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
-            if (removingId) return; // one removal at a time
+            if (removingId) return;
             setRemovingId(member.family_member_id);
             try {
               await removeMember(family.family_id, member.family_member_id);
@@ -153,9 +154,33 @@ export default function FamilyScreen() {
     );
   };
 
-  // Navigate to the map tab with this member pre-selected so it can
-  // fly the camera to them and open their PersonCard.
-  const goToMemberOnMap = (member) => {
+  const handleLeave = () => {
+    Alert.alert(
+      "Leave Family",
+      `Leave "${family.name}"? You will lose access to this family.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveFamily(family.family_id);
+              setFamily(null);
+              setIsCreator(false);
+            } catch (err) {
+              Alert.alert(
+                "Error",
+                err.response?.data?.error || "Failed to leave family"
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMemberPress = (member) => {
     router.push({
       pathname: "/",
       params: { selectedUserId: String(member.user_id) },
@@ -328,6 +353,17 @@ export default function FamilyScreen() {
           </TouchableOpacity>
         </View>
 
+        {!isCreator && (
+          <TouchableOpacity
+            style={styles.leaveBtn}
+            onPress={handleLeave}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="exit-outline" size={18} color="#D32F2F" />
+            <Text style={styles.leaveBtnText}>Leave Family</Text>
+          </TouchableOpacity>
+        )}
+
         <Text style={styles.sectionTitle}>Members</Text>
 
         <FlatList
@@ -344,16 +380,14 @@ export default function FamilyScreen() {
             />
           }
           
-    renderItem={({ item, index }) => {
-      // The first member (typically the account owner) is fixed:
-      // no map navigation, no remove option.
-      const isFirst = index === 0;
-      const CardWrapper = isFirst ? View : TouchableOpacity;
-      const wrapperProps = isFirst
-        ? {}
-        : { activeOpacity: 0.7, onPress: () => goToMemberOnMap(item) };
+    renderItem={({ item }) => {
+      const isItemCreator = item.user_id === family.created_by;
       return (
-        <CardWrapper style={styles.memberCard} {...wrapperProps}>
+        <TouchableOpacity
+          style={styles.memberCard}
+          activeOpacity={0.7}
+          onPress={() => handleMemberPress(item)}
+        >
           <View style={styles.memberAvatar}>
             <Ionicons name="person" size={18} color={colors.primary} />
           </View>
@@ -365,7 +399,7 @@ export default function FamilyScreen() {
               {relationLabel(item.relation)}
             </Text>
           </View>
-          {isCreator && !isFirst && (
+          {isCreator && !isItemCreator && (
             <TouchableOpacity
               style={styles.removeBtn}
               onPress={() => handleRemove(item)}
@@ -378,7 +412,7 @@ export default function FamilyScreen() {
               )}
             </TouchableOpacity>
           )}
-        </CardWrapper>
+        </TouchableOpacity>
       );
     }}
 
@@ -556,6 +590,22 @@ const styles = StyleSheet.create({
   },
   fullWidthBtn: {
     width: "100%",
+  },
+  leaveBtn: {
+    borderWidth: 1.5,
+    borderColor: "#D32F2F",
+    height: 46,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  leaveBtnText: {
+    color: "#D32F2F",
+    fontWeight: "700",
+    fontSize: 14,
   },
   secondaryBtnText: {
     color: colors.primary,

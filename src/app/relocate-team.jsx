@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
   Map as MapLibreMap,
@@ -20,12 +19,7 @@ import {
   Layer,
 } from "@maplibre/maplibre-react-native";
 import colors from "@/constants/colors";
-import FormInput from "@/components/ui/FormInput";
-import { createTeam } from "@/services/teamService";
-import {
-  limitPhoneInput,
-  normalizePhoneForLogin,
-} from "@/services/authService";
+import { relocateTeam } from "@/services/teamService";
 import useLiveLocation from "@/hooks/useLiveLocation";
 
 const MAPTILER_API_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
@@ -36,16 +30,16 @@ const MAP_STYLE_URL = `https://api.maptiler.com/maps/dataviz/style.json?key=${MA
 const USER_ZOOM = 15;
 const USER_FLY_DURATION_MS = 1000;
 
-export default function CreateTeamScreen() {
+export default function RelocateTeamScreen() {
+  const params = useLocalSearchParams();
   const router = useRouter();
+  const teamId = Number(params.teamId);
+  const teamName = params.teamName ?? "Team";
+
   const { locationGranted, getCachedCoords, resolveCoords } = useLiveLocation();
 
-  const [name, setName] = useState("");
-  const [contact, setContact] = useState("");
-  const [isPublic, setIsPublic] = useState(false);
   const [location, setLocation] = useState(null);
   const [mapReady, setMapReady] = useState(false);
-  const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
   const cameraRef = useRef(null);
@@ -92,7 +86,7 @@ export default function CreateTeamScreen() {
           ? [
               {
                 type: "Feature",
-                id: "team-base",
+                id: "relocate-pin",
                 geometry: {
                   type: "Point",
                   coordinates: [location.longitude, location.latitude],
@@ -103,17 +97,6 @@ export default function CreateTeamScreen() {
     }),
     [location]
   );
-
-  const updateField = (key, value) => {
-    if (key === "name") setName(value);
-    if (key === "contact") setContact(limitPhoneInput(value));
-    setErrors((prev) => {
-      if (!prev[key]) return prev;
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
 
   const handleMapPress = (event) => {
     const [longitude, latitude] = event.nativeEvent.lngLat ?? [];
@@ -126,46 +109,20 @@ export default function CreateTeamScreen() {
       return;
     }
     setLocation({ latitude, longitude });
-    setErrors((prev) => {
-      if (!prev.location) return prev;
-      const next = { ...prev };
-      delete next.location;
-      return next;
-    });
   };
 
-  const validate = () => {
-    const next = {};
-    if (!name.trim()) next.name = "Team name is required.";
-    const normalizedContact = normalizePhoneForLogin(contact);
-    if (!normalizedContact) {
-      next.contact = "Contact number is required.";
-    } else if (normalizedContact.length !== 10) {
-      next.contact = "Enter a valid mobile number (e.g., 917 123 4567)";
-    }
-    if (!location) next.location = "Tap the map to set the team location.";
-    setErrors(next);
-    return Object.keys(next).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (submitting || !validate()) return;
+  const handleConfirm = async () => {
+    if (submitting || !location) return;
     setSubmitting(true);
     try {
-      await createTeam({
-        name: name.trim(),
-        contact_number: normalizePhoneForLogin(contact),
-        latitude: location.latitude,
-        longitude: location.longitude,
-        is_public: isPublic,
-      });
-      Alert.alert("Success", "Team created!", [
+      await relocateTeam(teamId, location.latitude, location.longitude);
+      Alert.alert("Success", `${teamName} has been relocated.`, [
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (err) {
       Alert.alert(
         "Error",
-        err.response?.data?.error || "Failed to create team"
+        err.response?.data?.error || "Failed to relocate team"
       );
     } finally {
       setSubmitting(false);
@@ -175,64 +132,11 @@ export default function CreateTeamScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      <View style={styles.flex}>
 
-        <View style={styles.fieldsBlock}>
-          <FormInput
-            label="Name"
-            value={name}
-            onChangeText={(v) => updateField("name", v)}
-            error={errors.name}
-            placeholder="   e.g. Rescue Alpha"
-            returnKeyType="next"
-          />
-          <FormInput
-            label="Contact Number"
-            prefix={{
-              icon: (
-                <MaterialIcons
-                  name="phone"
-                  color={colors.placeholder}
-                  size={20}
-                />
-              ),
-              text: "+63",
-            }}
-            placeholder="917 123 4567"
-            keyboardType="phone-pad"
-            maxLength={10}
-            value={contact}
-            onChangeText={(v) => updateField("contact", v)}
-            autoComplete="tel"
-            error={errors.contact}
-          />
-          <View style={styles.visibilityCard}>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleInfo}>
-                <Ionicons name="eye" size={18} color={colors.text} />
-                <View>
-                  <Text style={styles.toggleLabel}>Visible to Citizens</Text>
-                  <Text style={styles.toggleHint}>
-                    Show this team&rsquo;s base on the citizen map
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[styles.toggleSwitch, isPublic && styles.toggleSwitchOn]}
-                activeOpacity={0.7}
-                onPress={() => setIsPublic((prev) => !prev)}
-              >
-                <View
-                  style={[styles.toggleKnob, isPublic && styles.toggleKnobOn]}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.mapField}>
+        <View style={styles.mapSection}>
           <Text style={styles.fieldHint}>
-            Tap the map to drop the team&rsquo;s base pin.
+            Tap the map to set the new location for <Text style={styles.boldText}>{teamName}</Text>.
           </Text>
           <View style={styles.mapWrap}>
             <MapLibreMap
@@ -257,21 +161,21 @@ export default function CreateTeamScreen() {
                 trackUserLocation={locationGranted ? "default" : undefined}
               />
               {mapReady ? (
-                <GeoJSONSource id="teamLocationSource" data={pinGeojson}>
+                <GeoJSONSource id="relocateLocationSource" data={pinGeojson}>
                   <Layer
                     type="circle"
-                    id="teamLocationHalo"
+                    id="relocateLocationHalo"
                     paint={{
-                      "circle-color": colors.primary,
+                      "circle-color": "#f97316",
                       "circle-opacity": 0.15,
                       "circle-radius": 18,
                     }}
                   />
                   <Layer
                     type="circle"
-                    id="teamLocationPin"
+                    id="relocateLocationPin"
                     paint={{
-                      "circle-color": colors.primary,
+                      "circle-color": "#f97316",
                       "circle-radius": 8,
                       "circle-stroke-width": 2.5,
                       "circle-stroke-color": colors.white,
@@ -291,50 +195,69 @@ export default function CreateTeamScreen() {
               disabled={locating}
             >
               {locating ? (
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator size="small" color="#f97316" />
               ) : (
-                <Ionicons name="locate" size={22} color={colors.primary} />
+                <Ionicons name="locate" size={22} color="#f97316" />
               )}
             </TouchableOpacity>
           </View>
+
           <View style={styles.mapFooter}>
             <View style={styles.mapFooterInfo}>
               {location ? (
                 <>
-                  <MaterialIcons name="place" size={14} color={colors.primary} />
+                  <MaterialIcons name="place" size={14} color="#f97316" />
                   <Text style={styles.coordsText} numberOfLines={1}>
                     {`${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`}
                   </Text>
                 </>
-              ) : null}
-              {errors.location ? (
-                <Text style={styles.fieldError}>{errors.location}</Text>
-              ) : null}
+              ) : (
+                <Text style={styles.noLocationText}>
+                  Tap the map to pick a new location
+                </Text>
+              )}
             </View>
 
-            <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.buttonBusy]}
-              activeOpacity={0.85}
-              onPress={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <>
-                  <MaterialIcons name="check" size={18} color={colors.white} />
-                  <Text style={styles.submitText}>Create Team</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                activeOpacity={0.85}
+                onPress={() => router.back()}
+                disabled={submitting}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.confirmButton,
+                  (!location || submitting) && styles.buttonBusy,
+                ]}
+                activeOpacity={0.85}
+                onPress={handleConfirm}
+                disabled={!location || submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <>
+                    <MaterialIcons name="check" size={18} color={colors.white} />
+                    <Text style={styles.confirmButtonText}>Confirm Relocation</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  boldText: {
+    fontWeight: 'bold' 
+  }, 
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -346,6 +269,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 8,
   },
   backButton: {
@@ -366,64 +290,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
   },
-  fieldsBlock: {
-    gap: 14,
-    paddingHorizontal: 20,
-  },
-  visibilityCard: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    padding: 16,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  toggleInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  toggleHint: {
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 1,
-  },
-  toggleSwitch: {
-    width: 50,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 2,
-  },
-  toggleSwitchOn: {
-    backgroundColor: colors.primary,
-  },
-  toggleKnob: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    alignSelf: "flex-start",
-  },
-  toggleKnobOn: {
-    alignSelf: "flex-end",
-  },
-  mapField: {
+  mapSection: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 4,
     paddingBottom: 16,
     gap: 6,
   },
@@ -470,12 +340,31 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     flexShrink: 1,
   },
-  fieldError: {
+  noLocationText: {
     fontSize: 12,
-    color: colors.primary,
+    color: colors.muted,
   },
-  submitButton: {
-    backgroundColor: colors.primary,
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  cancelButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  cancelButtonText: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  confirmButton: {
+    flex: 2,
+    backgroundColor: "#f97316",
     height: 48,
     borderRadius: 12,
     alignItems: "center",
@@ -486,7 +375,7 @@ const styles = StyleSheet.create({
   buttonBusy: {
     opacity: 0.7,
   },
-  submitText: {
+  confirmButtonText: {
     color: colors.white,
     fontWeight: "700",
     fontSize: 15,

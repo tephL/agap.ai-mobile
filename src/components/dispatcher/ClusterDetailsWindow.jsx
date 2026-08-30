@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,8 +11,19 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import PriorityChip from "../ui/PriorityChip";
+import DisasterTypeChip from "../ui/DisasterTypeChip";
 import StatusBadge from "../ui/StatusBadge";
 import { reverseGeocode } from "../../services/geocodingService";
+import { updateClusterStatus } from "../../services/teamService";
+
+function formatDate(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
 
 export default function ClusterDetailsWindow({
   cluster,
@@ -18,9 +31,12 @@ export default function ClusterDetailsWindow({
   assignedExtraCount = 0,
   onClose,
   onAssignTeam,
+  onResolved,
+  onOpenTeam,
 }) {
   const router = useRouter();
   const [barangay, setBarangay] = useState(null);
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     if (!cluster?.latitude || !cluster?.longitude) return;
@@ -53,12 +69,48 @@ export default function ClusterDetailsWindow({
     });
   };
 
+  const handleOpenTeam = () => {
+    onOpenTeam?.();
+  };
+
+  const handleResolve = () => {
+    Alert.alert(
+      "Resolve Cluster",
+      "Are you sure you want to mark this cluster as resolved? This will release all assigned teams.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Resolve",
+          style: "destructive",
+          onPress: async () => {
+            if (resolving) return;
+            setResolving(true);
+            try {
+              await updateClusterStatus(cluster.cluster_id, "resolved");
+              onResolved?.();
+              onClose?.();
+            } catch (e) {
+              console.log("resolve cluster error:", e);
+            } finally {
+              setResolving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.window}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.title}>{locationLabel}</Text>
+          <View style={styles.headerChips}>
+            <PriorityChip priority={cluster.priority_level} />
+            <DisasterTypeChip type={cluster.ai_disaster_type} />
+            <Text style={styles.statusText}>{cluster.status}</Text>
+          </View>
         </View>
         <TouchableOpacity
           onPress={onClose}
@@ -68,50 +120,13 @@ export default function ClusterDetailsWindow({
         </TouchableOpacity>
       </View>
 
-      {/* Info row: priority, status, reports count */}
-      <View style={styles.infoRow}>
-        <View style={styles.infoPill}>
-          <PriorityChip priority={cluster.priority_level} />
-        </View>
-        <View style={styles.infoPill}>
-          <Text style={styles.infoPillLabel}>Status</Text>
-          <Text style={styles.infoPillValue}>
-            {cluster.status ?? "open"}
-          </Text>
-        </View>
-        <View style={styles.infoPill}>
-          <Text style={styles.infoPillLabel}>Reports</Text>
-          <Text style={styles.infoPillValue}>
-            {cluster.report_count ?? 0}
-          </Text>
-        </View>
-      </View>
-
-      {/* AI Summary */}
-      {cluster.ai_summary ? (
-        <View style={styles.summaryCard}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
-            <Text style={styles.sectionTitle}>AI Summary</Text>
-          </View>
-          <Text style={styles.summaryText} numberOfLines={3} ellipsizeMode="tail">
-            {cluster.ai_summary}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Affected people */}
-      <View style={styles.affectedRow}>
-        <Ionicons name="people-outline" size={16} color={colors.muted} />
-        <Text style={styles.affectedLabel}>Affected</Text>
-        <Text style={styles.affectedValue}>
-          {cluster.people_affected ?? 0}
-        </Text>
-      </View>
-
-      {/* Assigned team banner */}
+      {/* Team currently dispatched to this cluster */}
       {assignedTeam ? (
-        <View style={styles.assignedBanner}>
+        <TouchableOpacity
+          style={styles.assignedBanner}
+          activeOpacity={0.7}
+          onPress={handleOpenTeam}
+        >
           <View style={styles.assignedIconWrap}>
             <Ionicons name="people-circle-outline" size={18} color={colors.white} />
           </View>
@@ -123,8 +138,41 @@ export default function ClusterDetailsWindow({
             </Text>
           </View>
           <StatusBadge status={assignedTeam.status} />
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+        </TouchableOpacity>
       ) : null}
+
+      {/* Body */}
+      <View style={styles.body}>
+        <View style={styles.infoRowWrap}>
+          <View style={styles.infoStat}>
+            <Ionicons name="people-outline" size={16} color={colors.muted} />
+            <Text style={styles.infoStatLabel}>Affected</Text>
+            <Text style={styles.infoStatValue}>{cluster.people_affected ?? 0}</Text>
+          </View>
+          {cluster.ai_severity ? (
+            <View style={styles.infoStat}>
+              <Ionicons name="pulse-outline" size={16} color={colors.muted} />
+              <Text style={styles.infoStatLabel}>Severity</Text>
+              <Text style={[styles.infoStatValue, { textTransform: "capitalize" }]}>
+                {cluster.ai_severity}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {cluster.ai_summary ? (
+          <View style={styles.summaryCard}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
+              <Text style={styles.sectionTitle}>AI Summary</Text>
+            </View>
+            <Text style={styles.summaryText} numberOfLines={3} ellipsizeMode="tail">
+              {cluster.ai_summary}
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
       {/* Buttons */}
       <View style={styles.buttonRow}>
@@ -133,8 +181,8 @@ export default function ClusterDetailsWindow({
           activeOpacity={0.8}
           onPress={handleSeeDetails}
         >
-          <Ionicons name="document-text-outline" size={18} color={colors.primary} />
-          <Text style={styles.seeDetailsText}>See Details</Text>
+          <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+          <Text style={styles.seeDetailsText}>Details</Text>
         </TouchableOpacity>
 
         {!assignedTeam ? (
@@ -143,10 +191,24 @@ export default function ClusterDetailsWindow({
             activeOpacity={0.8}
             onPress={onAssignTeam}
           >
-            <Ionicons name="people-circle-outline" size={18} color={colors.white} />
-            <Text style={styles.assignButtonText}>Assign a Team</Text>
+            <Ionicons name="people-circle-outline" size={16} color={colors.white} />
+            <Text style={styles.assignButtonText}>Assign</Text>
           </TouchableOpacity>
         ) : null}
+
+        <TouchableOpacity
+          style={styles.resolveButton}
+          activeOpacity={0.8}
+          onPress={handleResolve}
+          disabled={resolving}
+        >
+          {resolving ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="checkmark-circle-outline" size={16} color={colors.white} />
+          )}
+          <Text style={styles.resolveButtonText}>Resolve</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -171,86 +233,27 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   headerText: {
     flex: 1,
+    gap: 6,
   },
   title: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     color: colors.text,
   },
-  infoRow: {
+  headerChips: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    marginBottom: 10,
   },
-  infoPill: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    gap: 4,
-  },
-  infoPillLabel: {
-    fontSize: 11,
+  statusText: {
+    fontSize: 12,
     fontWeight: "600",
     color: colors.muted,
-  },
-  infoPillValue: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.text,
     textTransform: "capitalize",
-  },
-  summaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    padding: 10,
-    gap: 6,
-    marginBottom: 10,
-  },
-  sectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    color: colors.muted,
-  },
-  summaryText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.text,
-  },
-  affectedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 6,
-    marginBottom: 10,
-  },
-  affectedLabel: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-  affectedValue: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
   },
   assignedBanner: {
     flexDirection: "row",
@@ -261,7 +264,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     borderRadius: 12,
     padding: 10,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   assignedIconWrap: {
     width: 34,
@@ -290,35 +293,104 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: "row",
     gap: 8,
+    marginTop: 12,
   },
   seeDetailsButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     borderWidth: 1.5,
     borderColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 11,
+    backgroundColor: colors.background,
   },
   seeDetailsText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: colors.primary,
+  },
+  body: {
+    gap: 8,
+    flexShrink: 1,
+  },
+  infoRowWrap: {
+    flexDirection: "row",
+  },
+  infoStat: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  infoStatLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  infoStatValue: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: colors.muted,
+  },
+  summaryText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.text,
   },
   assignButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 4,
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 11,
   },
   assignButtonText: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  resolveButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#15803D",
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  resolveButtonText: {
+    fontSize: 13,
     fontWeight: "700",
     color: colors.white,
   },

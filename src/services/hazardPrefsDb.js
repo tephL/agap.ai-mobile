@@ -15,6 +15,12 @@ const MIGRATIONS = [
     enabled  INTEGER NOT NULL
   );
   `,
+  `
+  CREATE TABLE IF NOT EXISTS ui_pref (
+    key   TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+  );
+  `,
 ];
 
 async function openDb() {
@@ -77,4 +83,22 @@ export async function setActiveHazardLayerId(layerId) {
       );
     }
   });
+}
+
+/** Whether the map legend was dismissed by the user. Defaults to visible. */
+export async function getLegendHidden() {
+  const db = await openDb();
+  const row = await db.getFirstAsync(
+    "SELECT value FROM ui_pref WHERE key = ?;",
+    ["legend_hidden"]
+  );
+  return row?.value === "1";
+}
+
+export async function setLegendHidden(hidden) {
+  const db = await openDb();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO ui_pref (key, value) VALUES (?, ?);`,
+    ["legend_hidden", hidden ? "1" : "0"]
+  );
 }

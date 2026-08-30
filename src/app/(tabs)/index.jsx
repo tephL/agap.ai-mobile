@@ -1,8 +1,8 @@
-import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Modal } from "react-native";
+import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Linking, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer } from '@maplibre/maplibre-react-native';
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 
 // services
@@ -13,16 +13,27 @@ import { getDamStatuses } from '../../services/hazardService.js';
 import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/damSeverity';
 import { getInfluencingDams } from '@/components/hazards/damInfluence';
 import { useHazardElevation } from '../../hooks/useHazardElevation';
+import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
+import { getActiveTyphoon } from '../../services/typhoonService.js';
+import { getRouteCoordinates } from '../../services/routeService';
+import { getPublicTeams } from '../../services/teamService';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
+import DispatchNotificationBar from "@/components/notifications/DispatchNotificationBar";
+import TyphoonAlertBanner from "@/components/notifications/TyphoonAlertBanner";
 import { PersonCard } from '@/components/PersonCard';
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
 import HazardLayersPanel from '@/components/HazardLayersPanel';
+import HazardLayerLegend from '@/components/HazardLayerLegend';
+
+// hooks
+import useActiveDispatches from '../../hooks/useActiveDispatches';
 
 // hazard layer selection prefs
 import { useActiveHazardLayer } from '../../hooks/useActiveHazardLayer';
-import { downloadLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
+import { downloadLayer, getHazardLayer, isDownloaded } from '../../lib/pmtiles/downloadLayer';
+import { getLegendHidden, setLegendHidden } from '../../services/hazardPrefsDb';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
@@ -54,6 +65,25 @@ const DAM_FLY_ZOOM = 13.5;
 const SELECTED_PERSON_FLY_DURATION_MS = 1000;
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PERSON_CARD_HEIGHT_ESTIMATE = SCREEN_HEIGHT * 0.4;
+
+// marching-ants steps for planned-route lines: cycling through these dash
+// patterns makes the dashes flow along each line's direction, i.e. from
+// the team base toward its assigned cluster
+const ROUTE_DASH_TICK_MS = 55;
+const ROUTE_DASH_STEP = 0.06;
+const ROUTE_DASH_SEQUENCE = [
+  [0, 4, 3],
+  [0.5, 4, 2.5],
+  [1, 4, 2],
+  [1.5, 4, 1.5],
+  [2, 4, 1],
+  [2.5, 4, 0.5],
+  [3, 4, 0],
+  [0, 0.5, 3, 3.5],
+];
+
+// teams dispatched to the citizen's cluster appear orange (same as dispatcher busy status)
+const TEAM_DISPATCH_COLOR = '#f97316';
 const DAM_SHEET_COLLAPSED_ESTIMATE = SCREEN_HEIGHT * 0.45;
 const DAM_MARKER_COLOR = '#4287f5';
 // Pulse cycle lengths per severity — the closer to spilling, the faster
@@ -121,14 +151,102 @@ async function downloadOfflineMapForCurrentArea(userLocation) {
 }
 
 // ---------------------------------------------------------------------------
+// RouteDashLayer — animated marching-ants dashes for dispatched team routes
+// ---------------------------------------------------------------------------
+
+const RouteDashLayer = React.memo(function RouteDashLayer() {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setPhase((p) => (p + ROUTE_DASH_STEP) % 1), ROUTE_DASH_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const dashArray =
+    ROUTE_DASH_SEQUENCE[Math.floor(phase * ROUTE_DASH_SEQUENCE.length) % ROUTE_DASH_SEQUENCE.length];
+
+  return (
+    <>
+      <Layer
+        type="line"
+        id="citizenRoutesCasingLayer"
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{
+          'line-color': '#ffffff',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 4, 14, 7],
+          'line-opacity': 0.6,
+        }}
+      />
+      <Layer
+        type="line"
+        id="citizenRoutesLayer"
+        layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+        paint={{
+          'line-color': TEAM_DISPATCH_COLOR,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 14, 4],
+          'line-dasharray': dashArray,
+          'line-opacity': 0.9,
+        }}
+      />
+    </>
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 export default function Index() {
   const { selectedUserId, sosStatus } = useLocalSearchParams();
+  const router = useRouter();
+
+  // typhoon alert state (session-only dismissal)
+  const [activeTyphoon, setActiveTyphoon] = useState(null);
+  const [typhoonDismissed, setTyphoonDismissed] = useState(false);
+
+  // "Report received" overlay shown after returning from the report form.
+  // Reset the ref guard each time this screen gains focus so the overlay
+  // can re-appear on the next submission.
+  const [sosReceivedVariant, setSosReceivedVariant] = useState(null);
+  const handledSosStatusRef = useRef(null);
+  useFocusEffect(
+    useCallback(() => {
+      handledSosStatusRef.current = null;
+      if (
+        typeof sosStatus === "string" &&
+        ["received", "prepared", "active"].includes(sosStatus)
+      ) {
+        handledSosStatusRef.current = sosStatus;
+        setSosReceivedVariant(sosStatus);
+      }
+    }, [sosStatus])
+  );
+
+  const handleTyphoonAskPreparedness = useCallback(() => {
+    router.push({
+      pathname: "/assistant",
+      params: {
+        question: "May aktibong bagyo (Signal No. 3 sa aking lugar) — ano ang mga tips sa disaster preparedness na dapat kong sundin?",
+      },
+    });
+  }, [router]);
+
+  const handleTyphoonDismiss = useCallback(() => {
+    setTyphoonDismissed(true);
+  }, []);
+
+  const handleTyphoonViewDetails = useCallback(() => {
+    // details expanded inline by the banner component
+  }, []);
 
   // location / permissions
   const { locationGranted, coords, getCachedCoords, resolveCoords } = useLiveLocation();
   const [locating, setLocating] = useState(false);
+
+  // active dispatch notifications
+  const { dispatches, dismiss, resetDismissed } = useActiveDispatches();
+
+  // public teams (is_public = true) shown on citizen map
+  const [publicTeams, setPublicTeams] = useState([]);
 
   // Stable null-safe shape so hazard memos/handlers can read .latitude/.longitude
   // unconditionally before the first GPS fix arrives.
@@ -164,6 +282,7 @@ export default function Index() {
   const [mapReady, setMapReady] = useState(false);
   const hasRunOnce = useRef(false);
   const cameraRef = useRef(null);
+  const mapRef = useRef(null);
 
   // tracks which selectedUserId param value we've already acted on, so a
   // background family refetch doesn't keep re-flying/re-opening the card
@@ -185,16 +304,135 @@ export default function Index() {
     })();
   }, []);
 
+  // fetch active typhoon for alert banner (citizens only)
+  useEffect(() => {
+    (async () => {
+      try {
+        const session = await getStoredSession();
+        if (!session || session.role_id !== CITIZEN_ROLE_ID) return;
+        const data = await getActiveTyphoon();
+        setActiveTyphoon(data?.typhoon ?? null);
+      } catch (e) {
+        console.log("Failed to fetch active typhoon", e);
+      }
+    })();
+  }, []);
+
   // pulsing "dih" effect state
   const [pulse, setPulse] = useState(0);
   const [damPulse, setDamPulse] = useState({ normal: 0, caution: 0, danger: 0 });
+  const [teamPulse, setTeamPulse] = useState(0);
 
   // hazard overlay selection (persisted, single-select) + layers sheet state
   const { activeId, select: selectHazardLayer } = useActiveHazardLayer();
   const [layersOpen, setLayersOpen] = useState(false);
 
+  /**
+   * Reads the active hazard layer at the user's current position by asking
+   * the rendered map which polygon sits under that pixel. Returns the flood
+   * `Var` value (1 = low, 2 = medium, 3 = high) or null when the point is
+   * not inside a hazard polygon (or nothing is rendered yet).
+   */
+  const resolveCurrentHazardVar = useCallback(
+    async (layerId) => {
+      if (!mapReady || !mapRef.current) return null;
+      try {
+        const coords = getCachedCoords() || (await resolveCoords());
+        if (!coords) return null;
+        const pixel = await mapRef.current.project([
+          coords.longitude,
+          coords.latitude,
+        ]);
+        if (!pixel) return null;
+        const features = await mapRef.current.queryRenderedFeatures(pixel, {
+          layers: [`hazard-source-${layerId}-fill`],
+        });
+        if (!features || features.length === 0) return null;
+        const level = Number(features[0].properties?.Var);
+        return [1, 2, 3].includes(level) ? level : null;
+      } catch (e) {
+        console.log("Failed to resolve hazard at location", e);
+        return null;
+      }
+    },
+    [mapReady, getCachedCoords, resolveCoords]
+  );
+
+  const handleAskAI = useCallback(
+    async (layerId) => {
+      const layer = getHazardLayer(layerId);
+      let hazardParams = {};
+      // Location risk is only resolvable when the tapped layer is the one
+      // actually rendered on the map (queryRenderedFeatures reads drawn
+      // polygons); otherwise just explain the layer in general terms.
+      if (activeId === layerId) {
+        const varLevel = await resolveCurrentHazardVar(layerId);
+        if (varLevel != null) {
+          hazardParams = { hazardLayerId: layerId, hazardVar: String(varLevel) };
+        }
+      }
+      router.push({
+        pathname: "/assistant",
+        params: {
+          question: `Ano ang ibig sabihin ng "${layer.label}" na hazard layer? Ipaliwanag ito nang detalyado.`,
+          ...hazardParams,
+        },
+      });
+    },
+    [router, activeId, resolveCurrentHazardVar]
+  );
+
+  // legend visibility (persisted): expands whenever the active layer
+  // changes, otherwise restores what the user last chose
+  const [legendHidden, setLegendHiddenState] = useState(false);
+  const prevActiveLayerRef = useRef(activeId);
+  useEffect(() => {
+    const prev = prevActiveLayerRef.current;
+    prevActiveLayerRef.current = activeId;
+    if (prev !== null && activeId !== prev) {
+      // a different layer was picked — always re-show its legend
+      setLegendHiddenState(false);
+      setLegendHidden(false).catch(() => undefined);
+      return;
+    }
+    // same layer (or first mount) — restore the persisted choice
+    getLegendHidden()
+      .then(setLegendHiddenState)
+      .catch(() => undefined);
+  }, [activeId]);
+
+  const handleToggleLegend = useCallback(() => {
+    setLegendHiddenState((hidden) => {
+      setLegendHidden(!hidden).catch(() => undefined);
+      return !hidden;
+    });
+  }, []);
+
   // staleness re-check clock
   const [now, setNow] = useState(Date.now());
+
+  // ---- reset dismissed dispatch notifications on tab focus -----------
+  useFocusEffect(
+    useCallback(() => {
+      resetDismissed();
+    }, [resetDismissed])
+  );
+
+  // ---- fetch public teams on focus -------------------------------------
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const teams = await getPublicTeams();
+          if (!cancelled) setPublicTeams(teams);
+        } catch (e) {
+          console.log("Failed to load public teams", e);
+        }
+      })();
+      return () => { cancelled = true; };
+    }, [])
+  );
 
   // ---- location sending + family fetch loop (runs while screen focused) ---
   const refreshFamilyLocations = useCallback(async () => {
@@ -373,6 +611,176 @@ export default function Index() {
     })),
   };
 
+  // ---- geojson for dispatched team markers ------------------------------
+  const teamGeojson = {
+    type: 'FeatureCollection',
+    features: dispatches
+      .filter(
+        (d) =>
+          d.team?.lat != null &&
+          d.team?.lng != null &&
+          !Number.isNaN(d.team.lat) &&
+          !Number.isNaN(d.team.lng)
+      )
+      .map((d) => ({
+        type: 'Feature',
+        id: `dispatch-team-${d.team_id}`,
+        geometry: {
+          type: 'Point',
+          coordinates: [d.team.lng, d.team.lat],
+        },
+        properties: {
+          team_id: d.team_id,
+          name: d.team?.name ?? 'Response Team',
+          assignment_id: d.assignment_id,
+        },
+      })),
+  };
+
+  // ---- planned routes for dispatched teams: team base -> cluster ----------
+  const [teamRoutes, setTeamRoutes] = useState({});
+
+  const activeDispatches = useMemo(() => {
+    return dispatches
+      .filter(
+        (d) =>
+          d.team?.lat != null &&
+          d.team?.lng != null &&
+          !Number.isNaN(d.team.lat) &&
+          !Number.isNaN(d.team.lng) &&
+          d.cluster?.lat != null &&
+          d.cluster?.lng != null &&
+          !Number.isNaN(d.cluster.lat) &&
+          !Number.isNaN(d.cluster.lng)
+      )
+      .map((d) => ({
+        teamId: d.team_id,
+        from: [d.team.lng, d.team.lat],
+        to: [d.cluster.lng, d.cluster.lat],
+      }));
+  }, [dispatches]);
+
+  const dispatchSignature = useMemo(
+    () =>
+      activeDispatches
+        .map((d) => `${d.teamId}:${d.from.join(',')}=>${d.to.join(',')}`)
+        .sort()
+        .join('|'),
+    [activeDispatches]
+  );
+  const fetchedDispatchSigRef = useRef(null);
+
+  useEffect(() => {
+    if (dispatchSignature === fetchedDispatchSigRef.current) return;
+    fetchedDispatchSigRef.current = dispatchSignature;
+
+    let cancelled = false;
+    (async () => {
+      if (activeDispatches.length === 0) {
+        setTeamRoutes({});
+        return;
+      }
+      const entries = await Promise.all(
+        activeDispatches.map(async (d) => [
+          d.teamId,
+          await getRouteCoordinates(d.from, d.to),
+        ])
+      );
+      if (cancelled) return;
+
+      const next = {};
+      for (const [teamId, coords] of entries) {
+        if (coords) next[teamId] = coords;
+      }
+      setTeamRoutes(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatchSignature, activeDispatches]);
+
+  // ---- routes GeoJSON for marching-ants lines ----------------------------
+  const routesGeojson = useMemo(
+    () => ({
+      type: 'FeatureCollection',
+      features: Object.entries(teamRoutes).map(([teamId, coordinates]) => ({
+        type: 'Feature',
+        id: `citizen-route-${teamId}`,
+        geometry: { type: 'LineString', coordinates },
+        properties: { team_id: Number(teamId) },
+      })),
+    }),
+    [teamRoutes]
+  );
+
+  // ---- team starting point markers (base location, dispatcher icon style) -
+  const teamStartingPointGeojson = useMemo(
+    () => ({
+      type: 'FeatureCollection',
+      features: dispatches
+        .filter(
+          (d) =>
+            d.team?.lat != null &&
+            d.team?.lng != null &&
+            !Number.isNaN(d.team.lat) &&
+            !Number.isNaN(d.team.lng)
+        )
+        .map((d) => ({
+          type: 'Feature',
+          id: `team-start-${d.team_id}`,
+          geometry: {
+            type: 'Point',
+            coordinates: [d.team.lng, d.team.lat],
+          },
+          properties: {
+            team_id: d.team_id,
+            name: d.team?.name ?? 'Response Team',
+          },
+        })),
+    }),
+    [dispatches]
+  );
+
+  // ---- public teams (is_public) base markers ---------------------------
+  const PUBLIC_TEAM_COLOR = '#3b82f6';
+  const publicTeamGeojson = useMemo(() => {
+    const dispatchedIds = new Set(
+      dispatches
+        .filter(
+          (d) =>
+            d.team?.lat != null &&
+            d.team?.lng != null &&
+            !Number.isNaN(d.team.lat) &&
+            !Number.isNaN(d.team.lng)
+        )
+        .map((d) => d.team_id)
+    );
+    return {
+      type: 'FeatureCollection',
+      features: publicTeams
+        .filter(
+          (t) =>
+            !dispatchedIds.has(t.team_id) &&
+            typeof t.lat === 'number' &&
+            typeof t.lng === 'number' &&
+            !Number.isNaN(t.lat) &&
+            !Number.isNaN(t.lng)
+        )
+        .map((t) => ({
+          type: 'Feature',
+          id: `public-team-${t.team_id}`,
+          geometry: {
+            type: 'Point',
+            coordinates: [t.lng, t.lat],
+          },
+          properties: {
+            team_id: t.team_id,
+            name: t.name,
+          },
+        })),
+    };
+  }, [publicTeams, dispatches]);
+
   // Ground elevation for the hydrology risk factor (graceful when unknown).
   const { elevation: userElevation } = useHazardElevation(
     coarseUserLocation.latitude,
@@ -487,6 +895,22 @@ export default function Index() {
     }, PULSE_TICK_MS);
     return () => clearInterval(id);
   }, [visibleLayers.dams]);
+
+  // ---- faster pulse for dispatched team markers -------------------------
+  const TEAM_PULSE_DURATION_MS = 1200;
+  useEffect(() => {
+    let raf;
+    const start = Date.now();
+
+    const tick = () => {
+      const elapsed = (Date.now() - start) % TEAM_PULSE_DURATION_MS;
+      setTeamPulse(elapsed / TEAM_PULSE_DURATION_MS);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // ---- color staleness ----------------------------------------------------
   useEffect(() => {
@@ -628,8 +1052,96 @@ export default function Index() {
     setHazardsOpen(false);
   }, []);
 
-  const handleCallPerson = (phone_number, user_id) => {
-    // TODO: implement (e.g. Linking.openURL(`tel:${phone_number}`))
+  // ---- hazards handlers ----------------------------------------------------
+  const flyToDam = useCallback((lng, lat) => {
+    cameraRef.current?.flyTo({
+      center: [lng, lat],
+      zoom: DAM_FLY_ZOOM,
+      duration: SELECTED_PERSON_FLY_DURATION_MS,
+      padding: {
+        top: 0,
+        bottom: DAM_SHEET_COLLAPSED_ESTIMATE,
+        left: 0,
+        right: 0,
+      },
+    });
+  }, []);
+
+  const handleDamPress = (event) => {
+    // GeoJSONSource onPress wraps in nativeEvent.features[0]; Marker onPress
+    // passes the feature object directly as event.properties / event directly.
+    const feature = event?.nativeEvent?.features?.[0] ?? event;
+    if (!feature?.properties?.slug) return;
+
+    // Keep the drawer's list in sync with the latest backend data so it can
+    // never render a stale subset after re-opening from a marker tap.
+    refreshDams();
+
+    setSelectedDam(feature.properties);
+    setSheetExpanded(false);
+
+    const coords = feature.geometry?.coordinates ?? (feature.properties?.coordinates
+      ? [feature.properties.coordinates.lng, feature.properties.coordinates.lat]
+      : []);
+    const [lng, lat] = coords;
+    if (typeof lng === 'number' && typeof lat === 'number') {
+      flyToDam(lng, lat);
+    }
+  };
+
+  const handleSelectDamFromList = useCallback((dam) => {
+    if (!dam?.slug) return;
+    setSelectedDam(dam);
+    setSheetExpanded(false);
+
+    if (dam.coordinates) {
+      flyToDam(dam.coordinates.lng, dam.coordinates.lat);
+    }
+  }, [flyToDam]);
+
+  // Tapping a dashed route frames that dam's route and brings up the
+  // drawer pre-loaded with its card.
+  const handleRoutePress = (event) => {
+    const slug = event?.nativeEvent?.features?.[0]?.properties?.slug;
+    if (slug == null || influencingBySlug[slug] == null) return;
+    const target = dams.find((dam) => dam.slug === slug);
+    if (!target?.coordinates || userLocation.latitude == null) return;
+
+    const lngs = [userLocation.longitude, target.coordinates.lng];
+    const lats = [userLocation.latitude, target.coordinates.lat];
+    cameraRef.current?.fitBounds(
+      [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
+      {
+        padding: ROUTE_FIT_PADDING,
+        duration: SELECTED_PERSON_FLY_DURATION_MS,
+      },
+    );
+
+    setSelectedDam(target);
+    setHazardsOpen(true);
+    setSheetExpanded(false);
+    refreshDams();
+  };
+
+  const handleHazardsPress = () => {
+    refreshDams();
+    setSelectedDam(null);
+    setHazardsOpen(true);
+    setSheetExpanded(true);
+  };
+
+  const handleToggleLayer = useCallback((key) => {
+    setVisibleLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const handleCloseHazards = useCallback(() => {
+    setSelectedDam(null);
+    setHazardsOpen(false);
+  }, []);
+
+  const handleCallPerson = (phone_number) => {
+    if (!phone_number) return;
+    Linking.openURL(`tel:${phone_number.replace(/\s+/g, "")}`);
   };
 
   const handleLocatePress = async () => {
@@ -658,6 +1170,7 @@ export default function Index() {
     <View style={styles.container}>
 
       <Map
+        ref={mapRef}
         style={styles.map}
         mapStyle={MAP_STYLE_URL}
         logoEnabled={false}
@@ -703,6 +1216,24 @@ export default function Index() {
                   'circle-opacity': 0.9,
                 }}
               />
+              <Layer
+                type="symbol"
+                id="userLocationLabel"
+                layout={{
+                  'text-field': ['get', 'first_name'],
+                  'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                  'text-size': 11,
+                  'text-offset': [0, 1.8],
+                  'text-anchor': 'top',
+                  'text-allow-overlap': false,
+                }}
+                paint={{
+                  'text-color': '#1e40af',
+                  'text-halo-color': '#ffffff',
+                  'text-halo-width': 1.5,
+                  'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
+                }}
+              />
             </GeoJSONSource>
 
             <GeoJSONSource id="pulseSource" data={familyGeojson}>
@@ -722,6 +1253,175 @@ export default function Index() {
                 }}
               />
             </GeoJSONSource>
+
+            {/* dispatched response team markers — blue with white outline */}
+            {teamGeojson.features.length > 0 && (
+              <GeoJSONSource id="dispatchTeamSource" data={teamGeojson}>
+                <Layer
+                  type="circle"
+                  id="dispatchTeamPulse"
+                  paint={{
+                    'circle-color': '#3b82f6',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 6 + teamPulse * 30,
+                      12, 9 + teamPulse * 30,
+                      16, 12 + teamPulse * 30,
+                    ],
+                    'circle-opacity': Math.max(0.6 - teamPulse * 0.6, 0),
+                    'circle-stroke-width': 0,
+                  }}
+                />
+                <Layer
+                  type="circle"
+                  id="dispatchTeamLayer"
+                  paint={{
+                    'circle-color': '#3b82f6',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 4,
+                      12, 6,
+                      16, 8,
+                    ],
+                    'circle-stroke-width': 2.5,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-opacity': 0.95,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="dispatchTeamLabel"
+                  layout={{
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.8],
+                    'text-anchor': 'top',
+                    'text-allow-overlap': false,
+                  }}
+                  paint={{
+                    'text-color': '#1e40af',
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 1.5,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {/* marching-ants route lines from team base to cluster */}
+            {routesGeojson.features.length > 0 && (
+              <GeoJSONSource id="citizenRoutesSource" data={routesGeojson}>
+                <RouteDashLayer />
+              </GeoJSONSource>
+            )}
+
+            {/* team starting point markers — shelter icon, orange (busy), with name label */}
+            {teamStartingPointGeojson.features.length > 0 && (
+              <GeoJSONSource id="teamStartingPointSource" data={teamStartingPointGeojson}>
+                <Layer
+                  type="circle"
+                  id="teamStartCircle"
+                  paint={{
+                    'circle-color': '#ffffff',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 8,
+                      12, 12,
+                      16, 16,
+                      20, 20,
+                    ],
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': TEAM_DISPATCH_COLOR,
+                    'circle-opacity': 0.9,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="teamStartIcon"
+                  layout={{
+                    'icon-image': 'shelter',
+                    'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1, 16, 1.2, 20, 1.4],
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true,
+                  }}
+                  paint={{
+                    'icon-color': TEAM_DISPATCH_COLOR,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="teamStartLabel"
+                  layout={{
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.8],
+                    'text-anchor': 'top',
+                    'text-allow-overlap': false,
+                  }}
+                  paint={{
+                    'text-color': TEAM_DISPATCH_COLOR,
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 1.5,
+                    'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {/* public team markers — blue circle with shelter icon */}
+            {publicTeamGeojson.features.length > 0 && (
+              <GeoJSONSource id="publicTeamSource" data={publicTeamGeojson}>
+                <Layer
+                  type="circle"
+                  id="publicTeamCircle"
+                  paint={{
+                    'circle-color': '#ffffff',
+                    'circle-radius': [
+                      'interpolate', ['linear'], ['zoom'],
+                      8, 8,
+                      12, 12,
+                      16, 16,
+                      20, 20,
+                    ],
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': PUBLIC_TEAM_COLOR,
+                    'circle-opacity': 0.9,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="publicTeamIcon"
+                  layout={{
+                    'icon-image': 'shelter',
+                    'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 1, 16, 1.2, 20, 1.4],
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true,
+                  }}
+                  paint={{
+                    'icon-color': PUBLIC_TEAM_COLOR,
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="publicTeamLabel"
+                  layout={{
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.8],
+                    'text-anchor': 'top',
+                    'text-allow-overlap': false,
+                  }}
+                  paint={{
+                    'text-color': PUBLIC_TEAM_COLOR,
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 1.5,
+                    'text-opacity': ['interpolate', ['linear'], ['zoom'], 12, 0, 14, 1],
+                  }}
+                />
+              </GeoJSONSource>
+            )}
 
             {visibleLayers.dams && (
               <>
@@ -817,11 +1517,21 @@ export default function Index() {
         {activeId && <View style={styles.layersDot} />}
       </View>
 
+      {/* legend explaining the active overlay's colors — bottom-left, only
+          while a layer is active; collapses to a chip when hidden */}
+      <HazardLayerLegend
+        activeId={activeId}
+        hidden={legendHidden}
+        onToggle={handleToggleLegend}
+      />
+
+
       <HazardLayersPanel
         visible={layersOpen}
         onClose={() => setLayersOpen(false)}
         activeId={activeId}
         onSelect={selectHazardLayer}
+        onAskAI={handleAskAI}
         visibleLayers={visibleLayers}
         onToggleLayer={handleToggleLayer}
       />
@@ -840,6 +1550,35 @@ export default function Index() {
           onClose={handleClosePersonCard}
           onCall={handleCallPerson}
         />
+      )}
+
+      {!typhoonDismissed && activeTyphoon && (
+        <TyphoonAlertBanner
+          typhoon={activeTyphoon}
+          onDismiss={handleTyphoonDismiss}
+          onViewDetails={handleTyphoonViewDetails}
+          onAskPreparedness={handleTyphoonAskPreparedness}
+        />
+      )}
+
+      <DispatchNotificationBar
+        dispatches={dispatches}
+        onDismiss={dismiss}
+        style={activeTyphoon && !typhoonDismissed ? { top: 160 } : undefined}
+      />
+
+      {sosReceivedVariant && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSosReceivedVariant(null)}
+        >
+          <SosReceivedOverlay
+            variant={sosReceivedVariant}
+            onDone={() => setSosReceivedVariant(null)}
+          />
+        </Modal>
       )}
 
       {hazardsOpen && !selectedDam && (

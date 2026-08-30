@@ -32,20 +32,21 @@ interface LayerRowProps {
   config: HazardLayerConfig;
   active: boolean;
   onSelect: () => void;
+  onAskAI: (layerId: string) => void;
 }
 
 const LAYER_DESCRIPTIONS: Record<string, string> = {
   flood_5yr:
-    "Areas likely to flood in a common 5-year storm event",
+    "Mga lugar na malamang na bahain sa isang karaniwang 5 taon na bagyo",
   flood_25yr:
-    "Areas likely to flood in a 1-in-25 year storm event",
+    "Mga lugar na malamang na bahain sa isang 1 sa 25 taon na bagyo",
   flood_100yr:
-    "Areas likely to flood in a 1-in-100 year extreme storm event",
+    "Mga lugar na malamang na bahain sa isang 1 sa 100 taon na matinding bagyo",
   landslide:
-    "Zones prone to landslides based on slope, soil, and rainfall",
+    "Mga zona na madulas batay sa hulmahan, lupa, at ulan",
 };
 
-function LayerRow({ config, active, onSelect }: LayerRowProps) {
+function LayerRow({ config, active, onSelect, onAskAI }: LayerRowProps) {
   const { status, progress, download, remove } =
     useOfflinePMTilesLayer(config.id);
   const palette = HAZARD_COLORS[config.hazardType];
@@ -54,12 +55,12 @@ function LayerRow({ config, active, onSelect }: LayerRowProps) {
   // offline copy isn't orphaned silently in the background.
   const metaText =
     status === "downloading"
-      ? `~${config.approxSizeMB} MB · downloading ${progress}%`
+      ? `~${config.approxSizeMB} MB · nagda-download ${progress}%`
       : status === "ready"
-        ? `~${config.approxSizeMB} MB · saved offline`
+        ? `~${config.approxSizeMB} MB · naka-save offline`
         : status === "error"
-          ? `~${config.approxSizeMB} MB · download failed`
-          : `~${config.approxSizeMB} MB · streaming`;
+          ? `~${config.approxSizeMB} MB · nabigo ang download`
+          : `~${config.approxSizeMB} MB · nag-stream`;
 
   return (
     <View style={styles.row}>
@@ -83,7 +84,7 @@ function LayerRow({ config, active, onSelect }: LayerRowProps) {
                   active && styles.badgeTextActive,
                 ]}
               >
-                Recommended
+                Inirerekomenda
               </Text>
             </View>
           ) : null}
@@ -107,6 +108,14 @@ function LayerRow({ config, active, onSelect }: LayerRowProps) {
             </View>
           ) : null}
         </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.helpButton}
+        onPress={() => onAskAI(config.id)}
+        hitSlop={8}
+      >
+        <Ionicons name="help" size={14} color="#6B7280" />
       </TouchableOpacity>
 
       {status === "ready" ? (
@@ -176,9 +185,14 @@ interface HazardLayersPanelProps {
    * deselects it. Download state of every layer is unaffected.
    */
   onSelect: (layerId: string | null) => void;
+<<<<<<< HEAD
   /** Toggleable map features (dams, fault lines, ...). */
   visibleLayers?: Record<string, boolean>;
   onToggleLayer?: (key: string) => void;
+=======
+  /** Called with a layer id when the user taps the ? button. */
+  onAskAI: (layerId: string) => void;
+>>>>>>> origin/master
 }
 
 export default function HazardLayersPanel({
@@ -186,8 +200,12 @@ export default function HazardLayersPanel({
   onClose,
   activeId,
   onSelect,
+<<<<<<< HEAD
   visibleLayers,
   onToggleLayer,
+=======
+  onAskAI,
+>>>>>>> origin/master
 }: HazardLayersPanelProps) {
   const [tab, setTab] = React.useState<PanelTab>("hazards");
   if (!visible) return null;
@@ -198,11 +216,16 @@ export default function HazardLayersPanel({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet}>
           <View style={styles.header}>
+<<<<<<< HEAD
             <Text style={styles.title}>Map Layers</Text>
+=======
+            <Text style={styles.title}>Mga Layer ng Hazard Map</Text>
+>>>>>>> origin/master
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
           </View>
+<<<<<<< HEAD
 
           <View style={styles.tabBar}>
             <TouchableOpacity
@@ -262,6 +285,31 @@ export default function HazardLayersPanel({
               ))}
             </ScrollView>
           )}
+=======
+          <Text style={styles.subtitle}>
+            Pumili ng hazard overlay para sa mapa. Isang layer lang ang maaaring
+            ipakita sa isang oras para sa maayos na performance.
+          </Text>
+
+            <ScrollView
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
+              {HAZARD_LAYERS.map((layer) => (
+                <LayerRow
+                  key={layer.id}
+                  config={layer}
+                  active={activeId === layer.id}
+                  onSelect={() =>
+                    onSelect(activeId === layer.id ? null : layer.id)
+                  }
+                  onAskAI={onAskAI}
+                />
+              ))}
+            </ScrollView>
+>>>>>>> origin/master
         </Pressable>
       </Pressable>
     </Modal>
@@ -275,7 +323,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    maxHeight: "70%",
+    maxHeight: "90%",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: "#FFFFFF",
@@ -315,7 +363,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
   },
-  list: { flexGrow: 1, minHeight: 0 },
+  list: {
+    paddingBottom: 10, 
+    flexShrink: 1, 
+    minHeight: 0,
+  },
+  listContent: {
+    flexGrow: 1,
+    paddingBottom: 8,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -361,5 +417,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F3F4F6",
+  },
+  helpButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+    marginLeft: 6,
+    marginRight: 7
   },
 });

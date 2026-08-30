@@ -6,7 +6,7 @@ import colors from "../../constants/colors";
 import { getDispatcherSession } from "../../services/dispatcherService";
 
 const TAB_ICONS = {
-  reports: "document-text",
+  reports: "radio-button-on",
   map: "map",
   team: "people",
 };
@@ -56,7 +56,7 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="reports"
         options={{
-          title: "Reports",
+          title: "Clusters",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name={TAB_ICONS.reports} size={size} color={color} />
           ),
@@ -80,6 +80,7 @@ export default function AdminLayout() {
           ),
         }}
       />
+
     </Tabs>
   );
 }

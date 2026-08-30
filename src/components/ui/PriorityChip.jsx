@@ -2,6 +2,7 @@ import { Text, View, StyleSheet } from "react-native";
 import colors from "../../constants/colors";
 
 const PRIORITY_STYLES = {
+  critical: { bg: "#FDECEC", fg: "#7F1D1D" },
   high: { bg: "#FDECEC", fg: colors.primary },
   medium: { bg: "#FFF3E0", fg: "#B26A00" },
   low: { bg: "#E6F4EA", fg: "#2E7D32" },

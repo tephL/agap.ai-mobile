@@ -15,13 +15,25 @@ function formatContact(value) {
   return value;
 }
 
-export default function TeamDetailsWindow({ team, onClose, onSeeDetails }) {
+export default function TeamDetailsWindow({
+  team,
+  assignedCluster = null,
+  onClose,
+  onSeeDetails,
+  onOpenCluster,
+}) {
   if (!team) return null;
 
   const coordinateLabel =
     typeof team.lat === "number" && typeof team.lng === "number"
       ? `${team.lat.toFixed(5)}, ${team.lng.toFixed(5)}`
       : null;
+
+  const assignedClusterLabel = assignedCluster
+    ? `Cluster #${assignedCluster.cluster_id}${
+        assignedCluster.city ? ` · ${assignedCluster.city}` : ""
+      }`
+    : null;
 
   return (
     <View style={styles.window}>
@@ -61,6 +73,27 @@ export default function TeamDetailsWindow({ team, onClose, onSeeDetails }) {
           </Text>
         </View>
       </View>
+
+      {/* Cluster this team is currently dispatched to — tapping it pans
+          the map to that cluster (mirrors the assigned-team banner) */}
+      {assignedCluster ? (
+        <TouchableOpacity
+          style={styles.assignedBanner}
+          activeOpacity={0.7}
+          onPress={onOpenCluster}
+        >
+          <View style={styles.assignedIconWrap}>
+            <Ionicons name="location-outline" size={18} color={colors.white} />
+          </View>
+          <View style={styles.assignedBody}>
+            <Text style={styles.assignedLabel}>Assigned Cluster</Text>
+            <Text style={styles.assignedName} numberOfLines={1}>
+              {assignedClusterLabel}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+        </TouchableOpacity>
+      ) : null}
 
       <TouchableOpacity
         style={styles.detailsButton}
@@ -143,6 +176,41 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.text,
     textAlign: "right",
+  },
+  assignedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FDECEC",
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+  },
+  assignedIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignedBody: {
+    flex: 1,
+    gap: 1,
+  },
+  assignedLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: colors.primary,
+  },
+  assignedName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.text,
   },
   detailsButton: {
     flexDirection: "row",

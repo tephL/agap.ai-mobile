@@ -14,6 +14,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import PriorityChip from "../../components/ui/PriorityChip";
+import DisasterTypeChip from "../../components/ui/DisasterTypeChip";
 import { getCityClusters } from "../../services/clusterService";
 import { useCluster } from "../../context/ClusterContext";
 
@@ -61,12 +62,18 @@ export default function ReportsScreen() {
         <Text style={styles.cardTitle} numberOfLines={1}>
           {item.title}
         </Text>
-        <PriorityChip priority={item.priority} showDot />
+        <View style={styles.cardChips}>
+          {item.aiDisasterType ? (
+            <DisasterTypeChip type={item.aiDisasterType} />
+          ) : null}
+          <PriorityChip priority={item.priority} showDot />
+        </View>
       </View>
       <View style={styles.cardBottomRow}>
         <Text style={styles.cardMeta}>
           {item.reportCount} {item.reportCount === 1 ? "report" : "reports"} ·{" "}
           {item.peopleAffected} people affected
+          {item.aiSeverity ? ` · ${item.aiSeverity} severity` : ""}
         </Text>
         <View style={styles.goToWrap}>
           <MaterialIcons name="near-me" size={12} color={colors.primary} />
@@ -192,6 +199,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
+  },
+  cardChips: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 1,
   },
   cardTitle: {
     flexShrink: 1,
