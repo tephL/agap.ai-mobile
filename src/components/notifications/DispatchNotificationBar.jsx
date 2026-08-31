@@ -221,6 +221,7 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     backgroundColor: "#dcfce7",
+    alignSelf: "flex-start", 
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 2,
