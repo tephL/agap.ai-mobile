@@ -33,11 +33,26 @@ import {
 import { useCluster } from "@/context/ClusterContext";
 
 function Stepper({ status }) {
-  const current = ASSIGNMENT_STATUSES.indexOf(status);
+  const cancelled = status === "cancelled";
+  const steps = ASSIGNMENT_STATUSES.filter((s) => s !== "cancelled");
+  const current = steps.indexOf(status);
+
+  if (cancelled) {
+    return (
+      <View style={styles.stepper}>
+        <View style={[styles.stepWrap, styles.stepWrapWide]}>
+          <View style={[styles.stepDot, styles.stepDotReached, styles.stepDotCancelled]}>
+            <MaterialIcons name="close" size={12} color={colors.white} />
+          </View>
+          <Text style={[styles.stepLabel, styles.stepLabelReached]}>Cancelled</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.stepper}>
-      {ASSIGNMENT_STATUSES.map((step, index) => {
+      {steps.map((step, index) => {
         const reached = index <= current;
         return (
           <View key={step} style={styles.stepWrap}>
@@ -295,8 +310,12 @@ export default function TeamDetailScreen() {
     );
   }
 
-  const activeAssignment = assignment && assignment.status !== "resolved" ? assignment : null;
+  const activeAssignment =
+    assignment && assignment.status !== "resolved" && assignment.status !== "cancelled"
+      ? assignment
+      : null;
   const resolvedAssignment = assignment?.status === "resolved" ? assignment : null;
+  const cancelledAssignment = assignment?.status === "cancelled" ? assignment : null;
   const canAssign = !activeAssignment && Boolean(selectedClusterId);
   const nextStatusLabel =
     assignment?.status === "pending"
@@ -414,12 +433,18 @@ export default function TeamDetailScreen() {
         ) : (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionLabel}>
-              {resolvedAssignment ? "Previous assignment resolved" : "Not assigned"}
+              {cancelledAssignment
+                ? "Previous assignment cancelled"
+                : resolvedAssignment
+                  ? "Previous assignment resolved"
+                  : "Not assigned"}
             </Text>
             <Text style={styles.notAssignedCopy}>
-              {resolvedAssignment
-                ? `Wrapped up at ${resolvedAssignment.cluster?.name ?? "cluster"}. Pick a new cluster below to dispatch again.`
-                : "This team isn't dispatched to any cluster yet. Pick one below."}
+              {cancelledAssignment
+                ? `Cancelled at ${cancelledAssignment.cluster?.name ?? "cluster"}. Pick a new cluster below to dispatch again.`
+                : resolvedAssignment
+                  ? `Wrapped up at ${resolvedAssignment.cluster?.name ?? "cluster"}. Pick a new cluster below to dispatch again.`
+                  : "This team isn't dispatched to any cluster yet. Pick one below."}
             </Text>
 
             <Text style={styles.pickerTitle}>Select a cluster</Text>
@@ -768,6 +793,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     flex: 1,
+  },
+  stepWrapWide: {
+    alignItems: "center",
+  },
+  stepDotCancelled: {
+    borderColor: "#B91C1C",
+    backgroundColor: "#B91C1C",
   },
   stepDot: {
     width: 22,

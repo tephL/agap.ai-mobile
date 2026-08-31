@@ -33,10 +33,12 @@ export default function ClusterDetailsWindow({
   onAssignTeam,
   onResolved,
   onOpenTeam,
+  onCancelDispatch,
 }) {
   const router = useRouter();
   const [barangay, setBarangay] = useState(null);
   const [resolving, setResolving] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!cluster?.latitude || !cluster?.longitude) return;
@@ -93,6 +95,32 @@ export default function ClusterDetailsWindow({
               console.log("resolve cluster error:", e);
             } finally {
               setResolving(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCancelDispatch = () => {
+    Alert.alert(
+      "Cancel Dispatch?",
+      "This will recall the team and remove their assignment. The cluster will remain open for reassignment.",
+      [
+        { text: "Go Back", style: "cancel" },
+        {
+          text: "Cancel Dispatch",
+          style: "destructive",
+          onPress: async () => {
+            if (cancelling) return;
+            setCancelling(true);
+            try {
+              await onCancelDispatch?.();
+              onClose?.();
+            } catch (e) {
+              console.log("cancel dispatch error:", e);
+            } finally {
+              setCancelling(false);
             }
           },
         },
@@ -194,7 +222,21 @@ export default function ClusterDetailsWindow({
             <Ionicons name="people-circle-outline" size={16} color={colors.white} />
             <Text style={styles.assignButtonText}>Assign</Text>
           </TouchableOpacity>
-        ) : null}
+        ) : (
+          <TouchableOpacity
+            style={styles.cancelDispatchButton}
+            activeOpacity={0.8}
+            onPress={handleCancelDispatch}
+            disabled={cancelling}
+          >
+            {cancelling ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Ionicons name="close-circle-outline" size={16} color={colors.white} />
+            )}
+            <Text style={styles.cancelDispatchButtonText}>Cancel Dispatch</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={styles.resolveButton}
@@ -390,6 +432,21 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   resolveButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  cancelDispatchButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: "#B91C1C",
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  cancelDispatchButtonText: {
     fontSize: 13,
     fontWeight: "700",
     color: colors.white,

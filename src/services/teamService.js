@@ -4,7 +4,7 @@
 // the same shapes the UI already consumes (snake_case DB columns).
 import { api } from "./api";
 
-export const ASSIGNMENT_STATUSES = ["pending", "dispatched", "resolved"];
+export const ASSIGNMENT_STATUSES = ["pending", "dispatched", "cancelled", "resolved"];
 
 export async function getTeams() {
   const { data } = await api.get("/api/dispatcher/teams");
@@ -54,6 +54,13 @@ export async function updateAssignmentStatus(assignmentId, status) {
   const { data } = await api.patch(
     `/api/dispatcher/assignments/${assignmentId}/status`,
     { status }
+  );
+  return data.assignment;
+}
+
+export async function cancelAssignment(assignmentId) {
+  const { data } = await api.patch(
+    `/api/dispatcher/assignments/${assignmentId}/cancel`
   );
   return data.assignment;
 }
