@@ -234,7 +234,7 @@ export default function ClusterDetailsWindow({
             ) : (
               <Ionicons name="close-circle-outline" size={16} color={colors.white} />
             )}
-            <Text style={styles.cancelDispatchButtonText}>Cancel Dispatch</Text>
+            <Text style={styles.cancelDispatchButtonText}>Cancel</Text>
           </TouchableOpacity>
         )}
 
