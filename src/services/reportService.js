@@ -141,11 +141,12 @@ export async function requestReportLocation() {
       });
     }
 
-    await api.post("/api/reports/location", {
+    const response = await api.post("/api/reports/location", {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
     });
 
+    cameraStore.setReportId(response.data?.report_id ?? null);
     cameraStore.setLocationStatus("success");
   } catch (err) {
     cameraStore.setLocationStatus("error", err);
@@ -161,6 +162,11 @@ export async function getReportById(reportId) {
 export async function updateReportStatus(reportId, status) {
   const { data } = await api.patch(`/api/reports/${reportId}/status`, { status });
   return data.report;
+}
+
+export async function deleteReport(reportId) {
+  const { data } = await api.delete(`/api/reports/${reportId}`);
+  return data;
 }
 
 // --- Offline fallback (no backend reachable) ---

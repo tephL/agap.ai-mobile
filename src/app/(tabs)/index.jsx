@@ -12,11 +12,14 @@ import { getMyFamily } from '../../services/familyService.js';
 import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
 import { getActiveTyphoon } from '../../services/typhoonService.js';
 import { getRouteCoordinates } from '../../services/routeService';
+import { getReportById, deleteReport } from "../../services/reportService";
+import { getActiveReport, saveActiveReport, clearActiveReport } from "../../services/activeReportStore";
 import { getPublicTeams } from '../../services/teamService';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import DispatchNotificationBar from "@/components/notifications/DispatchNotificationBar";
+import ReportSubmittedBar from "@/components/notifications/ReportSubmittedBar";
 import TyphoonAlertBanner from "@/components/notifications/TyphoonAlertBanner";
 import { PersonCard } from '@/components/PersonCard';
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
@@ -185,7 +188,7 @@ const RouteDashLayer = React.memo(function RouteDashLayer() {
 // Component
 // ---------------------------------------------------------------------------
 export default function Index() {
-  const { selectedUserId, sosStatus } = useLocalSearchParams();
+  const { selectedUserId, sosStatus, reportId: reportIdParam } = useLocalSearchParams();
   const router = useRouter();
 
   // typhoon alert state (session-only dismissal)
@@ -193,21 +196,27 @@ export default function Index() {
   const [typhoonDismissed, setTyphoonDismissed] = useState(false);
 
   // "Report received" overlay shown after returning from the report form.
-  // Reset the ref guard each time this screen gains focus so the overlay
-  // can re-appear on the next submission.
+  // The sosStatus/reportId params are consumed exactly once (guarded by the
+  // ref) and then cleared off the route, so the overlay doesn't re-show every
+  // time this screen regains focus (e.g. navigating back from report details).
   const [sosReceivedVariant, setSosReceivedVariant] = useState(null);
   const handledSosStatusRef = useRef(null);
   useFocusEffect(
     useCallback(() => {
-      handledSosStatusRef.current = null;
-      if (
+      const isFresh =
         typeof sosStatus === "string" &&
-        ["received", "prepared", "active"].includes(sosStatus)
-      ) {
+        ["received", "prepared", "active"].includes(sosStatus);
+
+      if (isFresh && handledSosStatusRef.current !== sosStatus) {
         handledSosStatusRef.current = sosStatus;
         setSosReceivedVariant(sosStatus);
+        router.setParams({ sosStatus: undefined });
+      } else if (!isFresh) {
+        // Normal return to the map (no fresh submission pending): reset the
+        // guard so the next submission re-triggers the overlay.
+        handledSosStatusRef.current = null;
       }
-    }, [sosStatus])
+    }, [sosStatus, router])
   );
 
   const handleTyphoonAskPreparedness = useCallback(() => {
@@ -232,7 +241,103 @@ export default function Index() {
   const [locating, setLocating] = useState(false);
 
   // active dispatch notifications
-  const { dispatches, dismiss, resetDismissed } = useActiveDispatches();
+  const { dispatches, allDispatches, resetDismissed } = useActiveDispatches();
+
+  // "Your report was received" notif shown after returning from the report
+  // form. reportIdParam comes from report.jsx closeForm. The active report is
+  // persisted via activeReportStore so the notif reappears after re-login or
+  // an app restart (reportIdParam is only present right after submission).
+  const [activeReport, setActiveReport] = useState(null);
+
+  useEffect(() => {
+    if (reportIdParam == null) return;
+    let mounted = true;
+    (async () => {
+      const num = Number(reportIdParam);
+      if (!Number.isInteger(num) || num <= 0) return;
+      try {
+        const { report } = await getReportById(num);
+        if (!mounted) return;
+        // Don't show the report window if it no longer exists or was resolved.
+        if (!report || report.status === "resolved") {
+          await clearActiveReport();
+          return;
+        }
+        setActiveReport({ reportId: num, clusterId: report.cluster_id ?? null });
+        saveActiveReport({ reportId: num, clusterId: report.cluster_id ?? null });
+      } catch (e) {
+        if (mounted) console.log("activeReport load error:", e);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [reportIdParam]);
+
+  // On mount, restore a previously persisted active report (across re-login /
+  // app restarts) and re-validate it against the server. If the report no
+  // longer exists or was resolved (e.g. resolved/deleted server-side), clear it.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const stored = await getActiveReport();
+      if (!mounted || !stored?.reportId) return;
+      try {
+        const { report } = await getReportById(stored.reportId);
+        if (!mounted) return;
+        if (!report || report.status === "resolved") {
+          await clearActiveReport();
+          return;
+        }
+        setActiveReport({ reportId: stored.reportId, clusterId: report.cluster_id ?? null });
+        saveActiveReport({ reportId: stored.reportId, clusterId: report.cluster_id ?? null });
+      } catch (e) {
+        if (mounted) {
+          console.log("persisted activeReport load error:", e);
+          await clearActiveReport();
+        }
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Whether help is already on the way for the citizen's report — i.e. any
+  // active team assignment (pending or dispatched) to the report's cluster.
+  // Uses allDispatches (the full, unfiltered list) so it stays accurate, and
+  // it covers both the "Dispatching" (pending) and "En route" (dispatched)
+  // states that the DispatchNotificationBar reports as "help is on the way".
+  const reportDispatched =
+    activeReport?.clusterId != null &&
+    allDispatches.some(
+      (d) => d.cluster?.cluster_id === activeReport.clusterId
+    );
+
+  const handleReportViewDetails = useCallback(
+    (id) => {
+      router.push({ pathname: "/report-detail", params: { reportId: String(id) } });
+    },
+    [router]
+  );
+
+  const handleReportCancel = useCallback(
+    async (id) => {
+      try {
+        await deleteReport(id);
+        await clearActiveReport();
+        setActiveReport(null);
+      } catch (e) {
+        console.log("cancel report error:", e);
+      }
+    },
+    []
+  );
+
+  // Hide the report submitted window once help is on the way (a team is
+  // dispatched to the citizen's cluster); the DispatchNotificationBar takes
+  // over at that point.
+  const showReportBar = activeReport && !reportDispatched;
 
   // public teams (is_public = true) shown on citizen map
   const [publicTeams, setPublicTeams] = useState([]);
@@ -390,6 +495,28 @@ export default function Index() {
     useCallback(() => {
       resetDismissed();
     }, [resetDismissed])
+  );
+
+  // ---- hide report window once it has been resolved -------------------
+  useFocusEffect(
+    useCallback(() => {
+      if (!activeReport?.reportId) return;
+      let cancelled = false;
+      (async () => {
+        try {
+          const { report } = await getReportById(activeReport.reportId);
+          if (!cancelled && report?.status === "resolved") {
+            await clearActiveReport();
+            setActiveReport(null);
+          }
+        } catch (e) {
+          console.log("activeReport status check error:", e);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [activeReport])
   );
 
   // ---- fetch public teams on focus -------------------------------------
@@ -1202,9 +1329,17 @@ export default function Index() {
 
       <DispatchNotificationBar
         dispatches={dispatches}
-        onDismiss={dismiss}
         style={activeTyphoon && !typhoonDismissed ? { top: 160 } : undefined}
       />
+
+      {showReportBar && (
+        <ReportSubmittedBar
+          report={{ reportId: activeReport.reportId }}
+          onViewDetails={handleReportViewDetails}
+          onCancel={handleReportCancel}
+          style={{ top: dispatches.length > 0 ? 300 : 35 }}
+        />
+      )}
 
       {sosReceivedVariant && (
         <Modal

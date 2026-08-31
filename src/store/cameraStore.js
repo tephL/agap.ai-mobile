@@ -14,6 +14,7 @@ let state = {
   previewMode: "capture",
   viewingIndex: null,
   sentAt: null,
+  reportId: null,
   locationStatus: "idle", // "idle" | "pending" | "success" | "error"
   locationError: null,
 };
@@ -51,6 +52,7 @@ export const cameraStore = {
       previewMode: "capture",
       viewingIndex: null,
       sentAt: now,
+      reportId: null,
       locationStatus: "idle",
       locationError: null,
     });
@@ -63,6 +65,7 @@ export const cameraStore = {
       previewMode: "capture",
       viewingIndex: null,
       sentAt: null,
+      reportId: null,
       locationStatus: "idle",
       locationError: null,
     });
@@ -152,6 +155,9 @@ export const cameraStore = {
   },
   setLocationStatus(status, error = null) {
     setState({ ...state, locationStatus: status, locationError: error });
+  },
+  setReportId(reportId) {
+    setState({ ...state, reportId: reportId ?? null });
   },
 };
 

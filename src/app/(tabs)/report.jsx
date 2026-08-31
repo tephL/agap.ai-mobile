@@ -115,7 +115,7 @@ function PingingCheckmark() {
 export default function ReportScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { photos, sentAt, locationStatus, locationError } = useCameraStore();
+  const { photos, sentAt, locationStatus, locationError, reportId } = useCameraStore();
   const { isOnline } = useNetworkStatus();
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -202,11 +202,14 @@ export default function ReportScreen() {
     cameraStore.discardReport();
     // sosStatus tells the map screen which confirmation overlay to show:
     // "received" (online submit) | "prepared" (offline composer opened) |
-    // "active" (skipped the details form).
+    // "active" (skipped the details form). reportId identifies the created
+    // report so the map can show the persistent "report received" notif.
     router.replace(
-      sosStatus ? { pathname: "/(tabs)", params: { sosStatus } } : "/(tabs)"
+      sosStatus
+        ? { pathname: "/(tabs)", params: { sosStatus, ...(reportId ? { reportId } : {}) } }
+        : "/(tabs)"
     );
-  }, [router]);
+  }, [router, reportId]);
 
   useFocusEffect(
     useCallback(() => {

@@ -16,6 +16,7 @@ import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import { getReportById, updateReportStatus } from "@/services/reportService";
+import { getStoredSession, CITIZEN_ROLE_ID } from "@/services/authService";
 import { reverseGeocode } from "@/services/geocodingService";
 import { useCluster } from "@/context/ClusterContext";
 
@@ -49,6 +50,22 @@ export default function ReportDetailScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [resolving, setResolving] = useState(false);
   const scrollRef = useRef(null);
+
+  const [isCitizen, setIsCitizen] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const session = await getStoredSession();
+        if (mounted) setIsCitizen(session?.role_id === CITIZEN_ROLE_ID);
+      } catch {
+        if (mounted) setIsCitizen(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!reportId) return;
@@ -304,7 +321,7 @@ export default function ReportDetailScreen() {
           </View>
         ) : null}
 
-        {report.reporter?.phone_number ? (
+        {!isCitizen && report.reporter?.phone_number ? (
           <TouchableOpacity
             style={styles.callButton}
             activeOpacity={0.8}
@@ -315,7 +332,7 @@ export default function ReportDetailScreen() {
           </TouchableOpacity>
         ) : null}
 
-        {report.status !== "resolved" ? (
+        {!isCitizen && report.status !== "resolved" ? (
           <TouchableOpacity
             style={styles.resolveButton}
             activeOpacity={0.85}
