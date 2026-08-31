@@ -12,11 +12,13 @@ import { getMyFamily } from '../../services/familyService.js';
 import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
 import { getActiveTyphoon } from '../../services/typhoonService.js';
 import { getRouteCoordinates } from '../../services/routeService';
+import { getReportById, deleteReport } from "../../services/reportService";
 import { getPublicTeams } from '../../services/teamService';
 
 // components
 import LiveNotificationDropdown from "@/components/notifications/LiveNotificationDropdown";
 import DispatchNotificationBar from "@/components/notifications/DispatchNotificationBar";
+import ReportSubmittedBar from "@/components/notifications/ReportSubmittedBar";
 import TyphoonAlertBanner from "@/components/notifications/TyphoonAlertBanner";
 import { PersonCard } from '@/components/PersonCard';
 import { HazardLayerOverlay } from '@/components/HazardLayerToggle';
@@ -185,7 +187,7 @@ const RouteDashLayer = React.memo(function RouteDashLayer() {
 // Component
 // ---------------------------------------------------------------------------
 export default function Index() {
-  const { selectedUserId, sosStatus } = useLocalSearchParams();
+  const { selectedUserId, sosStatus, reportId: reportIdParam } = useLocalSearchParams();
   const router = useRouter();
 
   // typhoon alert state (session-only dismissal)
@@ -233,6 +235,68 @@ export default function Index() {
 
   // active dispatch notifications
   const { dispatches, dismiss, resetDismissed } = useActiveDispatches();
+
+  // "Your report was received" notif shown after returning from the report
+  // form. reportIdParam comes from report.jsx closeForm; we look up the
+  // report's cluster so we can tell whether a team is already en route.
+  const [activeReport, setActiveReport] = useState(null);
+  const [dismissedReportId, setDismissedReportId] = useState(null);
+
+  useEffect(() => {
+    if (reportIdParam == null) return;
+
+    let mounted = true;
+    (async () => {
+      try {
+        const reportId = Number(reportIdParam);
+        if (!Number.isInteger(reportId) || reportId <= 0) return;
+        const { report } = await getReportById(reportId);
+        if (mounted && report) {
+          setActiveReport({
+            reportId,
+            clusterId: report.cluster_id ?? null,
+          });
+        }
+      } catch (e) {
+        if (mounted) console.log("activeReport load error:", e);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [reportIdParam]);
+
+  // A team is "en route" (cancel blocked) if any of the citizen's dispatches
+  // is dispatched to the report's cluster.
+  const reportDispatched =
+    activeReport?.clusterId != null &&
+    dispatches.some(
+      (d) => d.status === "dispatched" && d.cluster?.cluster_id === activeReport.clusterId
+    );
+
+  const handleReportViewDetails = useCallback(
+    (id) => {
+      router.push({ pathname: "/report-detail", params: { reportId: String(id) } });
+    },
+    [router]
+  );
+
+  const handleReportCancel = useCallback(
+    async (id) => {
+      try {
+        await deleteReport(id);
+        setActiveReport(null);
+        setDismissedReportId(id);
+      } catch (e) {
+        console.log("cancel report error:", e);
+      }
+    },
+    []
+  );
+
+  const showReportBar =
+    activeReport && activeReport.reportId !== dismissedReportId;
 
   // public teams (is_public = true) shown on citizen map
   const [publicTeams, setPublicTeams] = useState([]);
@@ -1205,6 +1269,21 @@ export default function Index() {
         onDismiss={dismiss}
         style={activeTyphoon && !typhoonDismissed ? { top: 160 } : undefined}
       />
+
+      {showReportBar && (
+        <ReportSubmittedBar
+          report={{ reportId: activeReport.reportId }}
+          dispatched={reportDispatched}
+          onViewDetails={handleReportViewDetails}
+          onCancel={handleReportCancel}
+          onDismiss={() =>
+            setDismissedReportId((prev) =>
+              prev == null ? activeReport.reportId : prev
+            )
+          }
+          style={{ top: dispatches.length > 0 ? 300 : 35 }}
+        />
+      )}
 
       {sosReceivedVariant && (
         <Modal
