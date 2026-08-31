@@ -297,14 +297,16 @@ export default function Index() {
     };
   }, []);
 
-  // A team is "en route" (cancel blocked) if any of the citizen's dispatches
-  // is dispatched to the report's cluster. Uses allDispatches (not the
-  // dismissed-filtered list) so dismissing the dispatch bar doesn't re-show
-  // the report submitted window.
+  // Whether help is already on the way for the citizen's report — i.e. any
+  // active team assignment (pending or dispatched) to the report's cluster.
+  // Uses allDispatches (not the dismissed-filtered list) so dismissing the
+  // dispatch bar doesn't re-show the report submitted window, and it covers
+  // both the "Dispatching" (pending) and "En route" (dispatched) states that
+  // the DispatchNotificationBar reports as "help is on the way".
   const reportDispatched =
     activeReport?.clusterId != null &&
     allDispatches.some(
-      (d) => d.status === "dispatched" && d.cluster?.cluster_id === activeReport.clusterId
+      (d) => d.cluster?.cluster_id === activeReport.clusterId
     );
 
   const handleReportViewDetails = useCallback(
