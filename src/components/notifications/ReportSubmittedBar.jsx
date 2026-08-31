@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
@@ -18,17 +18,19 @@ const PULSE_DURATION_MS = 2000;
  * - dispatched: boolean — whether a team is already en route to the cluster
  * - onViewDetails(reportId)
  * - onCancel(reportId)
- * - onDismiss()
+ *
+ * The bar cannot be dismissed; it can only be minimized/expanded via the
+ * chevron toggle, keeping the active report visible to the citizen.
  */
 export default function ReportSubmittedBar({
   report,
   dispatched = false,
   onViewDetails,
   onCancel,
-  onDismiss,
   style,
 }) {
   const pulse = useRef(new Animated.Value(0)).current;
+  const [minimized, setMinimized] = useState(false);
 
   useEffect(() => {
     if (!report) return;
@@ -80,66 +82,76 @@ export default function ReportSubmittedBar({
             <Animated.View style={[styles.pulseDot, { opacity }]}>
               <View style={styles.pulseInner} />
             </Animated.View>
-            <View>
-              <Text style={styles.title}>Report received</Text>
-              <Text style={styles.subtitle}>
-                Your SOS report has been submitted successfully.
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.title} numberOfLines={1}>
+                Report received
               </Text>
+              {!minimized && (
+                <Text style={styles.subtitle}>
+                  Your SOS report has been submitted successfully.
+                </Text>
+              )}
             </View>
           </View>
           <Pressable
             hitSlop={8}
-            onPress={onDismiss}
-            style={styles.dismissBtn}
+            onPress={() => setMinimized((m) => !m)}
+            style={styles.minimizeBtn}
             accessibilityRole="button"
-            accessibilityLabel="Dismiss notification"
+            accessibilityLabel={minimized ? "Expand notification" : "Minimize notification"}
           >
-            <Ionicons name="close" size={16} color={colors.muted} />
+            <Ionicons
+              name={minimized ? "chevron-down" : "chevron-up"}
+              size={16}
+              color={colors.muted}
+            />
           </Pressable>
         </View>
 
-        <View style={styles.cardBody}>
-          {dispatched ? (
-            <Text style={styles.dispatchedNote}>
-              A team is already on the way — your report can no longer be cancelled.
-            </Text>
-          ) : (
-            <Text style={styles.cancelNote}>
-              You can still cancel this report if you no longer need help.
-            </Text>
-          )}
-
-          <View style={styles.actions}>
-            <Pressable
-              style={[styles.actionBtn, styles.viewBtn]}
-              onPress={() => onViewDetails?.(report.reportId)}
-              accessibilityRole="button"
-            >
-              <Ionicons name="eye" size={14} color={colors.primary} />
-              <Text style={styles.viewBtnText}>View details</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.actionBtn, dispatched ? styles.cancelDisabled : styles.cancelBtn]}
-              onPress={handleCancelPress}
-              disabled={dispatched}
-              accessibilityRole="button"
-            >
-              <Ionicons
-                name="close-circle"
-                size={14}
-                color={dispatched ? colors.muted : "#DC2626"}
-              />
-              <Text
-                style={[
-                  styles.cancelBtnText,
-                  dispatched && styles.cancelBtnTextDisabled,
-                ]}
-              >
-                Cancel help
+        {!minimized && (
+          <View style={styles.cardBody}>
+            {dispatched ? (
+              <Text style={styles.dispatchedNote}>
+                A team is already on the way — your report can no longer be cancelled.
               </Text>
-            </Pressable>
+            ) : (
+              <Text style={styles.cancelNote}>
+                You can still cancel this report if you no longer need help.
+              </Text>
+            )}
+
+            <View style={styles.actions}>
+              <Pressable
+                style={[styles.actionBtn, styles.viewBtn]}
+                onPress={() => onViewDetails?.(report.reportId)}
+                accessibilityRole="button"
+              >
+                <Ionicons name="eye" size={14} color={colors.primary} />
+                <Text style={styles.viewBtnText}>View details</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.actionBtn, dispatched ? styles.cancelDisabled : styles.cancelBtn]}
+                onPress={handleCancelPress}
+                disabled={dispatched}
+                accessibilityRole="button"
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={14}
+                  color={dispatched ? colors.muted : "#DC2626"}
+                />
+                <Text
+                  style={[
+                    styles.cancelBtnText,
+                    dispatched && styles.cancelBtnTextDisabled,
+                  ]}
+                >
+                  Cancel help
+                </Text>
+              </Pressable>
+            </View>
           </View>
-        </View>
+        )}
       </View>
     </View>
   );
@@ -182,6 +194,9 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 10,
   },
+  headerTextWrap: {
+    flex: 1,
+  },
   pulseDot: {
     width: 10,
     height: 10,
@@ -206,7 +221,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 1,
   },
-  dismissBtn: {
+  minimizeBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,

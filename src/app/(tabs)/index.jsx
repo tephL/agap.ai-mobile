@@ -240,7 +240,6 @@ export default function Index() {
   // form. reportIdParam comes from report.jsx closeForm; we look up the
   // report's cluster so we can tell whether a team is already en route.
   const [activeReport, setActiveReport] = useState(null);
-  const [dismissedReportId, setDismissedReportId] = useState(null);
 
   useEffect(() => {
     if (reportIdParam == null) return;
@@ -287,7 +286,6 @@ export default function Index() {
       try {
         await deleteReport(id);
         setActiveReport(null);
-        setDismissedReportId(id);
       } catch (e) {
         console.log("cancel report error:", e);
       }
@@ -295,8 +293,7 @@ export default function Index() {
     []
   );
 
-  const showReportBar =
-    activeReport && activeReport.reportId !== dismissedReportId;
+  const showReportBar = activeReport;
 
   // public teams (is_public = true) shown on citizen map
   const [publicTeams, setPublicTeams] = useState([]);
@@ -1276,11 +1273,6 @@ export default function Index() {
           dispatched={reportDispatched}
           onViewDetails={handleReportViewDetails}
           onCancel={handleReportCancel}
-          onDismiss={() =>
-            setDismissedReportId((prev) =>
-              prev == null ? activeReport.reportId : prev
-            )
-          }
           style={{ top: dispatches.length > 0 ? 300 : 35 }}
         />
       )}
