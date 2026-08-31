@@ -241,7 +241,7 @@ export default function Index() {
   const [locating, setLocating] = useState(false);
 
   // active dispatch notifications
-  const { dispatches, dismiss, resetDismissed } = useActiveDispatches();
+  const { dispatches, allDispatches, dismiss, resetDismissed } = useActiveDispatches();
 
   // "Your report was received" notif shown after returning from the report
   // form. reportIdParam comes from report.jsx closeForm. The active report is
@@ -298,10 +298,12 @@ export default function Index() {
   }, []);
 
   // A team is "en route" (cancel blocked) if any of the citizen's dispatches
-  // is dispatched to the report's cluster.
+  // is dispatched to the report's cluster. Uses allDispatches (not the
+  // dismissed-filtered list) so dismissing the dispatch bar doesn't re-show
+  // the report submitted window.
   const reportDispatched =
     activeReport?.clusterId != null &&
-    dispatches.some(
+    allDispatches.some(
       (d) => d.status === "dispatched" && d.cluster?.cluster_id === activeReport.clusterId
     );
 
@@ -325,7 +327,10 @@ export default function Index() {
     []
   );
 
-  const showReportBar = activeReport;
+  // Hide the report submitted window once help is on the way (a team is
+  // dispatched to the citizen's cluster); the DispatchNotificationBar takes
+  // over at that point.
+  const showReportBar = activeReport && !reportDispatched;
 
   // public teams (is_public = true) shown on citizen map
   const [publicTeams, setPublicTeams] = useState([]);
@@ -1302,7 +1307,6 @@ export default function Index() {
       {showReportBar && (
         <ReportSubmittedBar
           report={{ reportId: activeReport.reportId }}
-          dispatched={reportDispatched}
           onViewDetails={handleReportViewDetails}
           onCancel={handleReportCancel}
           style={{ top: dispatches.length > 0 ? 300 : 35 }}

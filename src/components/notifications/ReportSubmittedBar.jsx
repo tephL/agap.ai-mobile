@@ -7,15 +7,12 @@ const PULSE_DURATION_MS = 2000;
 
 /**
  * Persistent floating notification bar shown on the citizen map after they
- * submit a report. Confirms the report was received and offers two actions:
- * view the report details, or cancel their SOS help.
- *
- * Cancel is disabled (server rejects it too) once a team is already en route
- * to the citizen's cluster.
+ * submit a report — while no team is on the way yet. Confirms the report was
+ * received and offers two actions: view the report details, or cancel their
+ * SOS help.
  *
  * Props:
  * - report: { reportId, createdAt (ms|ISO), clusterId }
- * - dispatched: boolean — whether a team is already en route to the cluster
  * - onViewDetails(reportId)
  * - onCancel(reportId)
  *
@@ -24,7 +21,6 @@ const PULSE_DURATION_MS = 2000;
  */
 export default function ReportSubmittedBar({
   report,
-  dispatched = false,
   onViewDetails,
   onCancel,
   style,
@@ -110,15 +106,9 @@ export default function ReportSubmittedBar({
 
         {!minimized && (
           <View style={styles.cardBody}>
-            {dispatched ? (
-              <Text style={styles.dispatchedNote}>
-                A team is already on the way — your report can no longer be cancelled.
-              </Text>
-            ) : (
-              <Text style={styles.cancelNote}>
-                You can still cancel this report if you no longer need help.
-              </Text>
-            )}
+            <Text style={styles.cancelNote}>
+              You can still cancel this report if you no longer need help.
+            </Text>
 
             <View style={styles.actions}>
               <Pressable
@@ -130,24 +120,12 @@ export default function ReportSubmittedBar({
                 <Text style={styles.viewBtnText}>View details</Text>
               </Pressable>
               <Pressable
-                style={[styles.actionBtn, dispatched ? styles.cancelDisabled : styles.cancelBtn]}
+                style={[styles.actionBtn, styles.cancelBtn]}
                 onPress={handleCancelPress}
-                disabled={dispatched}
                 accessibilityRole="button"
               >
-                <Ionicons
-                  name="close-circle"
-                  size={14}
-                  color={dispatched ? colors.muted : "#DC2626"}
-                />
-                <Text
-                  style={[
-                    styles.cancelBtnText,
-                    dispatched && styles.cancelBtnTextDisabled,
-                  ]}
-                >
-                  Cancel help
-                </Text>
+                <Ionicons name="close-circle" size={14} color="#DC2626" />
+                <Text style={styles.cancelBtnText}>Cancel help</Text>
               </Pressable>
             </View>
           </View>
@@ -238,11 +216,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
   },
-  dispatchedNote: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#B45309",
-  },
   actions: {
     flexDirection: "row",
     gap: 8,
@@ -275,13 +248,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#DC2626",
-  },
-  cancelDisabled: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cancelBtnTextDisabled: {
-    color: colors.muted,
   },
 });
