@@ -49,9 +49,16 @@ export default function useActiveDispatches() {
 
       if (!cancelledRef.current) {
         setDispatches(enriched);
-        // Only surface cancellations we haven't shown before.
+        // Only surface cancellations we haven't shown before, and only
+        // for clusters that don't already have a fresh dispatch on the
+        // way — a new dispatch supersedes the earlier cancellation.
+        const activeClusterIds = new Set(
+          active.map((a) => a.cluster?.cluster_id).filter((id) => id != null)
+        );
         const freshCancelled = cancelled.filter(
-          (c) => !seenCancelledRef.current.has(c.assignment_id)
+          (c) =>
+            !seenCancelledRef.current.has(c.assignment_id) &&
+            !activeClusterIds.has(c.cluster?.cluster_id)
         );
         if (freshCancelled.length > 0) {
           freshCancelled.forEach((c) => seenCancelledRef.current.add(c.assignment_id));

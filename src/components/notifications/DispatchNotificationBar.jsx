@@ -58,6 +58,15 @@ export default function DispatchNotificationBar({ dispatches, cancelledDispatche
     outputRange: [0.4, 1],
   });
 
+  // Hide any cancelled notice for a cluster that already has an active
+  // dispatch — a new dispatch supersedes the earlier cancellation.
+  const activeClusterIds = new Set(
+    dispatches.map((d) => d.cluster?.cluster_id).filter((id) => id != null)
+  );
+  const visibleCancelled = cancelledDispatches.filter(
+    (c) => !activeClusterIds.has(c.cluster?.cluster_id)
+  );
+
   return (
     <View style={[styles.container, style]}>
       {dispatches.map((d) => (
@@ -67,7 +76,7 @@ export default function DispatchNotificationBar({ dispatches, cancelledDispatche
           opacity={opacity}
         />
       ))}
-      {cancelledDispatches.map((d) => (
+      {visibleCancelled.map((d) => (
         <CancelledCard key={d.assignment_id} dispatch={d} />
       ))}
     </View>
