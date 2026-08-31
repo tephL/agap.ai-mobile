@@ -180,70 +180,86 @@ export async function getStormSignals({ force = false } = {}) {
   }
 }
 
-// Central-Luzon demo fixture: landfall over Aurora / Nueva Ecija, capped at
-// Signal #3 so Bulacan sits inside the strongest ring like the scenario that
-// motivated the app's storm-signals preview.
+// Sample fixture modeled on Super Typhoon PEPITO (MAN-YI), using the 8 AM
+// 17 Nov 2024 TCB#16: center over the sea east of Quezon (pre-Aurora landfall),
+// signals across Luzon and Bicol. Each entry uses an exact province polygon
+// name from phProvinces.json at its highest hoisted signal so the overlay
+// colors every affected province correctly.
 const SAMPLE_LUZON = {
   bulletin: {
-    count: 12,
-    title: "Tropical Cyclone Bulletin #12",
-    issuedAt: "2021-12-17T03:00:00.000Z",
+    count: 16,
+    title: "Tropical Cyclone Bulletin No. 16",
+    issuedAt: "2024-11-17T00:00:00.000Z",
     expiresAt: null,
     final: false,
     url: null,
   },
   cyclone: {
-    name: "ODETTE",
-    internationalName: "RAI",
-    category: "TYPHOON",
-    center: "In the vicinity of Dingalan, Aurora",
-    movement: "Moving west-northwest at 20 km/h across Central Luzon",
+    name: "PEPITO",
+    internationalName: "MAN-YI",
+    category: "SUPER TYPHOON",
+    center: "Over the sea east of Quezon",
+    movement: "Moving west northwestward at 15 km/h",
   },
   signals: [
     {
-      level: 3,
+      level: 4,
       areas: [
-        { name: "Bulacan" },
-        { name: "Pampanga" },
-        { name: "Nueva Ecija" },
-        { name: "Tarlac" },
         { name: "Aurora" },
         { name: "Quezon" },
-      ],
-    },
-    {
-      level: 2,
-      areas: [
-        { name: "Metro Manila" },
-        { name: "Rizal" },
-        { name: "Cavite" },
-        { name: "Laguna" },
-        { name: "Bataan" },
-        { name: "Zambales" },
-        { name: "Pangasinan" },
+        { name: "Camarines Norte" },
+        { name: "Camarines Sur" },
+        { name: "Nueva Ecija" },
         { name: "Nueva Vizcaya" },
         { name: "Quirino" },
       ],
     },
     {
-      level: 1,
+      level: 3,
       areas: [
-        { name: "Ilocos Norte" },
+        { name: "Catanduanes" },
+        { name: "Laguna" },
+        { name: "Rizal" },
+        { name: "Bulacan" },
+        { name: "Pampanga" },
+        { name: "Tarlac" },
+        { name: "Zambales" },
+        { name: "Isabela" },
         { name: "Ilocos Sur" },
+        { name: "La Union" },
+        { name: "Pangasinan" },
+        { name: "Benguet" },
+        { name: "Ifugao" },
+        { name: "Mountain Province" },
         { name: "Abra" },
         { name: "Kalinga" },
-        { name: "Apayao" },
-        { name: "Mountain Province" },
-        { name: "Ifugao" },
-        { name: "Benguet" },
-        { name: "La Union" },
-        { name: "Isabela" },
+      ],
+    },
+    {
+      level: 2,
+      areas: [
+        { name: "Albay" },
         { name: "Cagayan" },
+        { name: "Apayao" },
+        { name: "Ilocos Norte" },
+        { name: "Bataan" },
+        { name: "Metro Manila" },
+        { name: "Cavite" },
         { name: "Batangas" },
+        { name: "Marinduque" },
+      ],
+    },
+    {
+      level: 1,
+      areas: [
+        { name: "Masbate" },
+        { name: "Romblon" },
+        { name: "Oriental Mindoro" },
+        { name: "Occidental Mindoro" },
       ],
     },
   ],
-  rawAreaCount: 27,
+  rawAreaCount: 36,
 };
 
 function sampleFromFixture() {

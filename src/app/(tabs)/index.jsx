@@ -14,7 +14,11 @@ import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/damSev
 import { getInfluencingDams } from '@/components/hazards/damInfluence';
 import { useHazardElevation } from '../../hooks/useHazardElevation';
 import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
-import { getActiveTyphoon } from '../../services/typhoonService.js';
+import {
+  getActiveTyphoon,
+  getTyphoons,
+  getCachedTyphoons,
+} from '../../services/typhoonService.js';
 import { getRouteCoordinates } from '../../services/routeService';
 import { getPublicTeams } from '../../services/teamService';
 
@@ -40,6 +44,10 @@ import HazardSheet from '@/components/hazards/HazardSheet';
 import HazardTabs from '@/components/hazards/HazardTabs';
 import DamMarker from '@/components/hazards/DamMarker';
 import StormSignalLegend from '@/components/hazards/StormSignalLegend';
+import TyphoonLegend from '@/components/hazards/TyphoonLegend';
+import LPALegend from '@/components/hazards/LPALegend';
+import RainLegend from '@/components/hazards/RainLegend';
+import LegendStack from '@/components/hazards/LegendStack';
 import StormSignalBanner from '@/components/hazards/StormSignalBanner';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
 import {
@@ -52,6 +60,21 @@ import {
   buildSignalGeojson,
   resolveSignalsToProvinces,
 } from '../../lib/stormSignals/provinceSignals.js';
+import {
+  buildTrackGeojson,
+  trackFitBounds,
+  INTENSITY_COLORS,
+  statusKeyFromWindspeed,
+} from '../../lib/typhoonTracks/trackJson.js';
+import { buildLpaGeojson, lpaBounds } from '../../lib/typhoonTracks/lpaGeoJson.js';
+import { getLowPressures } from '../../services/lowPressureService.js';
+import { buildSampleLpas } from '../../lib/typhoonTracks/sampleLpas.js';
+import {
+  buildRegionGeojson,
+  attachRainToRegions,
+} from '../../lib/weather/rainRegions.js';
+import { buildSampleRainForecast } from '../../lib/weather/rainForecastSample.js';
+import { getRainForecast, getSampleRainForecast } from '../../services/rainForecastService.js';
 import phProvinces from '../../data/phProvinces.json';
 
 
@@ -71,6 +94,33 @@ function loadStormSignals() {
   return USE_SAMPLE_STORM_SIGNALS
     ? Promise.resolve(getSampleStormSignals())
     : getStormSignals();
+}
+
+// Typhoon pool loader. Sample mode is handled inside getTyphoons() (which also
+// seeds the module cache so the map + AI context agree); this wrapper keeps the
+// call sites uniform and is where a live toggle could live.
+function loadTyphoons() {
+  return getTyphoons();
+}
+
+// LPA loader. Sample mode returns the bundled fixtures; a live source can be
+// wired in via getLowPressures() later.
+const USE_SAMPLE_LPAS = true;
+function loadLpas() {
+  if (USE_SAMPLE_LPAS) {
+    return Promise.resolve(buildSampleLpas());
+  }
+  return getLowPressures();
+}
+
+// Weekly rain loader. Sample mode returns the bundled fixture; a live source
+// can be wired in via getRainForecast() later.
+const USE_SAMPLE_RAIN_FORECAST = true;
+function loadRainForecast() {
+  if (USE_SAMPLE_RAIN_FORECAST) {
+    return Promise.resolve(getSampleRainForecast());
+  }
+  return getRainForecast();
 }
 
 // Bounding box [minLng, minLat, maxLng, maxLat] across the given features'
@@ -333,7 +383,7 @@ export default function Index() {
   const [selectedDam, setSelectedDam] = useState(null);
   const [hazardsOpen, setHazardsOpen] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
-  const [visibleLayers, setVisibleLayers] = useState({ dams: true, stormSignals: false });
+  const [visibleLayers, setVisibleLayers] = useState({ dams: true, stormSignals: false, typhoons: false, lpas: false, rain: false });
   const [activeTab, setActiveTab] = useState("dams");
 
   // PAGASA TCWS storm signals overlay
@@ -343,6 +393,24 @@ export default function Index() {
   const [stormBannerDismissed, setStormBannerDismissed] = useState(false);
   const [selectedStormProvince, setSelectedStormProvince] = useState(null);
   const stormAutoFitDoneRef = useRef(false);
+
+  // GDACS typhoon tracks overlay
+  const [typhoons, setTyphoons] = useState(null);
+  const [typhoonsError, setTyphoonsError] = useState(false);
+  const [typhoonLegendHidden, setTyphoonLegendHidden] = useState(false);
+  const [selectedTyphoon, setSelectedTyphoon] = useState(null);
+
+  // Low pressure areas overlay
+  const [lpas, setLpas] = useState(null);
+  const [lpasError, setLpasError] = useState(false);
+  const [lpaLegendHidden, setLpaLegendHidden] = useState(false);
+  const [selectedLpa, setSelectedLpa] = useState(null);
+
+  // Weekly rain forecast overlay
+  const [rainForecast, setRainForecast] = useState(null);
+  const [rainError, setRainError] = useState(false);
+  const [rainLegendHidden, setRainLegendHidden] = useState(false);
+  const [selectedRainRegion, setSelectedRainRegion] = useState(null);
 
   // fetch when toggled on; stale state is ignored while visibleLayers is off
   useEffect(() => {
@@ -417,11 +485,153 @@ export default function Index() {
     };
   }, [activeTab, stormSignals]);
 
+  // restore any cached typhoon pool so the tab/overlay renders immediately
+  useEffect(() => {
+    const cached = getCachedTyphoons();
+    if (cached) setTyphoons(cached);
+  }, []);
+
+  // GeoJSON for the typhoon overlay. Only the currently-selected typhoon is
+  // drawn (its PAGASA cone + impact halos + track); nothing when none picked.
+  const typhoonsGeojson = useMemo(() => {
+    if (!selectedTyphoon) return { type: "FeatureCollection", features: [] };
+    return buildTrackGeojson(selectedTyphoon);
+  }, [selectedTyphoon]);
+
+  // fetch GDACS typhoons when the overlay is toggled on
+  useEffect(() => {
+    if (!visibleLayers.typhoons) return;
+    let cancelled = false;
+    loadTyphoons()
+      .then((data) => {
+        if (!cancelled) {
+          setTyphoons(data);
+          setTyphoonsError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTyphoonsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleLayers.typhoons]);
+
+  // fetch typhoon data when the Typhoons tab is opened, even if the map
+  // overlay was never toggled on
+  useEffect(() => {
+    if (activeTab !== "typhoons") return;
+    if (typhoons != null) return;
+    let cancelled = false;
+    loadTyphoons()
+      .then((data) => {
+        if (!cancelled) {
+          setTyphoons(data);
+          setTyphoonsError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTyphoonsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, typhoons]);
+
+  // Low pressure areas
+  useEffect(() => {
+    if (!visibleLayers.lpas && activeTab !== "lowPressureArea") return;
+    if (lpas != null) return;
+    let cancelled = false;
+    loadLpas()
+      .then((data) => {
+        if (!cancelled) {
+          setLpas(data);
+          setLpasError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLpasError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleLayers.lpas, activeTab, lpas]);
+
+  const lpasGeojson = useMemo(() => buildLpaGeojson(lpas?.lpas ?? []), [lpas]);
+
+  // Weekly rain forecast
+  useEffect(() => {
+    if (!visibleLayers.rain && activeTab !== "rainForecast") return;
+    if (rainForecast != null) return;
+    let cancelled = false;
+    loadRainForecast()
+      .then((data) => {
+        if (!cancelled) {
+          setRainForecast(data);
+          setRainError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRainError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleLayers.rain, activeTab, rainForecast]);
+
+  // Rain overlay GeoJSON: region polygons tinted by "today's" (day 0) rainfall.
+  const regionGeojson = useMemo(() => buildRegionGeojson(phProvinces), []);
+  const rainByRegion = useMemo(() => {
+    const map = {};
+    for (const region of rainForecast?.regions ?? []) {
+      map[region.name] = region.days.map((d) => d.mm);
+    }
+    return map;
+  }, [rainForecast]);
+  const rainGeojson = useMemo(
+    () => attachRainToRegions(regionGeojson, 0, rainByRegion),
+    [regionGeojson, rainByRegion]
+  );
+
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
   const hasRunOnce = useRef(false);
   const cameraRef = useRef(null);
   const mapRef = useRef(null);
+
+  // When the Typhoons overlay is turned on, auto-select the first (strongest)
+  // typhoon so the PAGASA cone/impact overlay shows immediately, and pan the
+  // camera out to fit that storm's full track + cone. The pan runs once per
+  // on-cycle (guarded by typhoonAutoPanRef) so a later typhoon-data refresh
+  // doesn't yank the camera again. Turning the overlay off clears the
+  // selection and resets the guard.
+  const typhoonAutoPanRef = useRef(false);
+  useEffect(() => {
+    if (!visibleLayers.typhoons) {
+      setSelectedTyphoon(null);
+      typhoonAutoPanRef.current = false;
+      return;
+    }
+    if (!typhoons || typhoons.unavailable) return;
+    const list = typhoons.typhoons ?? [];
+    if (list.length === 0) return;
+    const strongest = [...list].sort(
+      (a, b) =>
+        (b.current?.windspeed ?? b.overallWindspeed ?? 0) -
+        (a.current?.windspeed ?? a.overallWindspeed ?? 0)
+    )[0];
+    setSelectedTyphoon(strongest);
+    if (typhoonAutoPanRef.current) return;
+    typhoonAutoPanRef.current = true;
+    const bounds = trackFitBounds(strongest);
+    if (bounds) {
+      cameraRef.current?.fitBounds(bounds, {
+        padding: { top: 180, right: 60, bottom: 220, left: 60 },
+        duration: 900,
+      });
+    }
+  }, [visibleLayers.typhoons, typhoons]);
 
   // tracks which selectedUserId param value we've already acted on, so a
   // background family refetch doesn't keep re-flying/re-opening the card
@@ -1192,6 +1402,137 @@ export default function Index() {
     [visibleLayers.stormSignals]
   );
 
+  // Focus the map on a single typhoon's track (from a map marker tap or the
+  // Typhoons tab list). Only active while the Typhoons overlay is on.
+  const handleFocusTyphoon = useCallback(
+    (typhoon) => {
+      if (!visibleLayers.typhoons || !typhoon) return;
+      setSelectedTyphoon(typhoon);
+      const bounds = trackFitBounds(typhoon);
+      if (bounds) {
+        cameraRef.current?.fitBounds(bounds, {
+          padding: { top: 180, right: 60, bottom: 220, left: 60 },
+          duration: 900,
+        });
+      }
+    },
+    [visibleLayers.typhoons]
+  );
+
+  // Selecting a typhoon from the list. Turns the Tyhoon overlay on if it is
+  // off, then focuses that storm (PAGASA cone + impact halos). Pressing the
+  // already-selected row again deselects so the map shows nothing.
+  const handleSelectTyphoon = useCallback(
+    (typhoon) => {
+      if (!typhoon) return;
+      if (selectedTyphoon?.eventId === typhoon.eventId) {
+        setSelectedTyphoon(null);
+        return;
+      }
+      if (!visibleLayers.typhoons) {
+        setVisibleLayers((prev) => ({ ...prev, typhoons: true, stormSignals: false }));
+        setTyphoonLegendHidden(false);
+        setStormLegendHidden(true);
+      }
+      setSelectedTyphoon(typhoon);
+      const bounds = trackFitBounds(typhoon);
+      if (bounds) {
+        cameraRef.current?.fitBounds(bounds, {
+          padding: { top: 180, right: 60, bottom: 220, left: 60 },
+          duration: 900,
+        });
+      }
+    },
+    [visibleLayers.typhoons, selectedTyphoon?.eventId]
+  );
+
+  const handleTyphoonPress = (event) => {
+    const feature = event?.nativeEvent?.features?.[0] ?? event;
+    const typhoon = (typhoons?.typhoons ?? []).find(
+      (t) => t.eventId === feature?.properties?.eventId
+    );
+    if (typhoon) handleFocusTyphoon(typhoon);
+  };
+
+  // Focus the map on a single LPA (from a map tap or the LPA tab list). Turns
+  // the LPA overlay on if it is off.
+  const handleSelectLpa = useCallback(
+    (lpa) => {
+      if (!lpa) return;
+      if (selectedLpa?.id === lpa.id) {
+        setSelectedLpa(null);
+        return;
+      }
+      if (!visibleLayers.lpas) {
+        setVisibleLayers((prev) => ({
+          ...prev,
+          lpas: true,
+          stormSignals: false,
+          typhoons: false,
+        }));
+        setLpaLegendHidden(false);
+      }
+      setSelectedLpa(lpa);
+      const bounds = lpaBounds(lpa);
+      if (bounds) {
+        cameraRef.current?.fitBounds(bounds, {
+          padding: { top: 180, right: 60, bottom: 220, left: 60 },
+          duration: 900,
+        });
+      }
+    },
+    [visibleLayers.lpas, selectedLpa?.id]
+  );
+
+  const handleLpaPress = (event) => {
+    const feature = event?.nativeEvent?.features?.[0] ?? event;
+    const lpa = (lpas?.lpas ?? []).find(
+      (x) => x.id === feature?.properties?.id
+    );
+    if (lpa) handleSelectLpa(lpa);
+  };
+
+  // Focus the map on a rain region (from a map tap or the Rain tab list).
+  const handleSelectRainRegion = useCallback(
+    (region) => {
+      if (!region) return;
+      if (selectedRainRegion?.id === region.id) {
+        setSelectedRainRegion(null);
+        return;
+      }
+      if (!visibleLayers.rain) {
+        setVisibleLayers((prev) => ({
+          ...prev,
+          rain: true,
+          stormSignals: false,
+          typhoons: false,
+          lpas: false,
+        }));
+        setRainLegendHidden(false);
+      }
+      setSelectedRainRegion(region);
+      const geomFeature = (regionGeojson?.features ?? []).find(
+        (f) => f.properties?.name === region.name
+      );
+      const bounds = geomFeature ? geometryBounds([geomFeature]) : null;
+      if (bounds) {
+        cameraRef.current?.fitBounds(bounds, {
+          padding: { top: 180, right: 60, bottom: 220, left: 60 },
+          duration: 900,
+        });
+      }
+    },
+    [visibleLayers.rain, selectedRainRegion?.id, regionGeojson]
+  );
+
+  const handleRainRegionPress = (event) => {
+    const feature = event?.nativeEvent?.features?.[0] ?? event;
+    const name = feature?.properties?.name;
+    if (!name) return;
+    const region = (rainForecast?.regions ?? []).find((r) => r.name === name);
+    if (region) handleSelectRainRegion(region);
+  };
+
   const handleHazardsPress = () => {
     refreshDams();
     setSelectedDam(null);
@@ -1202,23 +1543,58 @@ export default function Index() {
     setVisibleLayers({
       dams: activeTab === "dams",
       stormSignals: activeTab === "weatherBulletins",
+      typhoons: activeTab === "typhoons",
+      lpas: activeTab === "lowPressureArea",
+      rain: activeTab === "rainForecast",
     });
     if (activeTab === "weatherBulletins") setStormLegendHidden(true);
+    if (activeTab === "typhoons") setTyphoonLegendHidden(true);
+    if (activeTab === "lowPressureArea") setLpaLegendHidden(true);
+    if (activeTab === "rainForecast") setRainLegendHidden(true);
     setSelectedStormProvince(null);
+    setSelectedTyphoon(null);
+    setSelectedLpa(null);
+    setSelectedRainRegion(null);
   };
 
   // Pressing any top-row pill raises the expanded toast for that tab. The
   // Weather pill auto-enables the storm-signals overlay (legend stays
-  // collapsed); every other pill turns it off again.
+  // collapsed); every other pill turns it off again. The inner overlays are
+  // mutually exclusive across tabs, though the layers panel can toggle them
+  // independently.
   const handleChangeTab = useCallback((key) => {
     setActiveTab(key);
     setSheetExpanded(true);
     setSelectedStormProvince(null);
+    setSelectedTyphoon(null);
+    setSelectedLpa(null);
+    setSelectedRainRegion(null);
     if (key === "weatherBulletins") {
-      setVisibleLayers((prev) => ({ ...prev, stormSignals: true }));
+      setVisibleLayers((prev) => ({ ...prev, stormSignals: true, typhoons: false, lpas: false, rain: false }));
       setStormLegendHidden(true);
+      setTyphoonLegendHidden(true);
+      setLpaLegendHidden(true);
+      setRainLegendHidden(true);
+    } else if (key === "typhoons") {
+      setVisibleLayers((prev) => ({ ...prev, typhoons: true, stormSignals: false, lpas: false, rain: false }));
+      setTyphoonLegendHidden(true);
+      setStormLegendHidden(true);
+      setLpaLegendHidden(true);
+      setRainLegendHidden(true);
+    } else if (key === "lowPressureArea") {
+      setVisibleLayers((prev) => ({ ...prev, lpas: true, stormSignals: false, typhoons: false, rain: false }));
+      setLpaLegendHidden(true);
+      setStormLegendHidden(true);
+      setTyphoonLegendHidden(true);
+      setRainLegendHidden(true);
+    } else if (key === "rainForecast") {
+      setVisibleLayers((prev) => ({ ...prev, rain: true, stormSignals: false, typhoons: false, lpas: false }));
+      setRainLegendHidden(true);
+      setStormLegendHidden(true);
+      setTyphoonLegendHidden(true);
+      setLpaLegendHidden(true);
     } else {
-      setVisibleLayers((prev) => ({ ...prev, stormSignals: false }));
+      setVisibleLayers((prev) => ({ ...prev, stormSignals: false, typhoons: false, lpas: false, rain: false }));
     }
   }, []);
 
@@ -1228,14 +1604,29 @@ export default function Index() {
       setStormLegendHidden(false);
       setSelectedStormProvince(null);
     }
+    if (key === "typhoons") {
+      setTyphoonLegendHidden(false);
+      setSelectedTyphoon(null);
+    }
+    if (key === "lpas") {
+      setLpaLegendHidden(false);
+      setSelectedLpa(null);
+    }
+    if (key === "rain") {
+      setRainLegendHidden(false);
+      setSelectedRainRegion(null);
+    }
   }, []);
 
   const handleCloseHazards = useCallback(() => {
     setSelectedDam(null);
     setHazardsOpen(false);
     // closing the sheet turns every overlay off
-    setVisibleLayers({ dams: false, stormSignals: false });
+    setVisibleLayers({ dams: false, stormSignals: false, typhoons: false, lpas: false, rain: false });
     setSelectedStormProvince(null);
+    setSelectedTyphoon(null);
+    setSelectedLpa(null);
+    setSelectedRainRegion(null);
   }, []);
 
   const handleCallPerson = (phone_number) => {
@@ -1339,6 +1730,314 @@ export default function Index() {
                     'text-halo-width': 1.5,
                   }}
                 />
+              </GeoJSONSource>
+            )}
+
+            {visibleLayers.typhoons &&
+              typhoons &&
+              !typhoons.unavailable &&
+              selectedTyphoon && (
+              <GeoJSONSource id="typhoonsSource" data={typhoonsGeojson} onPress={handleTyphoonPress}>
+                {/* uncertainty cone: soft envelope fill + subtle edge */}
+                <Layer
+                  type="fill"
+                  id="typhoonsConeFill"
+                  filter={['==', ['get', 'kind'], 'cone']}
+                  paint={{
+                    'fill-color': '#FACC15',
+                    'fill-opacity': 0.12,
+                    'fill-outline-color': '#CA8A04',
+                  }}
+                />
+                {/* wind footprint fills */}
+                <Layer
+                  type="fill"
+                  id="typhoonsFootprintRed"
+                  filter={['==', ['get', 'kind'], 'footprint_red']}
+                  paint={{ 'fill-color': '#ef4444', 'fill-opacity': 0.22 }}
+                />
+                <Layer
+                  type="fill"
+                  id="typhoonsFootprintOrange"
+                  filter={['==', ['get', 'kind'], 'footprint_orange']}
+                  paint={{ 'fill-color': '#f97316', 'fill-opacity': 0.22 }}
+                />
+                <Layer
+                  type="fill"
+                  id="typhoonsFootprintGreen"
+                  filter={['==', ['get', 'kind'], 'footprint_green']}
+                  paint={{ 'fill-color': '#22c55e', 'fill-opacity': 0.22 }}
+                />
+                <Layer
+                  type="fill"
+                  id="typhoonsWindRadius"
+                  filter={['==', ['get', 'kind'], 'windradius']}
+                  paint={{ 'fill-color': '#0EA5E9', 'fill-opacity': 0.08 }}
+                />
+                {/* impact halo: transparent fill + dashed intensity-colored ring */}
+                <Layer
+                  type="fill"
+                  id="typhoonsHaloFill"
+                  filter={['==', ['get', 'kind'], 'halo']}
+                  paint={{
+                    'fill-color': [
+                      'match',
+                      ['get', 'intensity'],
+                      'superTyphoon', '#9b1c31',
+                      'severeTyphoon', '#b91c1c',
+                      'typhoon', '#e11d48',
+                      'severeStorm', '#f97316',
+                      'tropicalStorm', '#f59e0b',
+                      'depression', '#60a5fa',
+                      '#0EA5E9',
+                    ],
+                    'fill-opacity': 0.1,
+                  }}
+                />
+                <Layer
+                  type="line"
+                  id="typhoonsHaloRingCasing"
+                  filter={['==', ['get', 'kind'], 'haloRing']}
+                  paint={{
+                    'line-color': '#ffffff',
+                    'line-width': 6,
+                    'line-opacity': 0.5,
+                    'line-dasharray': [4, 3],
+                  }}
+                />
+                <Layer
+                  type="line"
+                  id="typhoonsHaloRingLine"
+                  filter={['==', ['get', 'kind'], 'haloRing']}
+                  paint={{
+                    'line-color': [
+                      'match',
+                      ['get', 'intensity'],
+                      'superTyphoon', '#9b1c31',
+                      'severeTyphoon', '#b91c1c',
+                      'typhoon', '#e11d48',
+                      'severeStorm', '#f97316',
+                      'tropicalStorm', '#f59e0b',
+                      'depression', '#60a5fa',
+                      '#0EA5E9',
+                    ],
+                    'line-width': 2.5,
+                    'line-opacity': 0.75,
+                    'line-dasharray': [4, 3],
+                  }}
+                />
+                {/* track lines: solid past, dashed forecast (white casing lifts
+                    them off the basemap) */}
+                <Layer
+                  type="line"
+                  id="typhoonsForecastLineCasing"
+                  filter={['==', ['get', 'segment'], 'forecast']}
+                  paint={{ 'line-color': '#ffffff', 'line-width': 6, 'line-opacity': 0.55 }}
+                />
+                <Layer
+                  type="line"
+                  id="typhoonsForecastLine"
+                  filter={['==', ['get', 'segment'], 'forecast']}
+                  paint={{
+                    'line-color': '#0EA5E9',
+                    'line-width': 2.5,
+                    'line-dasharray': [2, 1.5],
+                    'line-opacity': 0.9,
+                  }}
+                />
+                <Layer
+                  type="line"
+                  id="typhoonsPastLineCasing"
+                  filter={['==', ['get', 'segment'], 'past']}
+                  paint={{ 'line-color': '#ffffff', 'line-width': 6, 'line-opacity': 0.55 }}
+                />
+                <Layer
+                  type="line"
+                  id="typhoonsPastLine"
+                  filter={['==', ['get', 'segment'], 'past']}
+                  paint={{
+                    'line-color': '#475569',
+                    'line-width': 2.5,
+                    'line-opacity': 0.85,
+                  }}
+                />
+                {/* eye impact ring: small red halo (transparent fill + dashed
+                    red dashed outline) + tiny center dot */}
+                <Layer
+                  type="fill"
+                  id="typhoonsEyeHaloFill"
+                  filter={['==', ['get', 'kind'], 'eye']}
+                  paint={{ 'fill-color': '#ef4444', 'fill-opacity': 0.15 }}
+                />
+                <Layer
+                  type="line"
+                  id="typhoonsEyeRingCasing"
+                  filter={['==', ['get', 'kind'], 'eyeRing']}
+                  paint={{
+                    'line-color': '#ffffff',
+                    'line-width': 6,
+                    'line-opacity': 0.5,
+                    'line-dasharray': [3, 2],
+                  }}
+                />
+                <Layer
+                  type="line"
+                  id="typhoonsEyeRingLine"
+                  filter={['==', ['get', 'kind'], 'eyeRing']}
+                  paint={{
+                    'line-color': '#ef4444',
+                    'line-width': 2.5,
+                    'line-opacity': 0.85,
+                    'line-dasharray': [3, 2],
+                  }}
+                />
+                <Layer
+                  type="circle"
+                  id="typhoonsEyeDot"
+                  filter={['==', ['get', 'kind'], 'eyeDot']}
+                  paint={{
+                    'circle-radius': 4,
+                    'circle-color': '#ef4444',
+                    'circle-opacity': 0.95,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#ffffff',
+                  }}
+                />
+                {/* PAGASA-style category markers: hollow ring + letter at each
+                    track point (STY / TY / T / STS / S / D / L) */}
+                <Layer
+                  type="circle"
+                  id="typhoonsMarkerRing"
+                  filter={['has', 'marker']}
+                  paint={{
+                    'circle-radius': 12,
+                    'circle-color': 'rgba(255,255,255,0.92)',
+                    'circle-stroke-width': 2.5,
+                    'circle-stroke-color': [
+                      'match',
+                      ['get', 'intensity'],
+                      'superTyphoon', '#9b1c31',
+                      'severeTyphoon', '#b91c1c',
+                      'typhoon', '#e11d48',
+                      'severeStorm', '#f97316',
+                      'tropicalStorm', '#f59e0b',
+                      'depression', '#60a5fa',
+                      '#0EA5E9',
+                    ],
+                  }}
+                />
+                <Layer
+                  type="symbol"
+                  id="typhoonsMarkerText"
+                  filter={['has', 'marker']}
+                  style={{
+                    textField: ['get', 'marker'],
+                    textSize: 11,
+                    textAnchor: 'center',
+                    textAllowOverlap: true,
+                  }}
+                  paint={{
+                    textColor: [
+                      'match',
+                      ['get', 'intensity'],
+                      'superTyphoon', '#9b1c31',
+                      'severeTyphoon', '#b91c1c',
+                      'typhoon', '#e11d48',
+                      'severeStorm', '#f97316',
+                      'tropicalStorm', '#f59e0b',
+                      'depression', '#60a5fa',
+                      '#0EA5E9',
+                    ],
+                    textHaloColor: '#ffffff',
+                    textHaloWidth: 2,
+                  }}
+                />
+                {/* PAGASA-style forecast-hour labels (24H / 36H / ...) */}
+                <Layer
+                  type="symbol"
+                  id="typhoonsHourLabel"
+                  filter={['has', 'label']}
+                  style={{
+                    textField: ['get', 'label'],
+                    textSize: 10,
+                    textAnchor: 'bottom',
+                    textOffset: [0, -1.1],
+                    textAllowOverlap: true,
+                  }}
+                  paint={{
+                    textColor: '#0369A1',
+                    textHaloColor: '#ffffff',
+                    textHaloWidth: 2,
+                    textHaloBlur: 1,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {visibleLayers.lpas && lpas && !lpas.unavailable && (
+              <GeoJSONSource id="lpasSource" data={lpasGeojson} onPress={handleLpaPress}>
+                {/* hollow circle casing (lifts outline off the basemap) */}
+                <Layer
+                  type="line"
+                  id="lpasCircleCasing"
+                  filter={['==', ['get', 'kind'], 'lpaCircle']}
+                  paint={{ 'line-color': '#ffffff', 'line-width': 7, 'line-opacity': 0.55 }}
+                />
+                <Layer
+                  type="line"
+                  id="lpasCircleLine"
+                  filter={['==', ['get', 'kind'], 'lpaCircle']}
+                  paint={{ 'line-color': '#0EA5E9', 'line-width': 2.5, 'line-opacity': 0.9 }}
+                />
+                {/* center crosshair casing + line */}
+                <Layer
+                  type="line"
+                  id="lpasPlusCasing"
+                  filter={['==', ['get', 'kind'], 'lpaPlus']}
+                  paint={{ 'line-color': '#ffffff', 'line-width': 6, 'line-opacity': 0.55 }}
+                />
+                <Layer
+                  type="line"
+                  id="lpasPlusLine"
+                  filter={['==', ['get', 'kind'], 'lpaPlus']}
+                  paint={{ 'line-color': '#0EA5E9', 'line-width': 2.5, 'line-opacity': 0.9 }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {visibleLayers.rain && rainForecast && !rainForecast.unavailable && (
+              <GeoJSONSource id="rainSource" data={rainGeojson} onPress={handleRainRegionPress}>
+                {/* region fill tinted by today's rainfall */}
+                <Layer
+                  type="fill"
+                  id="rainRegionFill"
+                  paint={{
+                    'fill-color': [
+                      'case',
+                      ['==', ['get', 'rainMm'], 0], '#E5E7EB',
+                      ['<', ['get', 'rainMm'], 26], '#93C5FD',
+                      ['<', ['get', 'rainMm'], 50], '#3B82F6',
+                      ['<', ['get', 'rainMm'], 100], '#F59E0B',
+                      '#DC2626',
+                    ],
+                    'fill-opacity': 0.45,
+                  }}
+                />
+                {/* region borders */}
+                <Layer
+                  type="line"
+                  id="rainRegionLine"
+                  paint={{ 'line-color': '#ffffff', 'line-width': 1.5, 'line-opacity': 0.9 }}
+                />
+                {/* selected region highlight outline */}
+                {selectedRainRegion && (
+                  <Layer
+                    type="line"
+                    id="rainRegionHighlight"
+                    filter={['==', ['get', 'name'], selectedRainRegion.name]}
+                    paint={{ 'line-color': '#111827', 'line-width': 3, 'line-opacity': 0.9 }}
+                  />
+                )}
               </GeoJSONSource>
             )}
 
@@ -1664,20 +2363,39 @@ export default function Index() {
         {activeId && <View style={styles.layersDot} />}
       </View>
 
-      {/* legend explaining the active overlay's colors — bottom-left, only
-          while a layer is active; collapses to a chip when hidden */}
-      <HazardLayerLegend
-        activeId={activeId}
-        hidden={legendHidden}
-        onToggle={handleToggleLegend}
-      />
-
-      {visibleLayers.stormSignals && (
-        <StormSignalLegend
-          hidden={stormLegendHidden}
-          onToggle={() => setStormLegendHidden((h) => !h)}
+      {/* legend pills stack vertically (bottom-left) when multiple overlays
+          are toggled at once; each collapses to its own chip */}
+      <LegendStack>
+        <HazardLayerLegend
+          activeId={activeId}
+          hidden={legendHidden}
+          onToggle={handleToggleLegend}
         />
-      )}
+        {visibleLayers.stormSignals && (
+          <StormSignalLegend
+            hidden={stormLegendHidden}
+            onToggle={() => setStormLegendHidden((h) => !h)}
+          />
+        )}
+        {visibleLayers.typhoons && (
+          <TyphoonLegend
+            hidden={typhoonLegendHidden}
+            onToggle={() => setTyphoonLegendHidden((h) => !h)}
+          />
+        )}
+        {visibleLayers.lpas && (
+          <LPALegend
+            hidden={lpaLegendHidden}
+            onToggle={() => setLpaLegendHidden((h) => !h)}
+          />
+        )}
+        {visibleLayers.rain && (
+          <RainLegend
+            hidden={rainLegendHidden}
+            onToggle={() => setRainLegendHidden((h) => !h)}
+          />
+        )}
+      </LegendStack>
 
       {selectedStormProvince && (
         <View style={styles.stormProvinceChip}>
@@ -1702,6 +2420,77 @@ export default function Index() {
         </View>
       )}
 
+
+      {selectedTyphoon && (
+        <View style={styles.stormProvinceChip}>
+          <View
+            style={[
+              styles.stormProvinceSwatch,
+              {
+                backgroundColor:
+                  INTENSITY_COLORS[
+                    statusKeyFromWindspeed(
+                      selectedTyphoon.current?.windspeed ??
+                        selectedTyphoon.overallWindspeed
+                    )
+                  ] ?? INTENSITY_COLORS.unknown,
+              },
+            ]}
+          />
+          <Text style={styles.stormProvinceChipText} numberOfLines={1}>
+            {selectedTyphoon.name ??
+              `Cyclone ${selectedTyphoon.eventId}`}
+            {selectedTyphoon.current?.windspeed != null
+              ? ` · ${Math.round(selectedTyphoon.current.windspeed)} km/h`
+              : ""}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setSelectedTyphoon(null)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close typhoon details"
+          >
+            <Ionicons name="close" size={14} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {selectedLpa && (
+        <View style={styles.stormProvinceChip}>
+          <View style={[styles.stormProvinceSwatch, { backgroundColor: '#0EA5E9' }]} />
+          <Text style={styles.stormProvinceChipText} numberOfLines={1}>
+            {selectedLpa.name}
+            {selectedLpa.pressure != null
+              ? ` · ${selectedLpa.pressure} hPa`
+              : ""}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setSelectedLpa(null)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close LPA details"
+          >
+            <Ionicons name="close" size={14} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {selectedRainRegion && (
+        <View style={styles.stormProvinceChip}>
+          <View style={[styles.stormProvinceSwatch, { backgroundColor: '#3B82F6' }]} />
+          <Text style={styles.stormProvinceChipText} numberOfLines={1}>
+            {selectedRainRegion.name} · Week: {selectedRainRegion.weekTotal ?? 0} mm
+          </Text>
+          <TouchableOpacity
+            onPress={() => setSelectedRainRegion(null)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close rain region details"
+          >
+            <Ionicons name="close" size={14} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <HazardLayersPanel
         visible={layersOpen}
@@ -1800,8 +2589,20 @@ export default function Index() {
           stormSignals={stormSignals}
           stormSignalsLoading={stormSignals == null && !stormSignalsError}
           signalByProvince={signalByProvince}
-          overlayVisible={visibleLayers.stormSignals}
+          overlayVisible={visibleLayers.stormSignals || visibleLayers.typhoons || visibleLayers.lpas || visibleLayers.rain}
           onSelectStormRegion={handleSelectStormRegion}
+          typhoons={typhoons}
+          typhoonsLoading={typhoons == null && !typhoonsError}
+          selectedTyphoonEventId={selectedTyphoon?.eventId ?? null}
+          onSelectTyphoon={handleSelectTyphoon}
+          lpas={lpas}
+          lpasLoading={lpas == null && !lpasError}
+          selectedLpaId={selectedLpa?.id ?? null}
+          onSelectLpa={handleSelectLpa}
+          rainForecast={rainForecast}
+          rainLoading={rainForecast == null && !rainError}
+          selectedRainRegionId={selectedRainRegion?.id ?? null}
+          onSelectRainRegion={handleSelectRainRegion}
         />
       )}
 

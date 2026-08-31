@@ -75,10 +75,8 @@ export default function HazardLayerLegend({
 }
 
 const styles = StyleSheet.create({
+  // NOT absolute: this legend stacks vertically inside LegendStack.
   wrapper: {
-    position: "absolute",
-    left: 16,
-    bottom: 40,
     alignItems: "flex-start",
   },
   chip: {

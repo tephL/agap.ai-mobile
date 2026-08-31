@@ -22,6 +22,11 @@ import {
   resolveSignalsToProvinces,
   provinceAtPoint,
 } from "../lib/stormSignals/provinceSignals";
+import {
+  getTyphoons,
+  getCachedTyphoons,
+} from "../services/typhoonService";
+import { statusKeyFromWindspeed } from "../lib/typhoonTracks/trackJson";
 import phProvinces from "../data/phProvinces.json";
 
 function severitySentence(dam) {
@@ -251,5 +256,83 @@ export async function getStormSignalsContext(userLocation) {
     summary: summaryParts.join(" "),
   };
   latestStormSignalContext = context;
+  return context;
+}
+
+let latestTyphoonContext = null;
+
+export function getLatestTyphoonsContext() {
+  return latestTyphoonContext;
+}
+
+/**
+ * Snapshot of the current active typhoons (GDACS tracks) relevant to the
+ * Philippines. Returns null when no data can be fetched. Reads the cached pool
+ * when available to avoid on-demand network latency during a chat.
+ * @returns {Promise<object|null>}
+ */
+export async function getTyphoonsContext() {
+  const data = getCachedTyphoons() ?? (await getTyphoons());
+  if (!data || data.unavailable) {
+    latestTyphoonContext = null;
+    return null;
+  }
+
+  const list = data.typhoons ?? [];
+  const storms = list
+    .sort(
+      (a, b) =>
+        (b.current?.windspeed ?? b.overallWindspeed ?? 0) -
+        (a.current?.windspeed ?? a.overallWindspeed ?? 0)
+    )
+    .map((t) => {
+      const current = t.current ?? {};
+      const key = statusKeyFromWindspeed(current.windspeed ?? t.overallWindspeed);
+      return {
+        name: t.name ?? `Event ${t.eventId}`,
+        eventId: t.eventId,
+        status: current.status ?? t.overallStormstatus ?? "Tropical cyclone",
+        windspeedKmh: current.windspeed ?? t.overallWindspeed ?? null,
+        intensity: key ?? "unknown",
+        alertLevel: t.alertLevel ?? null,
+        center:
+          current.lon != null && current.lat != null
+            ? { latitude: current.lat, longitude: current.lon }
+            : null,
+        pastPositions: t.past.length,
+        forecastPositions: t.forecast.length,
+      };
+    });
+
+  const summaryParts = [];
+  if (storms.length === 0) {
+    summaryParts.push(
+      "There are currently no active tropical cyclones relevant to the Philippines (source: GDACS)."
+    );
+  } else {
+    summaryParts.push(
+      `${storms.length} active tropical cyclone(s) relevant to the Philippines (source: GDACS, ${data.generatedAt}):`
+    );
+    for (const s of storms) {
+      const center = s.center
+        ? ` centered near ${s.center.latitude.toFixed(1)}°N, ${s.center.longitude.toFixed(1)}°E`
+        : "";
+      summaryParts.push(
+        `${s.name}: ${s.status}${
+          s.windspeedKmh != null ? ` (${Math.round(s.windspeedKmh)} km/h)` : ""
+        }${center}, track shows ${s.pastPositions} past and ${s.forecastPositions} forecast positions.`
+      );
+    }
+  }
+
+  const context = {
+    generatedAt: data.generatedAt,
+    source: "GDACS",
+    active: data.active,
+    count: storms.length,
+    typhoons: storms,
+    summary: summaryParts.join(" "),
+  };
+  latestTyphoonContext = context;
   return context;
 }

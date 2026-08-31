@@ -19,6 +19,11 @@ const TABS = [
     icon: "thunderstorm-outline",
   },
   {
+    key: "rainForecast",
+    label: "Rain",
+    icon: "rainy-outline",
+  },
+  {
     key: "lowPressureArea",
     label: "Low Pressure Area",
     icon: "cloud-outline",

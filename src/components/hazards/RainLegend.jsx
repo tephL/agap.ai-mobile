@@ -2,19 +2,22 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import {
-  PAGASA_TCWS_COLORS,
-  PAGASA_TCWS_LABELS,
-} from "@/services/stormSignalService";
-
-const LEVELS = [1, 2, 3, 4, 5];
+// Rain intensity color ramp shared by the map overlay and the legend. Kept in
+// sync with RainForecastTab.rainColor manually (mm buckets are the same).
+const RAIN_STEPS = [
+  { label: "None", color: "#E5E7EB" },
+  { label: "1–25 mm (Light)", color: "#93C5FD" },
+  { label: "26–50 mm (Moderate)", color: "#3B82F6" },
+  { label: "51–100 mm (Heavy)", color: "#F59E0B" },
+  { label: "100+ mm (Torrential)", color: "#DC2626" },
+];
 
 /**
- * Bottom-right legend explaining the TCWS signal colors. Collapses into a
- * compact chip when hidden — tap the chip (or the header chevron) to flip.
- * Rendered only while the Storm Signals layer is toggled on.
+ * Bottom-left legend explaining the Rain overlay's color ramp (daily rainfall
+ * in mm). The `wrapper` is intentionally NOT absolute so it can stack inside
+ * LegendStack.
  */
-export default function StormSignalLegend({ hidden = false, onToggle }) {
+export default function RainLegend({ hidden = false, onToggle }) {
   if (hidden) {
     return (
       <View style={styles.wrapper}>
@@ -22,10 +25,10 @@ export default function StormSignalLegend({ hidden = false, onToggle }) {
           style={styles.chip}
           onPress={onToggle}
           activeOpacity={0.7}
-          accessibilityLabel="Ipakita ang storm signals legend"
+          accessibilityLabel="Ipakita ang rain forecast legend"
           hitSlop={8}
         >
-          <Text style={styles.chipText}>Storm Signals</Text>
+          <Text style={styles.chipText}>Rain</Text>
         </TouchableOpacity>
       </View>
     );
@@ -35,23 +38,21 @@ export default function StormSignalLegend({ hidden = false, onToggle }) {
     <View style={styles.wrapper}>
       <View style={styles.card}>
         <View style={styles.header}>
-          <Text style={styles.title}>Storm Signals (TCWS)</Text>
+          <Text style={styles.title}>Rain Forecast (today)</Text>
           <TouchableOpacity
             onPress={onToggle}
             hitSlop={8}
             style={styles.collapseButton}
-            accessibilityLabel="Itago ang storm signals legend"
+            accessibilityLabel="Itago ang rain forecast legend"
           >
             <Ionicons name="chevron-down" size={16} color="#6B7280" />
           </TouchableOpacity>
         </View>
-        {LEVELS.map((level) => (
-          <View key={level} style={styles.row}>
-            <View
-              style={[styles.swatch, { backgroundColor: PAGASA_TCWS_COLORS[level] }]}
-            />
+        {RAIN_STEPS.map((step) => (
+          <View key={step.label} style={styles.row}>
+            <View style={[styles.swatch, { backgroundColor: step.color }]} />
             <Text style={styles.rowText} numberOfLines={2}>
-              {level} — {PAGASA_TCWS_LABELS[level]}
+              {step.label}
             </Text>
           </View>
         ))}
@@ -61,12 +62,11 @@ export default function StormSignalLegend({ hidden = false, onToggle }) {
 }
 
 const styles = StyleSheet.create({
-  // NOT absolute: this legend stacks vertically inside LegendStack.
   wrapper: {
     alignItems: "flex-start",
   },
   chip: {
-    minWidth: 128,
+    minWidth: 96,
     backgroundColor: "rgba(255,255,255,0.96)",
     borderRadius: 20,
     paddingHorizontal: 18,

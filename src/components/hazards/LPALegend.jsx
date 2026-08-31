@@ -2,19 +2,13 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import {
-  PAGASA_TCWS_COLORS,
-  PAGASA_TCWS_LABELS,
-} from "@/services/stormSignalService";
-
-const LEVELS = [1, 2, 3, 4, 5];
-
 /**
- * Bottom-right legend explaining the TCWS signal colors. Collapses into a
- * compact chip when hidden — tap the chip (or the header chevron) to flip.
- * Rendered only while the Storm Signals layer is toggled on.
+ * Bottom-left legend explaining the Low Pressure Area overlay symbol: a
+ * solid-outline hollow circle plus center crosshair marking the low's center.
+ * Collapses to a compact chip. The `wrapper` is intentionally NOT absolute so
+ * it can stack inside LegendStack.
  */
-export default function StormSignalLegend({ hidden = false, onToggle }) {
+export default function LPALegend({ hidden = false, onToggle }) {
   if (hidden) {
     return (
       <View style={styles.wrapper}>
@@ -22,10 +16,10 @@ export default function StormSignalLegend({ hidden = false, onToggle }) {
           style={styles.chip}
           onPress={onToggle}
           activeOpacity={0.7}
-          accessibilityLabel="Ipakita ang storm signals legend"
+          accessibilityLabel="Ipakita ang low pressure area legend"
           hitSlop={8}
         >
-          <Text style={styles.chipText}>Storm Signals</Text>
+          <Text style={styles.chipText}>Low Pressure Area</Text>
         </TouchableOpacity>
       </View>
     );
@@ -35,33 +29,33 @@ export default function StormSignalLegend({ hidden = false, onToggle }) {
     <View style={styles.wrapper}>
       <View style={styles.card}>
         <View style={styles.header}>
-          <Text style={styles.title}>Storm Signals (TCWS)</Text>
+          <Text style={styles.title}>Low Pressure Area</Text>
           <TouchableOpacity
             onPress={onToggle}
             hitSlop={8}
             style={styles.collapseButton}
-            accessibilityLabel="Itago ang storm signals legend"
+            accessibilityLabel="Itago ang low pressure area legend"
           >
             <Ionicons name="chevron-down" size={16} color="#6B7280" />
           </TouchableOpacity>
         </View>
-        {LEVELS.map((level) => (
-          <View key={level} style={styles.row}>
-            <View
-              style={[styles.swatch, { backgroundColor: PAGASA_TCWS_COLORS[level] }]}
-            />
-            <Text style={styles.rowText} numberOfLines={2}>
-              {level} — {PAGASA_TCWS_LABELS[level]}
-            </Text>
+
+        <View style={styles.row}>
+          <View style={styles.symbol}>
+            <View style={styles.circle} />
+            <View style={[styles.arm, styles.armH]} />
+            <View style={[styles.arm, styles.armV]} />
           </View>
-        ))}
+          <Text style={styles.rowText}>
+            Low pressure area center (solid hollow circle)
+          </Text>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // NOT absolute: this legend stacks vertically inside LegendStack.
   wrapper: {
     alignItems: "flex-start",
   },
@@ -132,12 +126,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 6,
   },
-  swatch: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
+  symbol: {
+    width: 28,
+    height: 28,
     marginRight: 10,
+    alignItems: "center",
+    justifyContent: "center",
     flexShrink: 0,
+  },
+  circle: {
+    position: "absolute",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2.5,
+    borderColor: "#0EA5E9",
+    backgroundColor: "transparent",
+  },
+  arm: {
+    position: "absolute",
+    backgroundColor: "#0EA5E9",
+    borderRadius: 2,
+  },
+  armH: {
+    width: 12,
+    height: 2.5,
+  },
+  armV: {
+    width: 2.5,
+    height: 12,
   },
   rowText: {
     flexShrink: 1,

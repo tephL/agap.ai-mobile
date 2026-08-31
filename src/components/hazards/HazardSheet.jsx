@@ -25,6 +25,9 @@ import {
 import DamsTab from "./DamsTab";
 import TabPlaceholder from "./TabPlaceholder";
 import StormSignalsTab from "./StormSignalsTab";
+import TyphoonsTab from "./TyphoonsTab";
+import LpasTab from "./LpasTab";
+import RainForecastTab from "./RainForecastTab";
 import HazardDisclaimer from "./HazardDisclaimer";
 import ImpactZoneDetail from "./ImpactZoneDetail";
 import SeverityDetail from "./SeverityDetail";
@@ -126,6 +129,18 @@ function HazardSheetInner({
   signalByProvince = {},
   overlayVisible = false,
   onSelectStormRegion,
+  typhoons,
+  typhoonsLoading = false,
+  selectedTyphoonEventId = null,
+  onSelectTyphoon,
+  lpas,
+  lpasLoading = false,
+  selectedLpaId = null,
+  onSelectLpa,
+  rainForecast,
+  rainLoading = false,
+  selectedRainRegionId = null,
+  onSelectRainRegion,
 }) {
   const [translateY] = useState(() => new Animated.Value(HIDDEN_Y));
   const [translateYPos, setTranslateYPos] = useState(HIDDEN_Y);
@@ -470,22 +485,45 @@ function HazardSheetInner({
             onSelectRegion={onSelectStormRegion}
           />
         )}
-        {!slug && activeTab !== "dams" && activeTab !== "weatherBulletins" && (
+        {!slug && activeTab === "typhoons" && (
+          <TyphoonsTab
+            typhoons={typhoons}
+            typhoonsLoading={typhoonsLoading}
+            overlayVisible={overlayVisible}
+            selectedTyphoonEventId={selectedTyphoonEventId}
+            onSelectTyphoon={onSelectTyphoon}
+          />
+        )}
+        {!slug && activeTab === "lowPressureArea" && (
+          <LpasTab
+            lpas={lpas}
+            lpasLoading={lpasLoading}
+            overlayVisible={overlayVisible}
+            selectedLpaId={selectedLpaId}
+            onSelectLpa={onSelectLpa}
+          />
+        )}
+        {!slug && activeTab === "rainForecast" && (
+          <RainForecastTab
+            rainForecast={rainForecast}
+            rainLoading={rainLoading}
+            overlayVisible={overlayVisible}
+            selectedRainRegionId={selectedRainRegionId}
+            onSelectRainRegion={onSelectRainRegion}
+          />
+        )}
+        {!slug && activeTab !== "dams" && activeTab !== "weatherBulletins" && activeTab !== "typhoons" && activeTab !== "lowPressureArea" && activeTab !== "rainForecast" && (
           <TabPlaceholder
             icon={
               activeTab === "nearYou" ? "location-outline"
               : activeTab === "faultLines" ? "map-outline"
               : activeTab === "volcanoes" ? "flame-outline"
-              : activeTab === "typhoons" ? "thunderstorm-outline"
-              : activeTab === "lowPressureArea" ? "cloud-outline"
               : "newspaper-outline"
             }
             title={
               activeTab === "nearYou" ? "Near You"
               : activeTab === "faultLines" ? "Fault Lines"
               : activeTab === "volcanoes" ? "Volcanoes"
-              : activeTab === "typhoons" ? "Typhoons"
-              : activeTab === "lowPressureArea" ? "Low Pressure Area"
               : "Weather Bulletins"
             }
             subtitle="Coming soon. This feature will be available in a future update."

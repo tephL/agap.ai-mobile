@@ -26,7 +26,7 @@ import {
   clearChatHistory,
   getSuggestions,
 } from "@/services/aiService";
-import { getStormSignalsContext } from "@/context/hazardContext";
+import { getStormSignalsContext, getTyphoonsContext } from "@/context/hazardContext";
 
 const SYSTEM_SUGGESTIONS = [
   { text: "Ano ang dapat kong gawin kapag may bagyo?", icon: "thunderstorm" },
@@ -176,9 +176,17 @@ export default function Assistant() {
         const signalsContext = await getStormSignalsContext(
           coordsRef.current ?? null
         );
+        const typhoonContext = await getTyphoonsContext();
+        let contextLine = [];
+        if (signalsContext?.active) {
+          contextLine.push(`Storm signals: ${signalsContext.summary}`);
+        }
+        if (typhoonContext?.active) {
+          contextLine.push(`Typhoons: ${typhoonContext.summary}`);
+        }
         const outgoing =
-          signalsContext?.active
-            ? `${msg}\n\n[HAZARD CONTEXT] ${signalsContext.summary}`
+          contextLine.length > 0
+            ? `${msg}\n\n[HAZARD CONTEXT] ${contextLine.join(" ")}`
             : msg;
         const data = await sendChatMessage(outgoing, hazardContext);
         const assistantMessage = { role: "assistant", content: data.reply };
