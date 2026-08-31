@@ -241,7 +241,7 @@ export default function Index() {
   const [locating, setLocating] = useState(false);
 
   // active dispatch notifications
-  const { dispatches, allDispatches, dismiss, resetDismissed } = useActiveDispatches();
+  const { dispatches, allDispatches, resetDismissed } = useActiveDispatches();
 
   // "Your report was received" notif shown after returning from the report
   // form. reportIdParam comes from report.jsx closeForm. The active report is
@@ -299,10 +299,9 @@ export default function Index() {
 
   // Whether help is already on the way for the citizen's report — i.e. any
   // active team assignment (pending or dispatched) to the report's cluster.
-  // Uses allDispatches (not the dismissed-filtered list) so dismissing the
-  // dispatch bar doesn't re-show the report submitted window, and it covers
-  // both the "Dispatching" (pending) and "En route" (dispatched) states that
-  // the DispatchNotificationBar reports as "help is on the way".
+  // Uses allDispatches (the full, unfiltered list) so it stays accurate, and
+  // it covers both the "Dispatching" (pending) and "En route" (dispatched)
+  // states that the DispatchNotificationBar reports as "help is on the way".
   const reportDispatched =
     activeReport?.clusterId != null &&
     allDispatches.some(
@@ -1302,7 +1301,6 @@ export default function Index() {
 
       <DispatchNotificationBar
         dispatches={dispatches}
-        onDismiss={dismiss}
         style={activeTyphoon && !typhoonDismissed ? { top: 160 } : undefined}
       />
 

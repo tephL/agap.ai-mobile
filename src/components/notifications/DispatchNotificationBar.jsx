@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Pressable,
@@ -17,14 +17,16 @@ const PULSE_DURATION_MS = 2000;
  * Persistent bottom notification bar shown on the citizen map when
  * a response team has been dispatched to one of the user's clusters.
  *
+ * Each dispatch card cannot be dismissed; it can only be minimized/expanded
+ * via the chevron toggle so the active dispatch stays visible to the citizen.
+ *
  * Props:
  * - dispatches: Array<{
  *     assignment_id, team: { name, lat, lng },
  *     cluster: { lat, lng }, etaSeconds, status
  *   }>
- * - onDismiss(assignmentId)
  */
-export default function DispatchNotificationBar({ dispatches, onDismiss, style }) {
+export default function DispatchNotificationBar({ dispatches, style }) {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -61,15 +63,15 @@ export default function DispatchNotificationBar({ dispatches, onDismiss, style }
           key={d.assignment_id}
           dispatch={d}
           opacity={opacity}
-          onDismiss={onDismiss}
         />
       ))}
     </View>
   );
 }
 
-function DispatchCard({ dispatch, opacity, onDismiss }) {
-  const { assignment_id, team, cluster, etaSeconds, status } = dispatch;
+function DispatchCard({ dispatch, opacity }) {
+  const { team, cluster, etaSeconds, status } = dispatch;
+  const [minimized, setMinimized] = useState(false);
 
   const distanceMeters = haversineMeters(
     { lat: team?.lat, lng: team?.lng },
@@ -83,42 +85,52 @@ function DispatchCard({ dispatch, opacity, onDismiss }) {
           <Animated.View style={[styles.pulseDot, { opacity }]}>
             <View style={styles.pulseInner} />
           </Animated.View>
-          <Text style={styles.title}>Help is on the way!</Text>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.title} numberOfLines={1}>
+              Help is on the way!
+            </Text>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusText}>
+                {status === "dispatched" ? "En route" : "Dispatching"}
+              </Text>
+            </View>
+          </View>
         </View>
         <Pressable
           hitSlop={8}
-          onPress={() => onDismiss(assignment_id)}
-          style={styles.dismissBtn}
+          onPress={() => setMinimized((m) => !m)}
+          style={styles.minimizeBtn}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss notification"
+          accessibilityLabel={minimized ? "Expand notification" : "Minimize notification"}
         >
-          <Ionicons name="close" size={16} color={colors.muted} />
+          <Ionicons
+            name={minimized ? "chevron-down" : "chevron-up"}
+            size={16}
+            color={colors.muted}
+          />
         </Pressable>
       </View>
 
-      <View style={styles.cardBody}>
-        <View style={styles.infoRow}>
-          <Ionicons name="people" size={14} color={colors.primary} />
-          <Text style={styles.teamName} numberOfLines={2}>
-            {`A team from ${team?.name} is on the way` ?? "Response Team"}
-          </Text>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>
-              {status === "dispatched" ? "En route" : "Dispatching"}
+      {!minimized && (
+        <View style={styles.cardBody}>
+          <View style={styles.infoRow}>
+            <Ionicons name="people" size={14} color={colors.primary} />
+            <Text style={styles.teamName} numberOfLines={2}>
+              {`A team from ${team?.name} is on the way` ?? "Response Team"}
             </Text>
           </View>
-        </View>
 
-        <View style={styles.infoRow}>
-          <Ionicons name="navigate" size={14} color={colors.muted} />
-          <Text style={styles.etaText}>{formatETA(etaSeconds)}</Text>
-          {distanceMeters != null && (
-            <Text style={styles.distanceText}>
-              {formatDistance(distanceMeters)}
-            </Text>
-          )}
+          <View style={styles.infoRow}>
+            <Ionicons name="navigate" size={14} color={colors.muted} />
+            <Text style={styles.etaText}>{formatETA(etaSeconds)}</Text>
+            {distanceMeters != null && (
+              <Text style={styles.distanceText}>
+                {formatDistance(distanceMeters)}
+              </Text>
+            )}
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -160,6 +172,10 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
+  headerTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
   pulseDot: {
     width: 10,
     height: 10,
@@ -179,7 +195,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.text,
   },
-  dismissBtn: {
+  minimizeBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
