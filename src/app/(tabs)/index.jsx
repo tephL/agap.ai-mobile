@@ -257,7 +257,12 @@ export default function Index() {
       if (!Number.isInteger(num) || num <= 0) return;
       try {
         const { report } = await getReportById(num);
-        if (!mounted || !report) return;
+        if (!mounted) return;
+        // Don't show the report window if it no longer exists or was resolved.
+        if (!report || report.status === "resolved") {
+          await clearActiveReport();
+          return;
+        }
         setActiveReport({ reportId: num, clusterId: report.cluster_id ?? null });
         saveActiveReport({ reportId: num, clusterId: report.cluster_id ?? null });
       } catch (e) {
@@ -271,7 +276,7 @@ export default function Index() {
 
   // On mount, restore a previously persisted active report (across re-login /
   // app restarts) and re-validate it against the server. If the report no
-  // longer exists (e.g. it was resolved/deleted server-side), clear it.
+  // longer exists or was resolved (e.g. resolved/deleted server-side), clear it.
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -279,7 +284,8 @@ export default function Index() {
       if (!mounted || !stored?.reportId) return;
       try {
         const { report } = await getReportById(stored.reportId);
-        if (!mounted || !report) {
+        if (!mounted) return;
+        if (!report || report.status === "resolved") {
           await clearActiveReport();
           return;
         }
@@ -489,6 +495,28 @@ export default function Index() {
     useCallback(() => {
       resetDismissed();
     }, [resetDismissed])
+  );
+
+  // ---- hide report window once it has been resolved -------------------
+  useFocusEffect(
+    useCallback(() => {
+      if (!activeReport?.reportId) return;
+      let cancelled = false;
+      (async () => {
+        try {
+          const { report } = await getReportById(activeReport.reportId);
+          if (!cancelled && report?.status === "resolved") {
+            await clearActiveReport();
+            setActiveReport(null);
+          }
+        } catch (e) {
+          console.log("activeReport status check error:", e);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [activeReport])
   );
 
   // ---- fetch public teams on focus -------------------------------------
