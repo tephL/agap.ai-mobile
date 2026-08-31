@@ -62,6 +62,7 @@ export const PersonCard = ({
   relation,
   user_id,
   last_seen,
+  has_active_report,
   onClose,
   onCall,
   staleYellowThresholdMs = 5 * 60 * 1000,
@@ -138,7 +139,15 @@ export const PersonCard = ({
           <Text style={styles.name}>
             {first_name} {last_name}
           </Text>
-          <Text style={styles.relation}>{relation}</Text>
+          <View style={styles.subtitleRow}>
+            <Text style={styles.relation}>{relation}</Text>
+            {has_active_report && (
+              <View style={styles.reportTag}>
+                <Ionicons name="warning" size={12} color={COLORS.primary} />
+                <Text style={styles.reportTagText}>Reported</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Info rows */}
@@ -231,6 +240,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.muted,
     fontWeight: '500',
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  reportTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FDECEC',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  reportTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   infoSection: {
     gap: 0,

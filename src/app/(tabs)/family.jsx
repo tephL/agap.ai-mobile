@@ -19,6 +19,7 @@ import {
   removeMember,
   leaveFamily,
   getMyInvitations,
+  getFamilyMemberReportStatus,
   relationLabel,
 } from "@/services/familyService";
 import { timeAgo } from "@/utils/timeAgo";
@@ -35,6 +36,7 @@ export default function FamilyScreen() {
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [removingId, setRemovingId] = useState(null);
+  const [familyReportStatus, setFamilyReportStatus] = useState({});
   const loadRunRef = useRef(0);
 
   const loadData = useCallback(async () => {
@@ -48,6 +50,10 @@ export default function FamilyScreen() {
       const data = await getMyFamily();
       if (runId !== loadRunRef.current) return;
 
+      const reportStatus = await getFamilyMemberReportStatus();
+      if (runId !== loadRunRef.current) return;
+
+      setFamilyReportStatus(reportStatus);
       setPendingCount(Array.isArray(invites) ? invites.length : 0);
 
       // No family is a valid state, not an error.
@@ -382,14 +388,21 @@ export default function FamilyScreen() {
           
     renderItem={({ item }) => {
       const isItemCreator = item.user_id === family.created_by;
+      const hasActiveReport = Boolean(familyReportStatus[item.user_id]);
       return (
         <TouchableOpacity
-          style={styles.memberCard}
+          style={[
+            styles.memberCard,
+            hasActiveReport && styles.memberCardReport,
+          ]}
           activeOpacity={0.7}
           onPress={() => handleMemberPress(item)}
         >
-          <View style={styles.memberAvatar}>
-            <Ionicons name="person" size={18} color={colors.primary} />
+          <View style={[
+            styles.memberAvatar,
+            hasActiveReport && styles.memberAvatarReport,
+          ]}>
+            <Ionicons name="person" size={18} color={hasActiveReport ? colors.white : colors.primary} />
           </View>
           <View style={styles.memberInfo}>
             <Text style={styles.memberName}>
@@ -398,6 +411,12 @@ export default function FamilyScreen() {
             <Text style={styles.memberRelation}>
               {relationLabel(item.relation)}
             </Text>
+            {hasActiveReport && (
+              <View style={styles.reportTag}>
+                <Ionicons name="warning" size={12} color={colors.primary} />
+                <Text style={styles.reportTagText}>Reported</Text>
+              </View>
+            )}
           </View>
           {isCreator && !isItemCreator && (
             <TouchableOpacity
@@ -628,6 +647,26 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     flexDirection: "row",
     alignItems: "center",
+  },
+  memberCardReport: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  memberAvatarReport: {
+    backgroundColor: colors.primary,
+  },
+  reportTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+  },
+  reportTagText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
   memberAvatar: {
     width: 36,

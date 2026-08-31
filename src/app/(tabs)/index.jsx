@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 // services
 import { uploadUserLocation } from '../../services/usersService.js';
 import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
-import { getMyFamily } from '../../services/familyService.js';
+import { getMyFamily, getFamilyMemberReportStatus } from '../../services/familyService.js';
 import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
 import { getActiveTyphoon } from '../../services/typhoonService.js';
 import { getRouteCoordinates } from '../../services/routeService';
@@ -344,6 +344,7 @@ export default function Index() {
 
   // family markers state
   const [familyMembers, setFamilyMembers] = useState([]);
+  const [familyReportStatus, setFamilyReportStatus] = useState({});
   const [selectedPerson, setSelectedPerson] = useState(null);
 
   // map lifecycle state
@@ -554,6 +555,13 @@ export default function Index() {
     } catch (e) {
       console.log('failed to read local db', e);
     }
+
+    try {
+      const reportStatus = await getFamilyMemberReportStatus();
+      setFamilyReportStatus(reportStatus);
+    } catch (e) {
+      console.log('failed to fetch report status', e);
+    }
   }, []);
 
   // ---- location sending + family fetch loop (runs while screen focused) ---
@@ -660,6 +668,7 @@ export default function Index() {
       phone_number: match.phone_number,
       age: match.age,
       last_seen: match.last_seen,
+      has_active_report: Boolean(familyReportStatus[match.user_id]),
     });
 
     if (hasValidCoords) {
@@ -677,7 +686,7 @@ export default function Index() {
     } else {
       console.log(`No location yet for user ${match.user_id}, skipping flyTo`);
     }
-  }, [selectedUserId, familyMembers]);
+  }, [selectedUserId, familyMembers, familyReportStatus]);
 
   // ---- derived geojson for family markers -------------------------------
   const familyGeojson = {
@@ -697,6 +706,7 @@ export default function Index() {
         phone_number: member.phone_number,
         age: member.age,
         last_seen: member.last_seen,
+        has_active_report: Boolean(familyReportStatus[member.user_id]),
       },
     })),
   };
@@ -912,6 +922,7 @@ export default function Index() {
 
   const staleColorExpr = [
     'case',
+    ['get', 'has_active_report'], '#E32F31',  // red: has active report
     ['<', ageMs, STALE_YELLOW_THRESHOLD_MS], '#22c55e',  // green: seen < 5 min ago
     ['<', ageMs, STALE_GRAY_THRESHOLD_MS], '#eab308',    // yellow: < 30 min ago
     '#a9a9a9',                                            // gray: older / stale
@@ -1311,6 +1322,7 @@ export default function Index() {
           relation={selectedPerson.relation}
           user_id={selectedPerson.user_id}
           last_seen={selectedPerson.last_seen}
+          has_active_report={Boolean(selectedPerson.has_active_report)}
           staleYellowThresholdMs={STALE_YELLOW_THRESHOLD_MS}
           staleGrayThresholdMs={STALE_GRAY_THRESHOLD_MS}
           onClose={handleClosePersonCard}
