@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 
 // adjust this import to wherever fetchClustersWithinLocation actually lives
 import { fetchClustersWithinLocation, fetchClusterReports } from '../../services/dispatcher/clusterServ.js';
-import { getTeams } from '../../services/teamService';
+import { getTeams, cancelAssignment, getAssignmentForTeam } from '../../services/teamService';
 import { getRouteCoordinates } from '../../services/routeService';
 import { useCluster } from '../../context/ClusterContext';
 import ClusterDetailsWindow from '../../components/dispatcher/ClusterDetailsWindow';
@@ -649,6 +649,23 @@ export default function Index() {
 
   const collapseTeam = useCallback(() => setSelectedTeamId(null), []);
 
+  const handleCancelDispatch = useCallback(
+    async (team) => {
+      if (team == null) return;
+      try {
+        const assignment = await getAssignmentForTeam(team.team_id);
+        if (assignment && assignment.status !== "resolved" && assignment.status !== "cancelled") {
+          await cancelAssignment(assignment.assignment_id);
+        }
+        invalidateClusters();
+      } catch (e) {
+        console.log("cancel dispatch error:", e);
+        throw e;
+      }
+    },
+    [invalidateClusters]
+  );
+
   const handleTeamPress = useCallback(
     (event) => {
       event.stopPropagation();
@@ -970,6 +987,7 @@ export default function Index() {
           onAssignTeam={() => setAssignOpen(true)}
           onResolved={invalidateClusters}
           onOpenTeam={handleClusterOpenTeam}
+          onCancelDispatch={() => handleCancelDispatch(selectedAssignedTeam?.team)}
         />
       )}
 
@@ -980,6 +998,7 @@ export default function Index() {
           onClose={collapseTeam}
           onSeeDetails={openTeamDetail}
           onOpenCluster={handleTeamOpenCluster}
+          onCancelDispatch={() => handleCancelDispatch(selectedTeam)}
         />
       )}
 

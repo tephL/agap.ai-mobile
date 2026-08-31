@@ -25,8 +25,10 @@ const PULSE_DURATION_MS = 2000;
  *     assignment_id, team: { name, lat, lng },
  *     cluster: { lat, lng }, etaSeconds, status
  *   }>
+ * - cancelledDispatches: Array<{ assignment_id, cluster }> — recently
+ *   cancelled dispatches, rendered as a short-lived "Dispatch cancelled" card
  */
-export default function DispatchNotificationBar({ dispatches, style }) {
+export default function DispatchNotificationBar({ dispatches, cancelledDispatches = [], style }) {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -49,12 +51,21 @@ export default function DispatchNotificationBar({ dispatches, style }) {
     return () => loop.stop();
   }, [dispatches.length, pulse]);
 
-  if (dispatches.length === 0) return null;
+  if (dispatches.length === 0 && cancelledDispatches.length === 0) return null;
 
   const opacity = pulse.interpolate({
     inputRange: [0, 1],
     outputRange: [0.4, 1],
   });
+
+  // Hide any cancelled notice for a cluster that already has an active
+  // dispatch — a new dispatch supersedes the earlier cancellation.
+  const activeClusterIds = new Set(
+    dispatches.map((d) => d.cluster?.cluster_id).filter((id) => id != null)
+  );
+  const visibleCancelled = cancelledDispatches.filter(
+    (c) => !activeClusterIds.has(c.cluster?.cluster_id)
+  );
 
   return (
     <View style={[styles.container, style]}>
@@ -65,6 +76,41 @@ export default function DispatchNotificationBar({ dispatches, style }) {
           opacity={opacity}
         />
       ))}
+      {visibleCancelled.map((d) => (
+        <CancelledCard key={d.assignment_id} dispatch={d} />
+      ))}
+    </View>
+  );
+}
+
+// Short-lived "dispatch cancelled" card. Auto-dismisses after a few seconds
+// so the citizen learns the change without a lingering banner.
+function CancelledCard({ dispatch }) {
+  const { cluster } = dispatch;
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    const id = setTimeout(() => setHidden(true), 5000);
+    return () => clearTimeout(id);
+  }, []);
+
+  if (hidden) return null;
+
+  return (
+    <View style={styles.cancelledCard}>
+      <View style={styles.cancelledIconWrap}>
+        <Ionicons name="close" size={16} color="#ffffff" />
+      </View>
+      <View style={styles.cancelledBody}>
+        <Text style={styles.cancelledTitle} numberOfLines={1}>
+          Dispatch cancelled
+        </Text>
+        {cluster && (
+          <Text style={styles.cancelledSubtitle} numberOfLines={1}>
+            {`Cluster #${cluster.cluster_id ?? ""}: help is no longer on the way`}
+          </Text>
+        )}
+      </View>
     </View>
   );
 }
@@ -240,5 +286,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     marginLeft: 4,
+  },
+  cancelledCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FEE2E2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  cancelledIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#B91C1C",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelledBody: {
+    flex: 1,
+    gap: 2,
+  },
+  cancelledTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#7F1D1D",
+  },
+  cancelledSubtitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#991B1B",
   },
 });

@@ -241,7 +241,7 @@ export default function Index() {
   const [locating, setLocating] = useState(false);
 
   // active dispatch notifications
-  const { dispatches, allDispatches, resetDismissed } = useActiveDispatches();
+  const { dispatches, allDispatches, cancelledDispatches, resetDismissed } = useActiveDispatches();
 
   // "Your report was received" notif shown after returning from the report
   // form. reportIdParam comes from report.jsx closeForm. The active report is
@@ -1329,6 +1329,7 @@ export default function Index() {
 
       <DispatchNotificationBar
         dispatches={dispatches}
+        cancelledDispatches={cancelledDispatches}
         style={activeTyphoon && !typhoonDismissed ? { top: 160 } : undefined}
       />
 

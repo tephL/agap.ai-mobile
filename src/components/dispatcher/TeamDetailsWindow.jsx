@@ -1,4 +1,12 @@
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
 import StatusBadge from "../ui/StatusBadge";
@@ -21,7 +29,10 @@ export default function TeamDetailsWindow({
   onClose,
   onSeeDetails,
   onOpenCluster,
+  onCancelDispatch,
 }) {
+  const [cancelling, setCancelling] = useState(false);
+
   if (!team) return null;
 
   const coordinateLabel =
@@ -34,6 +45,33 @@ export default function TeamDetailsWindow({
         assignedCluster.city ? ` · ${assignedCluster.city}` : ""
       }`
     : null;
+
+  const handleCancelDispatch = () => {
+    if (!assignedCluster) return;
+    Alert.alert(
+      "Cancel Dispatch?",
+      "This will recall the team and remove their assignment. The cluster will remain open for reassignment.",
+      [
+        { text: "Go Back", style: "cancel" },
+        {
+          text: "Cancel Dispatch",
+          style: "destructive",
+          onPress: async () => {
+            if (cancelling) return;
+            setCancelling(true);
+            try {
+              await onCancelDispatch?.();
+              onClose?.();
+            } catch (e) {
+              console.log("cancel dispatch error:", e);
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.window}>
@@ -91,6 +129,19 @@ export default function TeamDetailsWindow({
               {assignedClusterLabel}
             </Text>
           </View>
+          <TouchableOpacity
+            style={styles.cancelDispatchIcon}
+            activeOpacity={0.7}
+            onPress={handleCancelDispatch}
+            disabled={cancelling}
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          >
+            {cancelling ? (
+              <ActivityIndicator size="small" color="#B91C1C" />
+            ) : (
+              <Ionicons name="close-circle" size={22} color="#B91C1C" />
+            )}
+          </TouchableOpacity>
           <Ionicons name="chevron-forward" size={16} color={colors.primary} />
         </TouchableOpacity>
       ) : null}
@@ -211,6 +262,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: colors.text,
+  },
+  cancelDispatchIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FDECEC",
+    alignItems: "center",
+    justifyContent: "center",
   },
   detailsButton: {
     flexDirection: "row",
