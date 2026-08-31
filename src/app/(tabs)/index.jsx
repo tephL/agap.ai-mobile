@@ -195,21 +195,27 @@ export default function Index() {
   const [typhoonDismissed, setTyphoonDismissed] = useState(false);
 
   // "Report received" overlay shown after returning from the report form.
-  // Reset the ref guard each time this screen gains focus so the overlay
-  // can re-appear on the next submission.
+  // The sosStatus/reportId params are consumed exactly once (guarded by the
+  // ref) and then cleared off the route, so the overlay doesn't re-show every
+  // time this screen regains focus (e.g. navigating back from report details).
   const [sosReceivedVariant, setSosReceivedVariant] = useState(null);
   const handledSosStatusRef = useRef(null);
   useFocusEffect(
     useCallback(() => {
-      handledSosStatusRef.current = null;
-      if (
+      const isFresh =
         typeof sosStatus === "string" &&
-        ["received", "prepared", "active"].includes(sosStatus)
-      ) {
+        ["received", "prepared", "active"].includes(sosStatus);
+
+      if (isFresh && handledSosStatusRef.current !== sosStatus) {
         handledSosStatusRef.current = sosStatus;
         setSosReceivedVariant(sosStatus);
+        router.setParams({ sosStatus: undefined });
+      } else if (!isFresh) {
+        // Normal return to the map (no fresh submission pending): reset the
+        // guard so the next submission re-triggers the overlay.
+        handledSosStatusRef.current = null;
       }
-    }, [sosStatus])
+    }, [sosStatus, router])
   );
 
   const handleTyphoonAskPreparedness = useCallback(() => {
