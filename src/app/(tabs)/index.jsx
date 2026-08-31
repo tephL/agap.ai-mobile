@@ -13,6 +13,7 @@ import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js
 import { getActiveTyphoon } from '../../services/typhoonService.js';
 import { getRouteCoordinates } from '../../services/routeService';
 import { getReportById, deleteReport } from "../../services/reportService";
+import { getActiveReport, saveActiveReport, clearActiveReport } from "../../services/activeReportStore";
 import { getPublicTeams } from '../../services/teamService';
 
 // components
@@ -243,34 +244,58 @@ export default function Index() {
   const { dispatches, dismiss, resetDismissed } = useActiveDispatches();
 
   // "Your report was received" notif shown after returning from the report
-  // form. reportIdParam comes from report.jsx closeForm; we look up the
-  // report's cluster so we can tell whether a team is already en route.
+  // form. reportIdParam comes from report.jsx closeForm. The active report is
+  // persisted via activeReportStore so the notif reappears after re-login or
+  // an app restart (reportIdParam is only present right after submission).
   const [activeReport, setActiveReport] = useState(null);
 
   useEffect(() => {
     if (reportIdParam == null) return;
-
     let mounted = true;
     (async () => {
+      const num = Number(reportIdParam);
+      if (!Number.isInteger(num) || num <= 0) return;
       try {
-        const reportId = Number(reportIdParam);
-        if (!Number.isInteger(reportId) || reportId <= 0) return;
-        const { report } = await getReportById(reportId);
-        if (mounted && report) {
-          setActiveReport({
-            reportId,
-            clusterId: report.cluster_id ?? null,
-          });
-        }
+        const { report } = await getReportById(num);
+        if (!mounted || !report) return;
+        setActiveReport({ reportId: num, clusterId: report.cluster_id ?? null });
+        saveActiveReport({ reportId: num, clusterId: report.cluster_id ?? null });
       } catch (e) {
         if (mounted) console.log("activeReport load error:", e);
       }
     })();
-
     return () => {
       mounted = false;
     };
   }, [reportIdParam]);
+
+  // On mount, restore a previously persisted active report (across re-login /
+  // app restarts) and re-validate it against the server. If the report no
+  // longer exists (e.g. it was resolved/deleted server-side), clear it.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const stored = await getActiveReport();
+      if (!mounted || !stored?.reportId) return;
+      try {
+        const { report } = await getReportById(stored.reportId);
+        if (!mounted || !report) {
+          await clearActiveReport();
+          return;
+        }
+        setActiveReport({ reportId: stored.reportId, clusterId: report.cluster_id ?? null });
+        saveActiveReport({ reportId: stored.reportId, clusterId: report.cluster_id ?? null });
+      } catch (e) {
+        if (mounted) {
+          console.log("persisted activeReport load error:", e);
+          await clearActiveReport();
+        }
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // A team is "en route" (cancel blocked) if any of the citizen's dispatches
   // is dispatched to the report's cluster.
@@ -291,6 +316,7 @@ export default function Index() {
     async (id) => {
       try {
         await deleteReport(id);
+        await clearActiveReport();
         setActiveReport(null);
       } catch (e) {
         console.log("cancel report error:", e);
