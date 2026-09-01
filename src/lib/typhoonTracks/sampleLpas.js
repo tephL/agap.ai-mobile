@@ -1,0 +1,50 @@
+// Sample / seed LPA data used to exercise the Low Pressure Area feature
+// (map overlay + list) independent of any live source. The single entry is
+// modeled on the same 8 AM 17 Nov 2024 stage as the Pepito typhoon/storm-signal
+// fixtures: a tropical depression / low pressure area out over the Philippine
+// Sea east of northern Luzon that Pepito's circulation was interacting with.
+//
+// Coordinates are realistic for a formative LPA in the West Pacific east of
+// Luzon. `buildSampleLpas` wraps them in the same envelope the live service
+// would return so consumers are identical.
+
+export const SAMPLE_LPAS = [
+  {
+    id: "lpa-20241117-01",
+    name: "LPA East of Northern Luzon",
+    type: "Low Pressure Area",
+    lat: 17.8,
+    lon: 126.4,
+    pressure: 1004,
+    windSpeed: 25,
+    note:
+      "A low pressure area east of northern Luzon being absorbed by PEPITO's circulation. Localized rains expected over Cagayan Valley and the eastern seaboard.",
+  },
+  {
+    id: "lpa-20241117-02",
+    name: "LPA Over the West Philippine Sea",
+    type: "Low Pressure Area",
+    lat: 13.2,
+    lon: 117.6,
+    pressure: 1006,
+    windSpeed: 20,
+    note:
+      "Well-organized area of low pressure in the West Philippine Sea bringing scattered showers over the western seaboard.",
+  },
+];
+
+/**
+ * Wrap the sample LPAs in the same envelope getLowPressures() would return,
+ * flagged `sample: true` so callers can distinguish it from live data.
+ */
+export function buildSampleLpas() {
+  return {
+    active: SAMPLE_LPAS.length > 0,
+    unavailable: false,
+    generatedAt: new Date().toISOString(),
+    source: "sample",
+    lpas: SAMPLE_LPAS,
+    rawCount: SAMPLE_LPAS.length,
+    sample: true,
+  };
+}

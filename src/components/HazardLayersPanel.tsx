@@ -4,6 +4,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -12,15 +13,20 @@ import { Ionicons } from "@expo/vector-icons";
 
 import HAZARD_COLORS from "@/constants/hazardColors";
 import { HAZARD_LAYERS, type HazardLayerConfig } from "@/lib/pmtiles/downloadLayer";
+import { MAP_LAYERS } from "@/components/hazards/layerRegistry";
 import { useOfflinePMTilesLayer } from "@/hooks/useOfflinePMTilesLayer";
 
 /**
- * Bottom-sheet "layers" tab: the user picks which single hazard layer is
- * overlaid on the map and can manage offline copies (download / remove).
- * Only one layer renders at a time — picking a new one unmounts the previous
- * overlay. Per-layer download state is independent of selection, so every
- * row keeps working (download/resume/remove) whether selected or not.
+ * Bottom-sheet "layers" panel with two tabs:
+ *   - Hazards: pick which single hazard layer is overlaid on the map and
+ *     manage offline copies (download / remove). Only one renders at a time.
+ *   - Map layers: toggleable map features (dams, fault lines, ...).
+ *
+ * Per-layer download state is independent of selection, so every row keeps
+ * working (download/resume/remove) whether selected or not.
  */
+
+type PanelTab = "hazards" | "map";
 
 interface LayerRowProps {
   config: HazardLayerConfig;
@@ -129,6 +135,46 @@ function LayerRow({ config, active, onSelect, onAskAI }: LayerRowProps) {
   );
 }
 
+/** Shape of a layerRegistry entry (plain JS module, typed here). */
+interface MapLayerRowConfig {
+  key: string;
+  label: string;
+  activeColor?: string;
+  description?: string;
+}
+
+function MapLayerRow({
+  config,
+  visible,
+  onToggle,
+}: {
+  config: MapLayerRowConfig;
+  visible: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowMain}>
+        <View
+          style={[styles.dot, { backgroundColor: config.activeColor ?? "#9CA3AF" }]}
+        />
+        <View style={styles.info}>
+          <Text style={styles.label}>{config.label}</Text>
+          {config.description ? (
+            <Text style={styles.description}>{config.description}</Text>
+          ) : null}
+        </View>
+      </View>
+      <Switch
+        value={visible}
+        onValueChange={onToggle}
+        trackColor={{ false: "#E5E7EB", true: "#208AEF" }}
+        thumbColor="#FFFFFF"
+      />
+    </View>
+  );
+}
+
 interface HazardLayersPanelProps {
   visible: boolean;
   onClose: () => void;
@@ -141,6 +187,9 @@ interface HazardLayersPanelProps {
   onSelect: (layerId: string | null) => void;
   /** Called with a layer id when the user taps the ? button. */
   onAskAI: (layerId: string) => void;
+  /** Toggleable map features (dams, fault lines, ...). */
+  visibleLayers?: Record<string, boolean>;
+  onToggleLayer?: (key: string) => void;
 }
 
 export default function HazardLayersPanel({
@@ -149,7 +198,10 @@ export default function HazardLayersPanel({
   activeId,
   onSelect,
   onAskAI,
+  visibleLayers,
+  onToggleLayer,
 }: HazardLayersPanelProps) {
+  const [tab, setTab] = React.useState<PanelTab>("hazards");
   if (!visible) return null;
 
   return (
@@ -158,34 +210,76 @@ export default function HazardLayersPanel({
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>Mga Layer ng Hazard Map</Text>
+            <Text style={styles.title}>Map Layers</Text>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <Ionicons name="close" size={22} color="#374151" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.subtitle}>
-            Pumili ng hazard overlay para sa mapa. Isang layer lang ang maaaring
-            ipakita sa isang oras para sa maayos na performance.
-          </Text>
 
-            <ScrollView
-              style={styles.list}
-              contentContainerStyle={styles.listContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
+          <View style={styles.tabBar}>
+            <TouchableOpacity
+              style={[styles.tab, tab === "hazards" && styles.tabActive]}
+              onPress={() => setTab("hazards")}
             >
-              {HAZARD_LAYERS.map((layer) => (
-                <LayerRow
-                  key={layer.id}
+              <Text
+                style={[styles.tabText, tab === "hazards" && styles.tabTextActive]}
+              >
+                Hazards
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, tab === "map" && styles.tabActive]}
+              onPress={() => setTab("map")}
+            >
+              <Text
+                style={[styles.tabText, tab === "map" && styles.tabTextActive]}
+              >
+                Map layers
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {tab === "hazards" ? (
+            <>
+              <Text style={styles.subtitle}>
+                Select a hazard overlay to view on the map. Only one layer can
+                be shown at a time to keep performance smooth.
+              </Text>
+
+              <ScrollView
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+              >
+                {HAZARD_LAYERS.map((layer) => (
+                  <LayerRow
+                    key={layer.id}
+                    config={layer}
+                    active={activeId === layer.id}
+                    onSelect={() =>
+                      onSelect(activeId === layer.id ? null : layer.id)
+                    }
+                    onAskAI={onAskAI}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          ) : (
+            <ScrollView style={styles.list} nestedScrollEnabled>
+              <Text style={styles.subtitle}>
+                Choose which map features are shown. Toggles apply instantly.
+              </Text>
+              {(MAP_LAYERS ?? []).map((layer) => (
+                <MapLayerRow
+                  key={layer.key}
                   config={layer}
-                  active={activeId === layer.id}
-                  onSelect={() =>
-                    onSelect(activeId === layer.id ? null : layer.id)
-                  }
-                  onAskAI={onAskAI}
+                  visible={visibleLayers?.[layer.key] ?? false}
+                  onToggle={() => onToggleLayer?.(layer.key)}
                 />
               ))}
             </ScrollView>
+          )}
         </Pressable>
       </Pressable>
     </Modal>
@@ -215,6 +309,24 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   title: { fontSize: 17, fontWeight: "700", color: "#111827" },
+  tabBar: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 4,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+    padding: 3,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  tabActive: { backgroundColor: "#FFFFFF" },
+  tabText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+  tabTextActive: { color: "#111827" },
   subtitle: {
     fontSize: 12,
     color: "#6B7280",
