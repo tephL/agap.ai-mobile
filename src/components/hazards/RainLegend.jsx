@@ -2,34 +2,22 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { HAZARD_LEGENDS } from "@/constants/hazardColors";
-import { getHazardLayer } from "@/lib/pmtiles/downloadLayer";
-
-interface HazardLayerLegendProps {
-  /** The one layer currently overlaid on the map (null = none). */
-  activeId: string | null;
-  /** Collapsed into the small chip; tap it to expand. */
-  hidden: boolean;
-  /** Flip between the chip and the full legend card. */
-  onToggle: () => void;
-}
+// Rain intensity color ramp shared by the map overlay and the legend. Kept in
+// sync with RainForecastTab.rainColor manually (mm buckets are the same).
+const RAIN_STEPS = [
+  { label: "None", color: "#E5E7EB" },
+  { label: "1–25 mm (Light)", color: "#93C5FD" },
+  { label: "26–50 mm (Moderate)", color: "#3B82F6" },
+  { label: "51–100 mm (Heavy)", color: "#F59E0B" },
+  { label: "100+ mm (Torrential)", color: "#DC2626" },
+];
 
 /**
- * Bottom-left legend explaining what the active hazard overlay's colors
- * mean (flood low/medium/high blue steps, landslide-prone areas, etc.).
- * Collapses into a compact chip when hidden — the only hide/show control
- * lives on the map itself. Renders nothing when no layer is active.
+ * Bottom-left legend explaining the Rain overlay's color ramp (daily rainfall
+ * in mm). The `wrapper` is intentionally NOT absolute so it can stack inside
+ * LegendStack.
  */
-export default function HazardLayerLegend({
-  activeId,
-  hidden,
-  onToggle,
-}: HazardLayerLegendProps) {
-  if (!activeId) return null;
-
-  const config = getHazardLayer(activeId);
-  const items = HAZARD_LEGENDS[config.hazardType];
-
+export default function RainLegend({ hidden = false, onToggle }) {
   if (hidden) {
     return (
       <View style={styles.wrapper}>
@@ -37,10 +25,10 @@ export default function HazardLayerLegend({
           style={styles.chip}
           onPress={onToggle}
           activeOpacity={0.7}
-          accessibilityLabel="Ipakita ang legend"
+          accessibilityLabel="Ipakita ang rain forecast legend"
           hitSlop={8}
         >
-          <Text style={styles.chipText}>Legend</Text>
+          <Text style={styles.chipText}>Rain</Text>
         </TouchableOpacity>
       </View>
     );
@@ -50,22 +38,21 @@ export default function HazardLayerLegend({
     <View style={styles.wrapper}>
       <View style={styles.card}>
         <View style={styles.header}>
-          <Text style={styles.title}>Legend</Text>
+          <Text style={styles.title}>Rain Forecast (today)</Text>
           <TouchableOpacity
             onPress={onToggle}
             hitSlop={8}
             style={styles.collapseButton}
-            accessibilityLabel="Itago ang legend"
+            accessibilityLabel="Itago ang rain forecast legend"
           >
             <Ionicons name="chevron-down" size={16} color="#6B7280" />
           </TouchableOpacity>
         </View>
-
-        {items.map((item) => (
-          <View key={item.color + item.label} style={styles.row}>
-            <View style={[styles.swatch, { backgroundColor: item.color }]} />
+        {RAIN_STEPS.map((step) => (
+          <View key={step.label} style={styles.row}>
+            <View style={[styles.swatch, { backgroundColor: step.color }]} />
             <Text style={styles.rowText} numberOfLines={2}>
-              {item.label}
+              {step.label}
             </Text>
           </View>
         ))}
@@ -75,15 +62,14 @@ export default function HazardLayerLegend({
 }
 
 const styles = StyleSheet.create({
-  // NOT absolute: this legend stacks vertically inside LegendStack.
   wrapper: {
     alignItems: "flex-start",
   },
   chip: {
     minWidth: 96,
-    backgroundColor: "rgba(255,255,255,0.95)",
+    backgroundColor: "rgba(255,255,255,0.96)",
     borderRadius: 20,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(0,0,0,0.08)",
@@ -94,19 +80,19 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   chipText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
     color: "#374151",
     textAlign: "center",
     includeFontPadding: false,
   },
   card: {
-    width: 210,
+    width: 224,
     backgroundColor: "rgba(255,255,255,0.96)",
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 14,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(0,0,0,0.08)",
     shadowColor: "#000",
@@ -119,15 +105,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
-    paddingBottom: 8,
+    marginBottom: 4,
+    paddingBottom: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(0,0,0,0.06)",
   },
   title: {
-    fontSize: 15,
+    flexShrink: 1,
+    fontSize: 14,
     fontWeight: "700",
     color: "#111827",
+    marginRight: 8,
     includeFontPadding: false,
   },
   collapseButton: {
@@ -137,24 +125,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F3F4F6",
+    flexShrink: 0,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    width: "100%",
-    marginTop: 8,
+    marginTop: 6,
   },
   swatch: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    marginRight: 12,
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    marginRight: 10,
     flexShrink: 0,
   },
   rowText: {
     flexShrink: 1,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     color: "#374151",
     includeFontPadding: false,
   },
