@@ -668,7 +668,8 @@ export default function Index() {
       phone_number: match.phone_number,
       age: match.age,
       last_seen: match.last_seen,
-      has_active_report: Boolean(familyReportStatus[match.user_id]),
+      has_active_report: Boolean(familyReportStatus[match.user_id]?.hasActiveReport),
+      active_report_id: familyReportStatus[match.user_id]?.reportId ?? null,
     });
 
     if (hasValidCoords) {
@@ -706,7 +707,8 @@ export default function Index() {
         phone_number: member.phone_number,
         age: member.age,
         last_seen: member.last_seen,
-        has_active_report: Boolean(familyReportStatus[member.user_id]),
+        has_active_report: Boolean(familyReportStatus[member.user_id]?.hasActiveReport),
+        active_report_id: familyReportStatus[member.user_id]?.reportId ?? null,
       },
     })),
   };
@@ -960,6 +962,12 @@ export default function Index() {
   const handleCallPerson = (phone_number) => {
     if (!phone_number) return;
     Linking.openURL(`tel:${phone_number.replace(/\s+/g, "")}`);
+  };
+
+  const handleReportDetails = (reportId) => {
+    if (reportId == null) return;
+    setSelectedPerson(null);
+    router.push({ pathname: "/report-detail", params: { reportId: String(reportId) } });
   };
 
   const handleLocatePress = async () => {
@@ -1323,10 +1331,12 @@ export default function Index() {
           user_id={selectedPerson.user_id}
           last_seen={selectedPerson.last_seen}
           has_active_report={Boolean(selectedPerson.has_active_report)}
+          report_id={selectedPerson.active_report_id}
           staleYellowThresholdMs={STALE_YELLOW_THRESHOLD_MS}
           staleGrayThresholdMs={STALE_GRAY_THRESHOLD_MS}
           onClose={handleClosePersonCard}
           onCall={handleCallPerson}
+          onDetails={handleReportDetails}
         />
       )}
 

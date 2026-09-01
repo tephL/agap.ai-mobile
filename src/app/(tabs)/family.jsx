@@ -388,7 +388,7 @@ export default function FamilyScreen() {
           
     renderItem={({ item }) => {
       const isItemCreator = item.user_id === family.created_by;
-      const hasActiveReport = Boolean(familyReportStatus[item.user_id]);
+      const hasActiveReport = Boolean(familyReportStatus[item.user_id]?.hasActiveReport);
       return (
         <TouchableOpacity
           style={[
