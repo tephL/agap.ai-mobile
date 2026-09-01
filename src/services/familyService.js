@@ -96,3 +96,31 @@ export async function rejectInvitation(id) {
   const { data } = await api.patch(`/api/invitations/${id}/reject`);
   return data;
 }
+
+/**
+ * Returns a map of user_id → { hasActiveReport, reportId } for family members.
+ * `hasActiveReport` indicates whether the member has an active (unresolved)
+ * report; `reportId` is the id of their most recent active report (null when
+ * they have none), used to deep-link into the report details.
+ *
+ * Falls back to an empty object on network errors so callers always get a
+ * valid (albeit empty) map without needing try/catch wrappers.
+ */
+export async function getFamilyMemberReportStatus() {
+  try {
+    const { data } = await api.get("/api/families/members/report-status");
+    const result = {};
+    if (Array.isArray(data?.members)) {
+      for (const m of data.members) {
+        result[m.user_id] = {
+          hasActiveReport: Boolean(m.has_active_report),
+          reportId: m.active_report_id ?? null,
+        };
+      }
+    }
+    return result;
+  } catch (err) {
+    console.log("getFamilyMemberReportStatus error:", err?.message || err);
+    return {};
+  }
+}

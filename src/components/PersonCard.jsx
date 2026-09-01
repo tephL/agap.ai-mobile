@@ -62,8 +62,11 @@ export const PersonCard = ({
   relation,
   user_id,
   last_seen,
+  has_active_report,
+  report_id,
   onClose,
   onCall,
+  onDetails,
   staleYellowThresholdMs = 5 * 60 * 1000,
   staleGrayThresholdMs = 30 * 60 * 1000,
 }) => {
@@ -98,6 +101,12 @@ export const PersonCard = ({
   const handleCall = () => {
     if (onCall) {
       onCall(phone_number, user_id);
+    }
+  };
+
+  const handleDetails = () => {
+    if (onDetails) {
+      onDetails(report_id);
     }
   };
 
@@ -138,7 +147,15 @@ export const PersonCard = ({
           <Text style={styles.name}>
             {first_name} {last_name}
           </Text>
-          <Text style={styles.relation}>{relation}</Text>
+          <View style={styles.subtitleRow}>
+            <Text style={styles.relation}>{relation}</Text>
+            {has_active_report && (
+              <View style={styles.reportTag}>
+                <Ionicons name="warning" size={12} color={COLORS.primary} />
+                <Text style={styles.reportTagText}>Reported</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Info rows */}
@@ -170,20 +187,51 @@ export const PersonCard = ({
           </View>
         </View>
 
-        {/* Call button */}
-        <TouchableOpacity
-          style={styles.callButton}
-          onPress={handleCall}
-          activeOpacity={0.85}
-        >
-          <Ionicons 
-            name="call" 
-            size={20} 
-            color={COLORS.white} 
-            style={{ marginRight: 8 }} 
-          />
-          <Text style={styles.callButtonText}>Call {first_name}</Text>
-        </TouchableOpacity>
+        {/* Actions */}
+        {has_active_report ? (
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={styles.detailsButton}
+              onPress={handleDetails}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={20}
+                color={COLORS.primary}
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.detailsButtonText}>Details</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.callButton, styles.callButtonFlex]}
+              onPress={handleCall}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="call"
+                size={20}
+                color={COLORS.white}
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.callButtonText}>Call</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.callButton}
+            onPress={handleCall}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="call"
+              size={20}
+              color={COLORS.white}
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.callButtonText}>Call {first_name}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Animated.View>
   );
@@ -232,6 +280,28 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontWeight: '500',
   },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  reportTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FDECEC',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  reportTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
   infoSection: {
     gap: 0,
   },
@@ -268,6 +338,27 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  detailsButton: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailsButtonText: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
   callButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 16,
@@ -281,6 +372,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  callButtonFlex: {
+    flex: 1,
+    marginTop: 0,
   },
   callButtonText: {
     color: COLORS.white,
