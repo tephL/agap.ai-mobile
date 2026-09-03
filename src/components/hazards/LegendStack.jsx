@@ -16,7 +16,9 @@ const styles = StyleSheet.create({
   stack: {
     position: "absolute",
     left: 16,
-    bottom: 40,
+    // sits above the bottom-left "Monitor" pill (which is 48px tall at
+    // bottom:34 → top ≈ 82) so the legend pills never overlap it
+    bottom: 96,
     alignItems: "flex-start",
     gap: 8,
     zIndex: 15,

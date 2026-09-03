@@ -80,7 +80,7 @@ function boundingBox(coords) {
   return b;
 }
 
-function makeStorm({ eventId, name, category, current, pastCoords, forecastCoords, movement }) {
+function makeStorm({ eventId, name, internationalName, category, current, pastCoords, forecastCoords, movement }) {
   const currentPt = {
     date: nowMs,
     ...current,
@@ -116,6 +116,7 @@ function makeStorm({ eventId, name, category, current, pastCoords, forecastCoord
   return {
     eventId,
     name,
+    internationalName: internationalName ?? null,
     bulletinNumber: current.bulletinNumber ?? null,
     source: "PAGASA",
     category,
@@ -160,6 +161,7 @@ export const SAMPLE_TYPHOONS = [
   makeStorm({
     eventId: "pepito-tcb17",
     name: "PEPITO",
+    internationalName: "MAN-YI",
     category: "Super Typhoon",
     current: { lon: 122.55, lat: 14.55, windspeed: 185, gust: 230, pressure: 940, status: "Super Typhoon" },
     pastCoords: [

@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
   LayoutAnimation,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -26,8 +27,9 @@ import DamsTab from "./DamsTab";
 import TabPlaceholder from "./TabPlaceholder";
 import StormSignalsTab from "./StormSignalsTab";
 import TyphoonsTab from "./TyphoonsTab";
-import LpasTab from "./LpasTab";
-import RainForecastTab from "./RainForecastTab";
+import RainForecastTab, { rainColor, rainLabel } from "./RainForecastTab";
+import { INTENSITY_COLORS, statusKeyFromWindspeed } from "@/lib/typhoonTracks/trackJson";
+import { colors, signalColors } from "@/theme";
 import HazardDisclaimer from "./HazardDisclaimer";
 import ImpactZoneDetail from "./ImpactZoneDetail";
 import SeverityDetail from "./SeverityDetail";
@@ -47,6 +49,7 @@ const DETAIL_HEIGHT = Math.round(SCREEN_HEIGHT * 0.36);
 const EXPANDED_HEIGHT = Math.round(SCREEN_HEIGHT * 0.70);
 const HIDDEN_Y = EXPANDED_HEIGHT + TAB_BAR_HEIGHT;
 const COLLAPSED_Y = HIDDEN_Y - COLLAPSED_HEIGHT;
+const EXPANDED_Y = HIDDEN_Y - EXPANDED_HEIGHT;
 const DETAIL_Y = HIDDEN_Y - DETAIL_HEIGHT;
 const NOW_TICK_INTERVAL_MS = 5000;
 
@@ -112,6 +115,147 @@ function LevelGauge({ rwl, nhwl, severityColor }) {
   );
 }
 
+/**
+ * "Near You" tab: tappable shortcut cards summarising what's relevant to the
+ * user's current location (storm signal, nearest tropical cyclone, rainfall),
+ * each navigating to the matching hazard pill.
+ */
+function NearYou({
+  userLocation,
+  userProvinceName,
+  userSignalLevel,
+  userRainProvince,
+  userRainToday,
+  userRainWeek,
+  nearestTyphoon,
+  stormSignalsLoading,
+  typhoonsLoading,
+  rainLoading,
+  onChangeTab,
+}) {
+  const hasLocation =
+    userLocation?.latitude != null && userLocation?.longitude != null;
+
+  const signalKey = Number(userSignalLevel);
+  const signalColor =
+    signalKey > 0 ? signalColors?.[signalKey] ?? colors.warning : colors.safe;
+  const signalTitle = userProvinceName
+    ? `Signal No. ${userSignalLevel}`
+    : "Enable location";
+  const signalSub = userProvinceName
+    ? `Storm signal for ${userProvinceName}`
+    : "Turn on location to see your area's storm signal";
+
+  const t = nearestTyphoon?.typhoon;
+  const tWind = t?.current?.windspeed ?? t?.overallWindspeed ?? 0;
+  const tKey = statusKeyFromWindspeed(tWind);
+  const tColor = INTENSITY_COLORS[tKey] ?? colors.warning;
+  const tName = t
+    ? t.internationalName
+      ? `${t.name ?? "Tropical cyclone"} (${t.internationalName})`
+      : t.name ?? "Tropical cyclone"
+    : null;
+  const tDist =
+    nearestTyphoon?.distanceMeters != null
+      ? formatDistance(nearestTyphoon.distanceMeters)
+      : null;
+
+  const rainColorNow = rainColor(userRainToday ?? 0);
+  const rainLabelNow = rainLabel(userRainToday ?? 0);
+
+  return (
+    <View style={styles.nearYouWrap}>
+      <Text style={styles.nearYouHeading}>Your location</Text>
+
+      <NearYouCard
+        icon="thunderstorm-outline"
+        iconColor={signalColor}
+        title={signalTitle}
+        subtitle={signalSub}
+        loading={stormSignalsLoading}
+        onPress={() => onChangeTab?.("weatherBulletins")}
+      />
+
+      <NearYouCard
+        icon="navigate-outline"
+        iconColor={tColor}
+        title={t ? tName : "No tropical cyclone nearby"}
+        subtitle={
+          t
+            ? `${t.current?.status?.trim() || "Active"}${tDist ? ` · ${tDist}` : ""}`
+            : "Tap to check all active tropical cyclones"
+        }
+        loading={typhoonsLoading}
+        onPress={() => onChangeTab?.("typhoons")}
+      />
+
+      <NearYouCard
+        icon="rainy-outline"
+        iconColor={rainColorNow}
+        title={
+          userRainProvince
+            ? `${userRainToday ?? 0} mm today`
+            : hasLocation
+            ? "Rain forecast unavailable"
+            : "Enable location"
+        }
+        subtitle={
+          userRainProvince
+            ? `${rainLabelNow} · ${userRainWeek ?? 0} mm this week in ${userRainProvince.name}`
+            : "Tap to see the full rain forecast for your province"
+        }
+        trailing={
+          userRainProvince != null
+            ? { label: rainLabelNow, color: rainColorNow }
+            : null
+        }
+        loading={rainLoading}
+        onPress={() => onChangeTab?.("rainForecast")}
+      />
+    </View>
+  );
+}
+
+function NearYouCard({
+  icon,
+  iconColor,
+  title,
+  subtitle,
+  trailing,
+  loading = false,
+  onPress,
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.nearYouCard}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+    >
+      <View style={[styles.nearYouIcon, { backgroundColor: `${iconColor}1F` }]}>
+        {loading ? (
+          <ActivityIndicator size="small" color={iconColor} />
+        ) : (
+          <Ionicons name={icon} size={20} color={iconColor} />
+        )}
+      </View>
+      <View style={styles.nearYouBody}>
+        <Text style={styles.nearYouTitle} numberOfLines={1}>{title}</Text>
+        <Text style={styles.nearYouSubtitle} numberOfLines={2}>{subtitle}</Text>
+      </View>
+      {trailing ? (
+        <View style={[styles.nearYouTrailing, { backgroundColor: `${trailing.color}1F` }]}>
+          <Text style={[styles.nearYouTrailingText, { color: trailing.color }]}>
+            {trailing.label}
+          </Text>
+        </View>
+      ) : (
+        <Ionicons name="chevron-forward" size={18} color={colors.placeholder} />
+      )}
+    </TouchableOpacity>
+  );
+}
+
 function HazardSheetInner({
   dams = [],
   userLocation,
@@ -122,6 +266,7 @@ function HazardSheetInner({
   activeTab = "dams",
   expanded,
   onExpandedChange,
+  onChangeTab,
   onSelectDam,
   onClose,
   stormSignals,
@@ -141,6 +286,10 @@ function HazardSheetInner({
   rainLoading = false,
   selectedRainRegionId = null,
   onSelectRainRegion,
+  onResetRainRegion,
+  userProvinceName = null,
+  userRainProvince = null,
+  userSignalLevel = null,
 }) {
   const [translateY] = useState(() => new Animated.Value(HIDDEN_Y));
   const [translateYPos, setTranslateYPos] = useState(HIDDEN_Y);
@@ -149,6 +298,7 @@ function HazardSheetInner({
   const [impactDetailVisible, setImpactDetailVisible] = useState(false);
   const [severityDetailVisible, setSeverityDetailVisible] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [expandedFully, setExpandedFully] = useState(false);
 
   const slug = dam?.slug ?? null;
 
@@ -160,11 +310,6 @@ function HazardSheetInner({
       clearInterval(interval);
     };
   }, []);
-
-  useEffect(() => {
-    const id = translateY.addListener(({ value }) => setTranslateYPos(value));
-    return () => translateY.removeListener(id);
-  }, [translateY]);
 
   useEffect(() => {
     if (!slug) return undefined;
@@ -198,6 +343,8 @@ function HazardSheetInner({
       target = 0;
     } else if (shownDam) {
       target = DETAIL_Y;
+    } else if (expandedFully && expanded) {
+      target = EXPANDED_Y;
     } else if (expanded) {
       target = COLLAPSED_Y;
     } else {
@@ -207,8 +354,8 @@ function HazardSheetInner({
       toValue: target,
       duration: 350,
       useNativeDriver: true,
-    }).start();
-  }, [expanded, detailsExpanded, shownDam, translateY]);
+    }).start(() => setTranslateYPos(target));
+  }, [expanded, expandedFully, detailsExpanded, shownDam, translateY]);
 
   const detail = slug != null && fetchState.slug === slug ? fetchState : null;
   const detailLoading = slug != null && detail === null;
@@ -265,6 +412,7 @@ function HazardSheetInner({
 
   const handleClose = useCallback(() => {
     setDetailsExpanded(false);
+    setExpandedFully(false);
     Animated.timing(translateY, {
       toValue: HIDDEN_Y,
       duration: 280,
@@ -272,9 +420,79 @@ function HazardSheetInner({
     }).start(() => onClose?.());
   }, [translateY, onClose]);
 
+  // Snap the sheet to the nearest of [expanded 70%, collapsed 40%, hidden]
+  // and sync the parent's open/close state accordingly.
+  const handleSnap = useCallback(
+    (y) => {
+      const clamped = Math.max(EXPANDED_Y, Math.min(HIDDEN_Y, y));
+      const candidates = [EXPANDED_Y, COLLAPSED_Y, HIDDEN_Y];
+      let best = COLLAPSED_Y;
+      let bestDist = Infinity;
+      for (const c of candidates) {
+        const d = Math.abs(clamped - c);
+        if (d < bestDist) {
+          bestDist = d;
+          best = c;
+        }
+      }
+      setDetailsExpanded(false);
+      setExpandedFully(best <= EXPANDED_Y + 1);
+      onExpandedChange?.(best < HIDDEN_Y);
+    },
+    [onExpandedChange]
+  );
+
+  // Single tap on the handle toggles hidden <-> collapsed (40%).
   const handleHandlePress = useCallback(() => {
+    setDetailsExpanded(false);
+    setExpandedFully(false);
     onExpandedChange?.(!expanded);
   }, [expanded, onExpandedChange]);
+
+  // Draggable handle: pulling up expands the sheet, pulling down collapses
+  // then hides it. Disabled while a dam detail view is open.
+  const handleStartY = useRef(translateYPos);
+  const shownDamRef = useRef(shownDam);
+  const translateYPosRef = useRef(translateYPos);
+  const handleHandlePressRef = useRef(handleHandlePress);
+  const handleSnapRef = useRef(handleSnap);
+  useEffect(() => {
+    shownDamRef.current = shownDam;
+    translateYPosRef.current = translateYPos;
+    handleHandlePressRef.current = handleHandlePress;
+    handleSnapRef.current = handleSnap;
+  });
+
+  /* eslint-disable react-hooks/refs -- canonical RN PanResponder pattern */
+  const handlePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !shownDamRef.current,
+      onMoveShouldSetPanResponder: (_, g) =>
+        !shownDamRef.current && Math.abs(g.dy) > 6,
+      onPanResponderGrant: () => {
+        translateY.stopAnimation();
+        handleStartY.current = translateYPosRef.current;
+      },
+      onPanResponderMove: (_, g) => {
+        const value = Math.max(
+          EXPANDED_Y,
+          Math.min(HIDDEN_Y, handleStartY.current + g.dy)
+        );
+        translateY.setValue(value);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (Math.abs(g.dy) < 8) {
+          handleHandlePressRef.current();
+        } else {
+          handleSnapRef.current(handleStartY.current + g.dy);
+        }
+      },
+      onPanResponderTerminate: (_, g) => {
+        handleSnapRef.current(handleStartY.current + g.dy);
+      },
+    })
+  ).current;
+  /* eslint-enable react-hooks/refs */
 
   const toggleDetails = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -317,6 +535,7 @@ function HazardSheetInner({
   const statusSentence = shownDam ? describeDamStatus(shownDam, severity) : null;
 
   const scrollEnabled = true;
+  const scrollRef = useRef(null);
 
 // Constrain ScrollView height so content stays within the visible on-screen
   // area when the sheet is collapsed. Without this, the ScrollView extends
@@ -324,21 +543,47 @@ function HazardSheetInner({
   const visibleH = Math.max(0, HIDDEN_Y - translateYPos);
   const scrollViewMaxH = Math.max(0, visibleH - HANDLE_AREA_H);
 
+  // The active tropical cyclone whose centre is closest to the user.
+  const nearestTyphoon = useMemo(() => {
+    if (userLocation?.latitude == null || userLocation?.longitude == null) {
+      return null;
+    }
+    const list = Array.isArray(typhoons?.typhoons) ? typhoons.typhoons : [];
+    let best = null;
+    let bestDist = Infinity;
+    for (const t of list) {
+      const cur = t.current;
+      if (cur?.lat == null || cur.lon == null) continue;
+      const d = haversineMeters(
+        { lat: userLocation.latitude, lng: userLocation.longitude },
+        { lat: cur.lat, lng: cur.lon }
+      );
+      if (d != null && d < bestDist) {
+        bestDist = d;
+        best = t;
+      }
+    }
+    return best ? { typhoon: best, distanceMeters: bestDist } : null;
+  }, [typhoons, userLocation]);
+
+  const userRainToday = userRainProvince?.days?.[0]?.mm ?? null;
+  const userRainWeek = userRainProvince?.weekTotal ?? null;
+
   return (
     <>
     <Animated.View
       style={[styles.container, { transform: [{ translateY }] }]}
       accessibilityLabel="Hazards sheet"
     >
-      <View style={styles.handleArea}>
-        <TouchableOpacity
+      {/* eslint-disable-next-line react-hooks/refs -- spread of PanResponder panHandlers */}
+      <View style={styles.handleArea} {...handlePanResponder.panHandlers}>
+        <View
           style={styles.handleHit}
-          onPress={handleHandlePress}
-          activeOpacity={0.8}
           accessibilityRole="button"
+          accessibilityLabel="Drag to expand or collapse hazards sheet"
         >
           <View style={styles.handleBar} />
-        </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.closeButton}
@@ -457,6 +702,7 @@ function HazardSheetInner({
       )}
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         scrollEnabled={scrollEnabled}
@@ -480,6 +726,8 @@ function HazardSheetInner({
           <StormSignalsTab
             signals={stormSignals}
             signalByProvince={signalByProvince}
+            userProvinceName={userProvinceName}
+            userSignalLevel={userSignalLevel}
             loading={stormSignalsLoading}
             overlayVisible={overlayVisible}
             onSelectRegion={onSelectStormRegion}
@@ -492,13 +740,8 @@ function HazardSheetInner({
             overlayVisible={overlayVisible}
             selectedTyphoonEventId={selectedTyphoonEventId}
             onSelectTyphoon={onSelectTyphoon}
-          />
-        )}
-        {!slug && activeTab === "lowPressureArea" && (
-          <LpasTab
             lpas={lpas}
             lpasLoading={lpasLoading}
-            overlayVisible={overlayVisible}
             selectedLpaId={selectedLpaId}
             onSelectLpa={onSelectLpa}
           />
@@ -510,19 +753,36 @@ function HazardSheetInner({
             overlayVisible={overlayVisible}
             selectedRainRegionId={selectedRainRegionId}
             onSelectRainRegion={onSelectRainRegion}
+            onResetRainRegion={onResetRainRegion}
+            userProvinceName={userProvinceName}
+            userRainProvince={userRainProvince}
+            onScrollToTop={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
           />
         )}
-        {!slug && activeTab !== "dams" && activeTab !== "weatherBulletins" && activeTab !== "typhoons" && activeTab !== "lowPressureArea" && activeTab !== "rainForecast" && (
+        {!slug && activeTab === "nearYou" && (
+          <NearYou
+            userLocation={userLocation}
+            userProvinceName={userProvinceName}
+            userSignalLevel={userSignalLevel}
+            userRainProvince={userRainProvince}
+            userRainToday={userRainToday}
+            userRainWeek={userRainWeek}
+            nearestTyphoon={nearestTyphoon}
+            stormSignalsLoading={stormSignalsLoading}
+            typhoonsLoading={typhoonsLoading}
+            rainLoading={rainLoading}
+            onChangeTab={onChangeTab}
+          />
+        )}
+        {!slug && activeTab !== "dams" && activeTab !== "weatherBulletins" && activeTab !== "typhoons" && activeTab !== "rainForecast" && activeTab !== "nearYou" && (
           <TabPlaceholder
             icon={
-              activeTab === "nearYou" ? "location-outline"
-              : activeTab === "faultLines" ? "map-outline"
+              activeTab === "faultLines" ? "map-outline"
               : activeTab === "volcanoes" ? "flame-outline"
               : "newspaper-outline"
             }
             title={
-              activeTab === "nearYou" ? "Near You"
-              : activeTab === "faultLines" ? "Fault Lines"
+              activeTab === "faultLines" ? "Fault Lines"
               : activeTab === "volcanoes" ? "Volcanoes"
               : "Weather Bulletins"
             }
@@ -936,6 +1196,57 @@ const styles = StyleSheet.create({
     color: "#9AA2B1",
     paddingBottom: 8,
     paddingHorizontal: 28,
+  },
+  nearYouWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    gap: 12,
+  },
+  nearYouHeading: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#182033",
+    letterSpacing: 0.2,
+  },
+  nearYouCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "#F7F8FA",
+    borderWidth: 1,
+    borderColor: "#E8EAF0",
+  },
+  nearYouIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nearYouBody: {
+    flex: 1,
+  },
+  nearYouTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#182033",
+  },
+  nearYouSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: "#737B8C",
+    marginTop: 2,
+  },
+  nearYouTrailing: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  nearYouTrailingText: {
+    fontSize: 11,
+    fontWeight: "800",
   },
 });
 

@@ -2,15 +2,22 @@ import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "../../constants/colors";
+import {
+  PAGASA_TCWS_COLORS,
+  PAGASA_TCWS_LABELS,
+} from "@/services/stormSignalService";
 
 /**
- * Compact top banner shown while PAGASA storm signals are active. Shows the
- * cyclone name, top signal + affected area count, and (when expanded) the
- * per-level breakdown and bulletin issue time. Dismissing hides it until the
- * Storm Signals layer is toggled off and on again.
+ * Compact top banner shown while PAGASA storm signals are active. Shows a
+ * personalized first line for the user's own province/signal, then the cyclone
+ * name, top signal + affected area count, and (when expanded) the per-level
+ * breakdown and bulletin issue time. Dismissing hides it until the Storm
+ * Signals layer is toggled off and on again.
  */
 export default function StormSignalBanner({
   signals,
+  userProvinceName = null,
+  userSignalLevel = null,
   onDismiss,
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -28,6 +35,8 @@ export default function StormSignalBanner({
     .sort((a, b) => b - a);
   const highest = levels.length > 0 ? levels[0] : null;
   const affectedCount = levels.reduce((sum, lvl) => sum + (byLevel[lvl]?.length ?? 0), 0);
+  const userColor = PAGASA_TCWS_COLORS[userSignalLevel] ?? colors.primary;
+  const userTextOn = userSignalLevel === 2 ? "#1F2937" : "#FFFFFF";
 
   return (
     <View style={styles.container}>
@@ -39,11 +48,34 @@ export default function StormSignalBanner({
             </View>
             <View style={styles.headerTextWrap}>
               <Text style={styles.title}>Storm Signals</Text>
-              <Text style={styles.subtitle}>
-                {highest != null
-                  ? `Signal No. ${highest} - ${affectedCount} area${affectedCount === 1 ? "" : "s"} affected`
-                  : "No active signals"}
-              </Text>
+              {userSignalLevel ? (
+                <View style={styles.userWrap}>
+                  <View
+                    style={[
+                      styles.userPill,
+                      { backgroundColor: userColor },
+                    ]}
+                  >
+                    <Text style={[styles.userPillNo, { color: userTextOn }]}>No.</Text>
+                    <Text style={[styles.userPillLevel, { color: userTextOn }]}>{userSignalLevel}</Text>
+                  </View>
+                  <View style={styles.userBody}>
+                    <Text style={styles.userTitle}>
+                      Your area: Signal No. {userSignalLevel}
+                      {userProvinceName ? ` · ${userProvinceName}` : ""}
+                    </Text>
+                    <Text style={styles.userWind} numberOfLines={2}>
+                      {PAGASA_TCWS_LABELS[userSignalLevel]}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.subtitle}>
+                  {highest != null
+                    ? `Signal No. ${highest} - ${affectedCount} area${affectedCount === 1 ? "" : "s"} affected`
+                    : "No active signals"}
+                </Text>
+              )}
             </View>
           </View>
           <Pressable
@@ -161,6 +193,49 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#B91C1C",
     marginTop: 1,
+  },
+  userWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+    backgroundColor: "#FEE2E2",
+    borderRadius: 10,
+    padding: 6,
+  },
+  userPill: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userPillNo: {
+    fontSize: 7,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  userPillLevel: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    lineHeight: 17,
+  },
+  userBody: {
+    flex: 1,
+  },
+  userTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#991B1B",
+  },
+  userWind: {
+    marginTop: 1,
+    fontSize: 11,
+    lineHeight: 14,
+    color: "#7F1D1D",
   },
   dismissBtn: {
     width: 28,

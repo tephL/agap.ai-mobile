@@ -124,72 +124,54 @@ export const REGION_ORDER = [
   "BARMM",
 ];
 
-/**
- * Aggregate the admin-region polygons from the province GeoJSON. Returns a
- * FeatureCollection where each feature is one of the 17 regions, carrying
- * `properties.regionName` and a `provinceCount`.
- */
-export function buildRegionGeojson(phProvinces) {
-  const byName = new Map();
-  for (const feature of phProvinces?.features ?? []) {
-    const provName = feature.properties?.name;
-    if (!provName) continue;
-    const region = PROVINCE_TO_REGION[provName];
-    if (!region) continue;
-    if (!byName.has(region)) {
-      byName.set(region, { name: region, polygons: [] });
-    }
-    byName.get(region).polygons.push(feature.geometry);
-  }
-
-  const features = [];
-  for (const region of REGION_ORDER) {
-    const entry = byName.get(region);
-    if (!entry) continue;
-    const geoms = entry.polygons;
-    let geometry;
-    if (geoms.length === 1) geometry = geoms[0];
-    else {
-      const coords = [];
-      for (const g of geoms) {
-        if (g.type === "Polygon") coords.push(g.coordinates);
-        else if (g.type === "MultiPolygon") coords.push(...g.coordinates);
-      }
-      geometry = { type: "MultiPolygon", coordinates: coords };
-    }
-    features.push({
-      type: "Feature",
-      properties: { name: region, regionName: region, provinceCount: geoms.length },
-      geometry,
-    });
-  }
-
-  return { type: "FeatureCollection", features };
-}
-
 /** Short display label for a region (e.g. "Region 3 (Central Luzon)" → "Central Luzon"). */
 export function regionShortName(region) {
   const m = /\(([^)]+)\)/.exec(region ?? "");
   return m ? m[1] : region;
 }
 
+function cleanGeometry(geometry) {
+  if (!geometry || !geometry.coordinates) return geometry;
+  if (geometry.type === "Polygon") {
+    const rings = (geometry.coordinates ?? []).filter((r) => r.length >= 4);
+    return rings.length > 0 ? { ...geometry, coordinates: rings } : null;
+  }
+  if (geometry.type === "MultiPolygon") {
+    const polys = (geometry.coordinates ?? [])
+      .map((poly) => poly.filter((r) => r.length >= 4))
+      .filter((poly) => poly.length > 0);
+    return polys.length > 0 ? { ...geometry, coordinates: polys } : null;
+  }
+  return geometry;
+}
+
 /**
- * Attach rainfall (mm) for the selected forecast day to each region feature.
- * Returns a new FeatureCollection where each region feature carries
- * `properties.rainMm` = the day's precipitation for that region.
+ * Attach rainfall (mm) to each province polygon for the selected forecast day.
+ * `rainByProvince` maps province name → the full 7-day mm series. Returns a new
+ * FeatureCollection where each province feature carries `rainMm` (the selected
+ * day) and `rainMmAll` (the whole series). Provinces outside the forecast
+ * simply carry 0.
  */
-export function attachRainToRegions(regionGeojson, dayIndex, rainByRegion) {
-  const features = (regionGeojson?.features ?? []).map((feature) => {
-    const regionName = feature.properties?.regionName;
-    const rainMm = rainByRegion?.[regionName]?.[dayIndex] ?? 0;
-    return {
-      ...feature,
+export function attachRainToProvinces(phProvinces, dayIndex, rainByProvince) {
+  const features = [];
+  for (const feature of phProvinces?.features ?? []) {
+    const geometry = cleanGeometry(feature.geometry);
+    if (!geometry) continue;
+    const name = feature.properties?.name;
+    if (!name) continue;
+    const series = rainByProvince?.[name] ?? Array(7).fill(0);
+    features.push({
+      type: "Feature",
       properties: {
         ...feature.properties,
+        name,
+        region: PROVINCE_TO_REGION[name] ?? null,
         dayIndex,
-        rainMm,
+        rainMm: series[dayIndex] ?? 0,
+        rainMmAll: series,
       },
-    };
-  });
+      geometry,
+    });
+  }
   return { type: "FeatureCollection", features };
 }
