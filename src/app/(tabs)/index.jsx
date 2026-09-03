@@ -10,8 +10,8 @@ import { uploadUserLocation } from '../../services/usersService.js';
 import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
 import { getMyFamily, getFamilyMemberReportStatus } from '../../services/familyService.js';
 import { getDamStatuses } from '../../services/hazardService.js';
-import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/damSeverity';
-import { getInfluencingDams } from '@/components/hazards/damInfluence';
+import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/dams/damSeverity';
+import { getInfluencingDams } from '@/components/hazards/dams/damInfluence';
 import { useHazardElevation } from '../../hooks/useHazardElevation';
 import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
 import {
@@ -45,13 +45,13 @@ import { getLegendHidden, setLegendHidden } from '../../services/hazardPrefsDb';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import HazardTabs from '@/components/hazards/HazardTabs';
-import DamMarker from '@/components/hazards/DamMarker';
-import StormSignalLegend from '@/components/hazards/StormSignalLegend';
-import TyphoonLegend from '@/components/hazards/TyphoonLegend';
-import LPALegend from '@/components/hazards/LPALegend';
-import RainLegend from '@/components/hazards/RainLegend';
-import LegendStack from '@/components/hazards/LegendStack';
-import StormSignalBanner from '@/components/hazards/StormSignalBanner';
+import DamMarker from '@/components/hazards/dams/DamMarker';
+import StormSignalLegend from '@/components/hazards/stormSignals/StormSignalLegend';
+import TyphoonLegend from '@/components/hazards/typhoons/TyphoonLegend';
+import LPALegend from '@/components/hazards/typhoons/LPALegend';
+import RainLegend from '@/components/hazards/rain/RainLegend';
+import LegendStack from '@/components/hazards/common/LegendStack';
+import StormSignalBanner from '@/components/hazards/stormSignals/StormSignalBanner';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
 import {
   getStormSignals,

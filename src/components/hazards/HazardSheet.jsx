@@ -22,18 +22,18 @@ import {
   parseDamObservationMs,
   damFreshnessColor,
   formatObservationAge,
-} from "./damStatus";
-import DamsTab from "./DamsTab";
-import TabPlaceholder from "./TabPlaceholder";
-import StormSignalsTab from "./StormSignalsTab";
-import TyphoonsTab from "./TyphoonsTab";
-import RainForecastTab, { rainColor, rainLabel } from "./RainForecastTab";
+} from "./dams/damStatus";
+import DamsTab from "./dams/DamsTab";
+import TabPlaceholder from "./common/TabPlaceholder";
+import StormSignalsTab from "./stormSignals/StormSignalsTab";
+import TyphoonsTab from "./typhoons/TyphoonsTab";
+import RainForecastTab, { rainColor, rainLabel } from "./rain/RainForecastTab";
 import { INTENSITY_COLORS, statusKeyFromWindspeed } from "@/lib/typhoonTracks/trackJson";
 import { colors, signalColors } from "@/theme";
-import HazardDisclaimer from "./HazardDisclaimer";
-import ImpactZoneDetail from "./ImpactZoneDetail";
-import SeverityDetail from "./SeverityDetail";
-import { resolveDamSeverity, describeDamStatus } from "./damSeverity";
+import HazardDisclaimer from "./common/HazardDisclaimer";
+import ImpactZoneDetail from "./dams/ImpactZoneDetail";
+import SeverityDetail from "./dams/SeverityDetail";
+import { resolveDamSeverity, describeDamStatus } from "./dams/damSeverity";
 import {
   getDamImpact,
   CREST_ELEVATIONS,

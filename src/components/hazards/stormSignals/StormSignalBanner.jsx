@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import colors from "../../constants/colors";
+import colors from "../../../constants/colors";
 import {
   PAGASA_TCWS_COLORS,
   PAGASA_TCWS_LABELS,

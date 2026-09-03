@@ -1,10 +1,10 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { haversineMeters, formatDistance } from "../../utils/haversine";
+import { haversineMeters, formatDistance } from "../../../utils/haversine";
 import { resolveDamSeverity } from "./damSeverity";
-import { getDamImpact, getImpactTier } from "../../data/hydrology";
-import HazardDisclaimer from "./HazardDisclaimer";
+import { getDamImpact, getImpactTier } from "../../../data/hydrology";
+import HazardDisclaimer from "../common/HazardDisclaimer";
 
 function DamsTabInner({
   dams,

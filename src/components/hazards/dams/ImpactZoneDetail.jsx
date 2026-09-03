@@ -9,8 +9,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { IMPACT_TIERS, getImpactTier } from "../../data/hydrology";
-import HazardDisclaimer from "./HazardDisclaimer";
+import { IMPACT_TIERS, getImpactTier } from "../../../data/hydrology";
+import HazardDisclaimer from "../common/HazardDisclaimer";
 
 const TIER_ORDER = ["catastrophic", "severe", "high", "moderate", "watch"];
 

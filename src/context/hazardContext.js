@@ -11,8 +11,8 @@ import { formatDistance } from "../utils/haversine";
 import {
   resolveDamSeverity,
   describeDamStatus,
-} from "../components/hazards/damSeverity";
-import { getInfluencingDams } from "../components/hazards/damInfluence";
+} from "../components/hazards/dams/damSeverity";
+import { getInfluencingDams } from "../components/hazards/dams/damInfluence";
 import { getImpactTier } from "../data/hydrology";
 import {
   getStormSignals,
