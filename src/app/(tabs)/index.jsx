@@ -51,7 +51,6 @@ import TyphoonLegend from '@/components/hazards/typhoons/TyphoonLegend';
 import LPALegend from '@/components/hazards/typhoons/LPALegend';
 import RainLegend from '@/components/hazards/rain/RainLegend';
 import LegendStack from '@/components/hazards/common/LegendStack';
-import StormSignalBanner from '@/components/hazards/stormSignals/StormSignalBanner';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
 import {
   getStormSignals,
@@ -496,7 +495,6 @@ export default function Index() {
   const [stormSignals, setStormSignals] = useState(null);
   const [stormSignalsError, setStormSignalsError] = useState(false);
   const [stormLegendHidden, setStormLegendHidden] = useState(false);
-  const [stormBannerDismissed, setStormBannerDismissed] = useState(false);
   const [selectedStormProvince, setSelectedStormProvince] = useState(null);
   const stormAutoFitDoneRef = useRef(false);
 
@@ -2809,17 +2807,6 @@ export default function Index() {
           onClose={handleClosePersonCard}
           onCall={handleCallPerson}
           onDetails={handleReportDetails}
-        />
-      )}
-
-      {visibleLayers.stormSignals &&
-        !stormBannerDismissed &&
-        stormSignals?.active && (
-        <StormSignalBanner
-          signals={stormSignals}
-          userProvinceName={userProvinceName}
-          userSignalLevel={userSignalLevel}
-          onDismiss={() => setStormBannerDismissed(true)}
         />
       )}
 
