@@ -5,11 +5,11 @@ export default {
     "slug": "agapai-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/peak.png",
     "scheme": "agap_ai",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/peak.png"
     },
     "android": {
       "adaptiveIcon": {
