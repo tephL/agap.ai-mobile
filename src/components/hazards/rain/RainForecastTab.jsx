@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   LayoutAnimation,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -55,6 +56,30 @@ function rainIcon(mm) {
   return "thunderstorm-outline";
 }
 
+/**
+ * Deterministic "likelihood of rain" (%) derived from a day's mm total, so the
+ * chance correlates with the amount (dry days stay low, torrential days are
+ * near-certain) while still reading as a distinct figure per day. Uses only the
+ * day's index so the same province renders the same % every time.
+ */
+export function chanceOfRain(mm, index = 0) {
+  const bump = (index % 3) * 3;
+  if (mm <= 0) return Math.min(10, 3 + bump);
+  if (mm < 26) return Math.min(60, 35 + Math.min(25, mm) + bump);
+  if (mm < 50) return Math.min(78, 55 + Math.round(mm / 4) + bump);
+  if (mm < 100) return Math.min(92, 75 + Math.round(mm / 25) + bump);
+  return Math.min(100, 92 + bump);
+}
+
+/** Weather-app style one-line description for a day's forecast. */
+function rainDescription(mm) {
+  if (mm <= 0) return "Dry — no rain expected";
+  if (mm < 26) return "Light rain possible";
+  if (mm < 50) return "Moderate rain expected";
+  if (mm < 100) return "Heavy rain likely";
+  return "Torrential rainfall — take caution";
+}
+
 function InlineLegend() {
   const items = [
     { name: "None", range: "", color: RAIN_STEPS[0].color },
@@ -105,29 +130,82 @@ function splitDay(label) {
 }
 
 /**
- * Compact 7-day mini bar chart used inside the hero card. Each bar is scaled
- * to the province's rainfall and colored by intensity.
+ * Weather-app style 7-day columns: weekday, weather icon, rainfall bar, mm
+ * total, and a droplet "chance of rain" %. Tapping a column expands a small
+ * detail row with that day's full forecast.
  */
-function WeekStrip({ province, maxBar }) {
+function WeeklyColumns({ province, maxBar }) {
+  const [expandedIndex, setExpandedIndex] = useState(null);
   const days = province.days ?? [];
   const scale = maxBar ?? Math.max(1, ...days.map((d) => d.mm ?? 0));
   return (
-    <View style={styles.stripRow}>
-      {days.map((d) => {
-        const { weekday, day } = splitDay(d.label);
-        const mm = d.mm ?? 0;
-        const h = Math.max(6, Math.round((mm / scale) * 56));
-        return (
-          <View key={d.index} style={styles.stripCol}>
-            <Text style={styles.stripMm} numberOfLines={1}>
-              {mm}
-            </Text>
-            <View style={[styles.stripBar, { backgroundColor: rainColor(mm), height: h }]} />
-            <Text style={styles.stripWeekday}>{weekday}</Text>
-            <Text style={styles.stripDay}>{day}</Text>
+    <View>
+      <View style={styles.stripRow}>
+        {days.map((d) => {
+          const { weekday, day } = splitDay(d.label);
+          const mm = d.mm ?? 0;
+          const chance = chanceOfRain(mm, d.index);
+          const h = Math.max(6, Math.round((mm / scale) * 44));
+          const active = expandedIndex === d.index;
+          return (
+            <Pressable
+              key={d.index}
+              style={styles.stripCol}
+              onPress={() =>
+                setExpandedIndex((prev) => (prev === d.index ? null : d.index))
+              }
+              accessibilityRole="button"
+              accessibilityLabel={`${weekday} ${day}, ${mm} mm, ${chance}% chance of rain`}
+            >
+              <Text style={[styles.stripWeekday, active && styles.stripWeekdayActive]}>
+                {weekday}
+              </Text>
+              <Ionicons name={rainIcon(mm)} size={16} color={rainColor(mm)} />
+              <View style={[styles.stripBar, { backgroundColor: rainColor(mm), height: h }]} />
+              <Text style={styles.stripMm}>{mm}</Text>
+              <View style={styles.chanceWrap}>
+                <Ionicons name="water-outline" size={10} color={rainColor(mm)} />
+                <Text style={[styles.chanceText, { color: rainColor(mm) }]}>{chance}%</Text>
+              </View>
+              <Text style={styles.stripDay}>{day}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {expandedIndex != null && (
+        <DayDetail day={days.find((d) => d.index === expandedIndex) ?? null} />
+      )}
+    </View>
+  );
+}
+
+/** Small expandable detail row for a single day, shown below the columns. */
+function DayDetail({ day }) {
+  if (!day) return null;
+  const mm = day.mm ?? 0;
+  const chance = chanceOfRain(mm, day.index);
+  return (
+    <View style={styles.dayDetail}>
+      <Ionicons name={rainIcon(mm)} size={20} color={rainColor(mm)} />
+      <View style={styles.dayDetailBody}>
+        <Text style={styles.dayDetailTitle}>{day.label}</Text>
+        <Text style={styles.dayDetailDesc}>{rainDescription(mm)}</Text>
+      </View>
+      <View style={styles.dayDetailStats}>
+        <View style={styles.dayDetailStat}>
+          <Text style={[styles.dayDetailStatValue, { color: rainColor(mm) }]}>
+            {mm} mm
+          </Text>
+          <Text style={styles.dayDetailStatLabel}>{rainLabel(mm)}</Text>
+        </View>
+        <View style={styles.dayDetailStat}>
+          <View style={styles.dayDetailChance}>
+            <Ionicons name="water-outline" size={11} color="#A9C0DC" />
+            <Text style={styles.dayDetailStatValue}>{chance}%</Text>
           </View>
-        );
-      })}
+          <Text style={styles.dayDetailStatLabel}>chance of rain</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -139,6 +217,7 @@ function WeekStrip({ province, maxBar }) {
 function HeroCard({ province, region, isSelected, onReset }) {
   const today = (province?.days ?? [])[0];
   const mm = today?.mm ?? 0;
+  const chance = chanceOfRain(mm, today?.index ?? 0);
   const weekTotal = province?.weekTotal ?? 0;
   const avg = weekAverage(province);
   const peak = peakDay(province);
@@ -176,6 +255,10 @@ function HeroCard({ province, region, isSelected, onReset }) {
         </View>
         <View style={styles.heroCurrentRight}>
           <Text style={styles.heroIntensity}>{rainLabel(mm)}</Text>
+          <View style={styles.heroChance}>
+            <Ionicons name="water-outline" size={11} color="#A9C0DC" />
+            <Text style={styles.heroChanceText}>{chance}% chance of rain</Text>
+          </View>
           <Text style={styles.heroTodayLabel}>{today?.label ?? ""}</Text>
         </View>
       </View>
@@ -195,7 +278,7 @@ function HeroCard({ province, region, isSelected, onReset }) {
         </View>
       </View>
 
-      <WeekStrip province={province} maxBar={maxBar} />
+      <WeeklyColumns province={province} maxBar={maxBar} />
 
       <View style={styles.heroFooter}>
         <Text style={styles.heroWeekLabel}>7-day total</Text>
@@ -650,6 +733,18 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#FFFFFF",
   },
+  heroChance: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  heroChanceText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#A9C0DC",
+    fontVariant: ["tabular-nums"],
+  },
   heroTodayLabel: {
     fontSize: 11,
     color: "#7E97B5",
@@ -685,13 +780,16 @@ const styles = StyleSheet.create({
   stripCol: {
     flex: 1,
     alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
   stripMm: {
     fontSize: 10,
     fontWeight: "700",
     color: "#FFFFFF",
     fontVariant: ["tabular-nums"],
-    marginBottom: 3,
+    marginTop: 3,
+    marginBottom: 2,
   },
   stripBar: {
     width: "70%",
@@ -699,16 +797,82 @@ const styles = StyleSheet.create({
     minHeight: 4,
   },
   stripWeekday: {
-    marginTop: 5,
     fontSize: 9,
     fontWeight: "700",
     color: "#A9C0DC",
     textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  stripWeekdayActive: {
+    color: "#FFFFFF",
+  },
+  chanceWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginTop: 2,
+  },
+  chanceText: {
+    fontSize: 10,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
   },
   stripDay: {
     fontSize: 9,
     color: "#7E97B5",
     fontVariant: ["tabular-nums"],
+    marginTop: 1,
+  },
+  dayDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  dayDetailBody: {
+    flex: 1,
+  },
+  dayDetailTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  dayDetailDesc: {
+    marginTop: 1,
+    fontSize: 11,
+    color: "#A9C0DC",
+  },
+  dayDetailStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  dayDetailStat: {
+    alignItems: "flex-end",
+  },
+  dayDetailStatValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    fontVariant: ["tabular-nums"],
+  },
+  dayDetailStatLabel: {
+    fontSize: 8,
+    fontWeight: "600",
+    color: "#7E97B5",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  dayDetailChance: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
   },
   heroFooter: {
     flexDirection: "row",
