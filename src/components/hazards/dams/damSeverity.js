@@ -2,7 +2,7 @@
 // (marker/halo colors), the drawer list dots, the sheet's summary card, and
 // the AI context provider — tune the thresholds here and everything follows.
 
-import { CREST_ELEVATIONS } from "../../data/hydrology";
+import { CREST_ELEVATIONS } from "../../../data/hydrology";
 
 export const SEVERITY_LEVELS = {
   normal: {

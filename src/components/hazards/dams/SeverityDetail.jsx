@@ -10,7 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { SEVERITY_CRITERIA } from "./damSeverity";
-import HazardDisclaimer from "./HazardDisclaimer";
+import HazardDisclaimer from "../common/HazardDisclaimer";
 
 const SEVERITY_ORDER = ["danger", "caution", "normal", "unknown"];
 

@@ -10,8 +10,8 @@ import { uploadUserLocation } from '../../services/usersService.js';
 import { fetchFamilyLocation, getFamilyPositions, setFamilyPositions } from "../../services/familyLocation.js";
 import { getMyFamily, getFamilyMemberReportStatus } from '../../services/familyService.js';
 import { getDamStatuses } from '../../services/hazardService.js';
-import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/damSeverity';
-import { getInfluencingDams } from '@/components/hazards/damInfluence';
+import { resolveDamSeverity, SEVERITY_LEVELS } from '@/components/hazards/dams/damSeverity';
+import { getInfluencingDams } from '@/components/hazards/dams/damInfluence';
 import { useHazardElevation } from '../../hooks/useHazardElevation';
 import { getStoredSession, CITIZEN_ROLE_ID } from '../../services/authService.js';
 import {
@@ -45,13 +45,12 @@ import { getLegendHidden, setLegendHidden } from '../../services/hazardPrefsDb';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import HazardTabs from '@/components/hazards/HazardTabs';
-import DamMarker from '@/components/hazards/DamMarker';
-import StormSignalLegend from '@/components/hazards/StormSignalLegend';
-import TyphoonLegend from '@/components/hazards/TyphoonLegend';
-import LPALegend from '@/components/hazards/LPALegend';
-import RainLegend from '@/components/hazards/RainLegend';
-import LegendStack from '@/components/hazards/LegendStack';
-import StormSignalBanner from '@/components/hazards/StormSignalBanner';
+import DamMarker from '@/components/hazards/dams/DamMarker';
+import StormSignalLegend from '@/components/hazards/stormSignals/StormSignalLegend';
+import TyphoonLegend from '@/components/hazards/typhoons/TyphoonLegend';
+import LPALegend from '@/components/hazards/typhoons/LPALegend';
+import RainLegend from '@/components/hazards/rain/RainLegend';
+import LegendStack from '@/components/hazards/common/LegendStack';
 import SosReceivedOverlay from '@/components/SosReceivedOverlay';
 import {
   getStormSignals,
@@ -62,6 +61,7 @@ import {
 import {
   buildSignalGeojson,
   resolveSignalsToProvinces,
+  provinceAtPoint,
 } from '../../lib/stormSignals/provinceSignals.js';
 import {
   buildTrackGeojson,
@@ -73,11 +73,10 @@ import { buildLpaGeojson, lpaBounds } from '../../lib/typhoonTracks/lpaGeoJson.j
 import { getLowPressures } from '../../services/lowPressureService.js';
 import { buildSampleLpas } from '../../lib/typhoonTracks/sampleLpas.js';
 import {
-  buildRegionGeojson,
-  attachRainToRegions,
+  attachRainToProvinces,
 } from '../../lib/weather/rainRegions.js';
-import { buildSampleRainForecast } from '../../lib/weather/rainForecastSample.js';
 import { getRainForecast, getSampleRainForecast } from '../../services/rainForecastService.js';
+import { PAR_BOUNDS, LUZON_BOUNDS, buildParLineFeature } from '../../lib/hazards/parGeometry.js';
 import phProvinces from '../../data/phProvinces.json';
 
 
@@ -203,14 +202,6 @@ const DAM_PULSE_PERIODS = { normal: 3500, caution: 2000, danger: 1100 };
 const ROUTE_FIT_PADDING = { top: 120, right: 80, bottom: 320, left: 80 };
 // Stable empty array so prop identity stays consistent across renders.
 const EMPTY_SLUGS = [];
-
-// maps the flood/susceptibility level resolved from the rendered map to a
-// readable label used in the level-aware AI question
-const HAZARD_LEVEL_LABELS = {
-  1: "MABABA (Low)",
-  2: "KATAMTAMAN (Moderate)",
-  3: "MATAAS (High)",
-};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -504,7 +495,6 @@ export default function Index() {
   const [stormSignals, setStormSignals] = useState(null);
   const [stormSignalsError, setStormSignalsError] = useState(false);
   const [stormLegendHidden, setStormLegendHidden] = useState(false);
-  const [stormBannerDismissed, setStormBannerDismissed] = useState(false);
   const [selectedStormProvince, setSelectedStormProvince] = useState(null);
   const stormAutoFitDoneRef = useRef(false);
 
@@ -581,7 +571,7 @@ export default function Index() {
   // fetch storm-signal data when the Weather tab is opened, even if the map
   // overlay was never toggled on
   useEffect(() => {
-    if (activeTab !== "weatherBulletins") return;
+    if (activeTab !== "weatherBulletins" && activeTab !== "nearYou") return;
     if (stormSignals != null) return;
     let cancelled = false;
     loadStormSignals()
@@ -605,12 +595,17 @@ export default function Index() {
     if (cached) setTyphoons(cached);
   }, []);
 
+  // Shared PAR boundary line feature, appended to typhoon and LPA overlays so
+  // the Philippine Area of Responsibility box is visible on weather layers.
+  const parLineFeature = useMemo(() => buildParLineFeature(), []);
+
   // GeoJSON for the typhoon overlay. Only the currently-selected typhoon is
   // drawn (its PAGASA cone + impact halos + track); nothing when none picked.
   const typhoonsGeojson = useMemo(() => {
     if (!selectedTyphoon) return { type: "FeatureCollection", features: [] };
-    return buildTrackGeojson(selectedTyphoon);
-  }, [selectedTyphoon]);
+    const built = buildTrackGeojson(selectedTyphoon);
+    return { ...built, features: [...built.features, parLineFeature] };
+  }, [selectedTyphoon, parLineFeature]);
 
   // fetch GDACS typhoons when the overlay is toggled on
   useEffect(() => {
@@ -634,7 +629,7 @@ export default function Index() {
   // fetch typhoon data when the Typhoons tab is opened, even if the map
   // overlay was never toggled on
   useEffect(() => {
-    if (activeTab !== "typhoons") return;
+    if (activeTab !== "typhoons" && activeTab !== "nearYou") return;
     if (typhoons != null) return;
     let cancelled = false;
     loadTyphoons()
@@ -654,7 +649,7 @@ export default function Index() {
 
   // Low pressure areas
   useEffect(() => {
-    if (!visibleLayers.lpas && activeTab !== "lowPressureArea") return;
+    if (!visibleLayers.lpas) return;
     if (lpas != null) return;
     let cancelled = false;
     loadLpas()
@@ -670,13 +665,16 @@ export default function Index() {
     return () => {
       cancelled = true;
     };
-  }, [visibleLayers.lpas, activeTab, lpas]);
+  }, [visibleLayers.lpas, lpas]);
 
-  const lpasGeojson = useMemo(() => buildLpaGeojson(lpas?.lpas ?? []), [lpas]);
+  const lpasGeojson = useMemo(() => {
+    const built = buildLpaGeojson(lpas?.lpas ?? []);
+    return { ...built, features: [...built.features, parLineFeature] };
+  }, [lpas, parLineFeature]);
 
   // Weekly rain forecast
   useEffect(() => {
-    if (!visibleLayers.rain && activeTab !== "rainForecast") return;
+    if (!visibleLayers.rain && activeTab !== "rainForecast" && activeTab !== "nearYou") return;
     if (rainForecast != null) return;
     let cancelled = false;
     loadRainForecast()
@@ -694,19 +692,58 @@ export default function Index() {
     };
   }, [visibleLayers.rain, activeTab, rainForecast]);
 
-  // Rain overlay GeoJSON: region polygons tinted by "today's" (day 0) rainfall.
-  const regionGeojson = useMemo(() => buildRegionGeojson(phProvinces), []);
-  const rainByRegion = useMemo(() => {
+  // Rain overlay GeoJSON: province polygons tinted by "today's" (day 0)
+  // rainfall. Each province gets the exact rainfall for its name.
+  const rainByProvince = useMemo(() => {
     const map = {};
-    for (const region of rainForecast?.regions ?? []) {
-      map[region.name] = region.days.map((d) => d.mm);
+    for (const province of rainForecast?.provinces ?? []) {
+      map[province.name] = province.days.map((d) => d.mm);
     }
     return map;
   }, [rainForecast]);
   const rainGeojson = useMemo(
-    () => attachRainToRegions(regionGeojson, 0, rainByRegion),
-    [regionGeojson, rainByRegion]
+    () => attachRainToProvinces(phProvinces, 0, rainByProvince),
+    [rainByProvince]
   );
+
+  // The province the user's current location falls in, used to show a
+  // dedicated "your location" 7-day forecast hero card in the Rain tab and to
+  // personalize the storm-signal banner. When no GPS fix or the point is over
+  // open ocean it falls back to null (the tab shows a "enable location" state).
+  const userProvinceName = useMemo(
+    () =>
+      provinceAtPoint(
+        userLocation.latitude,
+        userLocation.longitude,
+        phProvinces.features
+      ),
+    [userLocation.latitude, userLocation.longitude]
+  );
+
+  // The full province object (with per-day rainfall) for the user's location.
+  const userRainProvince = useMemo(
+    () =>
+      (rainForecast?.provinces ?? []).find(
+        (r) => r.name === userProvinceName
+      ) ?? null,
+    [rainForecast, userProvinceName]
+  );
+
+  // The user's own storm signal level (1-5) or null when not under a signal;
+  // drives the "Your area" card and personalized map banner.
+  const userSignalLevel = useMemo(
+    () => (userProvinceName != null ? signalByProvince[userProvinceName] ?? null : null),
+    [userProvinceName, signalByProvince]
+  );
+
+  // Weather overlays share the expanded PAR camera bounds so users can zoom out
+  // to view the whole Philippine Area of Responsibility. Non-weather overlays
+  // keep the tighter PH bounds.
+  const weatherOverlaysActive =
+    visibleLayers.stormSignals ||
+    visibleLayers.typhoons ||
+    visibleLayers.lpas ||
+    visibleLayers.rain;
 
   // map lifecycle state
   const [mapReady, setMapReady] = useState(false);
@@ -828,7 +865,6 @@ export default function Index() {
     async (layerId) => {
       const layer = getHazardLayer(layerId);
       let hazardParams = {};
-      let question;
       // Location risk is only resolvable when the tapped layer is the one
       // actually rendered on the map (queryRenderedFeatures reads drawn
       // polygons); otherwise just explain the layer in general terms.
@@ -836,26 +872,18 @@ export default function Index() {
         const varLevel = await resolveCurrentHazardVar(layerId);
         if (varLevel != null) {
           hazardParams = { hazardLayerId: layerId, hazardVar: String(varLevel) };
-          question = `Ang aking kasalukuyang lugar ay nasa ${HAZARD_LEVEL_LABELS[varLevel]} na antas sa "${layer.label}" hazard layer. Ano ang ibig sabihin nito para sa akin, at ano ang dapat kong gawin? Ipaliwanag ito nang detalyado.`;
         }
-      }
-      if (!question) {
-        question = `Ano ang ibig sabihin ng "${layer.label}" na hazard layer? Ipaliwanag ito nang detalyado.`;
       }
       router.push({
         pathname: "/assistant",
-        params: { question, ...hazardParams },
+        params: {
+          question: `Ano ang ibig sabihin ng "${layer.label}" na hazard layer? Ipaliwanag ito nang detalyado.`,
+          ...hazardParams,
+        },
       });
     },
     [router, activeId, resolveCurrentHazardVar]
   );
-
-  // "?" floating button on the map that jumps into the AI assistant with the
-  // active hazard layer + current level — shown only while a layer is on
-  const handleAskAboutActiveLayer = useCallback(() => {
-    if (activeId == null) return;
-    handleAskAI(activeId);
-  }, [activeId, handleAskAI]);
 
   // legend visibility (persisted): expands whenever the active layer
   // changes, otherwise restores what the user last chose
@@ -1652,11 +1680,11 @@ export default function Index() {
     if (lpa) handleSelectLpa(lpa);
   };
 
-  // Focus the map on a rain region (from a map tap or the Rain tab list).
+  // Focus the map on a rain province (from a map tap or the Rain tab list).
   const handleSelectRainRegion = useCallback(
-    (region) => {
-      if (!region) return;
-      if (selectedRainRegion?.id === region.id) {
+    (province) => {
+      if (!province) return;
+      if (selectedRainRegion?.id === province.id) {
         setSelectedRainRegion(null);
         return;
       }
@@ -1670,11 +1698,8 @@ export default function Index() {
         }));
         setRainLegendHidden(false);
       }
-      setSelectedRainRegion(region);
-      const geomFeature = (regionGeojson?.features ?? []).find(
-        (f) => f.properties?.name === region.name
-      );
-      const bounds = geomFeature ? geometryBounds([geomFeature]) : null;
+      setSelectedRainRegion(province);
+      const bounds = provinceBounds(phProvinces, province.name);
       if (bounds) {
         cameraRef.current?.fitBounds(bounds, {
           padding: { top: 180, right: 60, bottom: 220, left: 60 },
@@ -1682,39 +1707,69 @@ export default function Index() {
         });
       }
     },
-    [visibleLayers.rain, selectedRainRegion?.id, regionGeojson]
+    [visibleLayers.rain, selectedRainRegion?.id]
   );
+
+  // Return the Rain toast to the user's own area: clear any selected province
+  // (falling back to "YOUR AREA") and refit the camera to their province.
+  const handleResetRainRegion = useCallback(() => {
+    if (!userProvinceName) return;
+    setSelectedRainRegion(null);
+    const bounds = provinceBounds(phProvinces, userProvinceName);
+    if (bounds) {
+      cameraRef.current?.fitBounds(bounds, {
+        padding: { top: 180, right: 60, bottom: 220, left: 60 },
+        duration: 900,
+      });
+    }
+  }, [userProvinceName]);
 
   const handleRainRegionPress = (event) => {
     const feature = event?.nativeEvent?.features?.[0] ?? event;
     const name = feature?.properties?.name;
     if (!name) return;
-    const region = (rainForecast?.regions ?? []).find((r) => r.name === name);
-    if (region) handleSelectRainRegion(region);
+    const province = (rainForecast?.provinces ?? []).find(
+      (p) => p.name === name
+    );
+    if (province) handleSelectRainRegion(province);
   };
 
   const handleHazardsPress = () => {
+    // If a weather overlay is still active and the toast is just hidden,
+    // reopen the same tab/overlay context instead of resetting everything.
+    if (weatherOverlaysActive && !sheetExpanded) {
+      refreshDams();
+      setSheetExpanded(true);
+      return;
+    }
     refreshDams();
     setSelectedDam(null);
     setHazardsOpen(true);
     setSheetExpanded(true);
-    // overlays re-sync to the active tab on open; the storm-signals legend
-    // stays closed (collapsed to its chip) rather than auto-expanding
+    // Opening the panel lands on the "Near You" tab so users immediately see
+    // what's relevant to them. Dam stays on (the sheet's default layer) while
+    // the weather overlays are switched off; the user can reach them from the
+    // tab bar.
+    setActiveTab("nearYou");
     setVisibleLayers({
-      dams: activeTab === "dams",
-      stormSignals: activeTab === "weatherBulletins",
-      typhoons: activeTab === "typhoons",
-      lpas: activeTab === "lowPressureArea",
-      rain: activeTab === "rainForecast",
+      dams: true,
+      stormSignals: false,
+      typhoons: false,
+      lpas: false,
+      rain: false,
     });
-    if (activeTab === "weatherBulletins") setStormLegendHidden(true);
-    if (activeTab === "typhoons") setTyphoonLegendHidden(true);
-    if (activeTab === "lowPressureArea") setLpaLegendHidden(true);
-    if (activeTab === "rainForecast") setRainLegendHidden(true);
     setSelectedStormProvince(null);
     setSelectedTyphoon(null);
     setSelectedLpa(null);
     setSelectedRainRegion(null);
+    // recentre on the user, mirroring the "Near You" tab camera behaviour
+    if (userLocation?.latitude != null) {
+      cameraRef.current?.flyTo({
+        center: [userLocation.longitude, userLocation.latitude],
+        zoom: 10,
+        duration: 900,
+      });
+    }
   };
 
   // Pressing any top-row pill raises the expanded toast for that tab. The
@@ -1736,16 +1791,12 @@ export default function Index() {
       setLpaLegendHidden(true);
       setRainLegendHidden(true);
     } else if (key === "typhoons") {
-      setVisibleLayers((prev) => ({ ...prev, typhoons: true, stormSignals: false, lpas: false, rain: false }));
+      // Tropical Cyclones tab — show both cyclone tracks and any LPAs that
+      // relate to them (LPAs were folded into this tab).
+      setVisibleLayers((prev) => ({ ...prev, typhoons: true, lpas: true, stormSignals: false, rain: false }));
       setTyphoonLegendHidden(true);
       setStormLegendHidden(true);
       setLpaLegendHidden(true);
-      setRainLegendHidden(true);
-    } else if (key === "lowPressureArea") {
-      setVisibleLayers((prev) => ({ ...prev, lpas: true, stormSignals: false, typhoons: false, rain: false }));
-      setLpaLegendHidden(true);
-      setStormLegendHidden(true);
-      setTyphoonLegendHidden(true);
       setRainLegendHidden(true);
     } else if (key === "rainForecast") {
       setVisibleLayers((prev) => ({ ...prev, rain: true, stormSignals: false, typhoons: false, lpas: false }));
@@ -1756,24 +1807,52 @@ export default function Index() {
     } else {
       setVisibleLayers((prev) => ({ ...prev, stormSignals: false, typhoons: false, lpas: false, rain: false }));
     }
-  }, []);
+
+    // Move the camera toward the newly-selected overlay's area (pan/recentre
+    // only — we don't zoom into a single feature). Weather tabs pull back so
+    // the PAR grid is in view; Rain recentres on the user's region.
+    if (key === "weatherBulletins" || key === "typhoons") {
+      cameraRef.current?.fitBounds(LUZON_BOUNDS, {
+        padding: { top: 140, right: 40, bottom: 220, left: 40 },
+        duration: 900,
+      });
+    } else if (key === "rainForecast") {
+      const bounds = userProvinceName
+        ? provinceBounds(phProvinces, userProvinceName)
+        : PAR_BOUNDS;
+      cameraRef.current?.fitBounds(bounds ?? PAR_BOUNDS, {
+        padding: { top: 160, right: 40, bottom: 260, left: 40 },
+        duration: 900,
+      });
+    } else if (key === "nearYou" && userLocation?.latitude != null) {
+      cameraRef.current?.flyTo({
+        center: [userLocation.longitude, userLocation.latitude],
+        zoom: 10,
+        duration: 900,
+      });
+    } else if (key === "dams" || key === "faultLines" || key === "volcanoes") {
+      cameraRef.current?.fitBounds(PH_BOUNDS, {
+        padding: { top: 120, right: 40, bottom: 220, left: 40 },
+        duration: 900,
+      });
+    }
+  }, [userProvinceName, userLocation]);
 
   const handleToggleLayer = useCallback((key) => {
     setVisibleLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+    // toggling a layer on does NOT auto-expand its legend chip — the user
+    // opens a legend explicitly by tapping its pill. "Only one legend open at
+    // a time" is enforced by each legend's onToggle handler in LegendStack.
     if (key === "stormSignals") {
-      setStormLegendHidden(false);
       setSelectedStormProvince(null);
     }
     if (key === "typhoons") {
-      setTyphoonLegendHidden(false);
       setSelectedTyphoon(null);
     }
     if (key === "lpas") {
-      setLpaLegendHidden(false);
       setSelectedLpa(null);
     }
     if (key === "rain") {
-      setRainLegendHidden(false);
       setSelectedRainRegion(null);
     }
   }, []);
@@ -1843,8 +1922,10 @@ export default function Index() {
             centerCoordinate: PH_CENTER,
             zoomLevel: 6,
           }}
-          maxBounds={PH_BOUNDS}
-          minZoom={activeId ? DAM_FLY_ZOOM : 6}
+          maxBounds={weatherOverlaysActive ? PAR_BOUNDS : PH_BOUNDS}
+          minZoom={weatherOverlaysActive
+            ? (activeId ? DAM_FLY_ZOOM : 4)
+            : (activeId ? DAM_FLY_ZOOM : 6)}
           maxZoom={20}
           trackUserLocation={locationGranted ? "default" : undefined}
         />
@@ -1896,6 +1977,18 @@ export default function Index() {
                     'text-halo-width': 1.5,
                   }}
                 />
+                {selectedStormProvince && (
+                  <Layer
+                    type="line"
+                    id="stormSignalHighlight"
+                    filter={['==', ['get', 'name'], selectedStormProvince.name]}
+                    paint={{
+                      'line-color': '#111827',
+                      'line-width': 3,
+                      'line-opacity': 0.95,
+                    }}
+                  />
+                )}
               </GeoJSONSource>
             )}
 
@@ -1904,6 +1997,13 @@ export default function Index() {
               !typhoons.unavailable &&
               selectedTyphoon && (
               <GeoJSONSource id="typhoonsSource" data={typhoonsGeojson} onPress={handleTyphoonPress}>
+                {/* PAR boundary */}
+                <Layer
+                  type="line"
+                  id="typhoonsParLine"
+                  filter={['==', ['get', 'kind'], 'par']}
+                  paint={{ 'line-color': '#0EA5E9', 'line-width': 1.5, 'line-dasharray': [5, 4], 'line-opacity': 0.5 }}
+                />
                 {/* uncertainty cone: soft envelope fill + subtle edge */}
                 <Layer
                   type="fill"
@@ -2142,31 +2242,26 @@ export default function Index() {
 
             {visibleLayers.lpas && lpas && !lpas.unavailable && (
               <GeoJSONSource id="lpasSource" data={lpasGeojson} onPress={handleLpaPress}>
-                {/* hollow circle casing (lifts outline off the basemap) */}
+                {/* hollow circle casing (lifts the yellow outline off the
+                    basemap) */}
                 <Layer
                   type="line"
                   id="lpasCircleCasing"
                   filter={['==', ['get', 'kind'], 'lpaCircle']}
-                  paint={{ 'line-color': '#ffffff', 'line-width': 7, 'line-opacity': 0.55 }}
+                  paint={{ 'line-color': '#ffffff', 'line-width': 8, 'line-opacity': 0.7 }}
                 />
                 <Layer
                   type="line"
                   id="lpasCircleLine"
                   filter={['==', ['get', 'kind'], 'lpaCircle']}
-                  paint={{ 'line-color': '#0EA5E9', 'line-width': 2.5, 'line-opacity': 0.9 }}
+                  paint={{ 'line-color': '#FACC15', 'line-width': 3, 'line-opacity': 1 }}
                 />
-                {/* center crosshair casing + line */}
+                {/* PAR boundary */}
                 <Layer
                   type="line"
-                  id="lpasPlusCasing"
-                  filter={['==', ['get', 'kind'], 'lpaPlus']}
-                  paint={{ 'line-color': '#ffffff', 'line-width': 6, 'line-opacity': 0.55 }}
-                />
-                <Layer
-                  type="line"
-                  id="lpasPlusLine"
-                  filter={['==', ['get', 'kind'], 'lpaPlus']}
-                  paint={{ 'line-color': '#0EA5E9', 'line-width': 2.5, 'line-opacity': 0.9 }}
+                  id="lpasParLine"
+                  filter={['==', ['get', 'kind'], 'par']}
+                  paint={{ 'line-color': '#0EA5E9', 'line-width': 1.5, 'line-dasharray': [5, 4], 'line-opacity': 0.5 }}
                 />
               </GeoJSONSource>
             )}
@@ -2502,7 +2597,7 @@ export default function Index() {
         accessibilityLabel="Open hazards drawer"
       >
         <Ionicons name="warning-outline" size={18} color="#E32F31" />
-        <Text style={styles.hazardsButtonText}>Hazards</Text>
+        <Text style={styles.hazardsButtonText}>Monitor</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -2529,20 +2624,6 @@ export default function Index() {
         {activeId && <View style={styles.layersDot} />}
       </View>
 
-      {/* "?" button — only while a hazard layer is on. Jumps to the AI
-          assistant with the active layer + the user's current hazard level. */}
-      {activeId != null && (
-        <View style={styles.helpButtonWrap}>
-          <TouchableOpacity
-            style={styles.helpButton}
-            onPress={handleAskAboutActiveLayer}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="help" size={24} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* legend pills stack vertically (bottom-left) when multiple overlays
           are toggled at once; each collapses to its own chip */}
       <LegendStack>
@@ -2554,25 +2635,53 @@ export default function Index() {
         {visibleLayers.stormSignals && (
           <StormSignalLegend
             hidden={stormLegendHidden}
-            onToggle={() => setStormLegendHidden((h) => !h)}
+            onToggle={() => {
+              if (stormLegendHidden) {
+                setTyphoonLegendHidden(true);
+                setLpaLegendHidden(true);
+                setRainLegendHidden(true);
+              }
+              setStormLegendHidden(!stormLegendHidden);
+            }}
           />
         )}
         {visibleLayers.typhoons && (
           <TyphoonLegend
             hidden={typhoonLegendHidden}
-            onToggle={() => setTyphoonLegendHidden((h) => !h)}
+            onToggle={() => {
+              if (typhoonLegendHidden) {
+                setStormLegendHidden(true);
+                setLpaLegendHidden(true);
+                setRainLegendHidden(true);
+              }
+              setTyphoonLegendHidden(!typhoonLegendHidden);
+            }}
           />
         )}
         {visibleLayers.lpas && (
           <LPALegend
             hidden={lpaLegendHidden}
-            onToggle={() => setLpaLegendHidden((h) => !h)}
+            onToggle={() => {
+              if (lpaLegendHidden) {
+                setStormLegendHidden(true);
+                setTyphoonLegendHidden(true);
+                setRainLegendHidden(true);
+              }
+              setLpaLegendHidden(!lpaLegendHidden);
+            }}
           />
         )}
         {visibleLayers.rain && (
           <RainLegend
             hidden={rainLegendHidden}
-            onToggle={() => setRainLegendHidden((h) => !h)}
+            onToggle={() => {
+              if (rainLegendHidden) {
+                setStormLegendHidden(true);
+                setTyphoonLegendHidden(true);
+                setLpaLegendHidden(true);
+              }
+              setRainLegendHidden(!rainLegendHidden);
+            }}
           />
         )}
       </LegendStack>
@@ -2701,15 +2810,6 @@ export default function Index() {
         />
       )}
 
-      {visibleLayers.stormSignals &&
-        !stormBannerDismissed &&
-        stormSignals?.active && (
-        <StormSignalBanner
-          signals={stormSignals}
-          onDismiss={() => setStormBannerDismissed(true)}
-        />
-      )}
-
       {!typhoonDismissed && activeTyphoon && (
         <TyphoonAlertBanner
           typhoon={activeTyphoon}
@@ -2776,6 +2876,7 @@ export default function Index() {
           activeTab={activeTab}
           expanded={sheetExpanded}
           onExpandedChange={setSheetExpanded}
+          onChangeTab={handleChangeTab}
           onSelectDam={handleSelectDamFromList}
           onClose={handleCloseHazards}
           stormSignals={stormSignals}
@@ -2795,6 +2896,10 @@ export default function Index() {
           rainLoading={rainForecast == null && !rainError}
           selectedRainRegionId={selectedRainRegion?.id ?? null}
           onSelectRainRegion={handleSelectRainRegion}
+          onResetRainRegion={handleResetRainRegion}
+          userProvinceName={userProvinceName}
+          userRainProvince={userRainProvince}
+          userSignalLevel={userSignalLevel}
         />
       )}
 
@@ -2847,25 +2952,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 92,
     right: 16,
-  },
-  // sits above the layers button (only shown while a hazard layer is on)
-  helpButtonWrap: {
-    position: 'absolute',
-    bottom: 148,
-    right: 16,
-  },
-  helpButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#208AEF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
   layersButton: {
     width: 48,

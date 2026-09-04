@@ -192,7 +192,7 @@ export function parsePagasaBulletinText(text) {
     return null;
   }
 
-  const { name, category } = parseCenterAndName(lines);
+  const { name, category, intlName } = parseCenterAndName(lines);
 
   // --- Issued at ---
   const issuedMatch = /\bIssued at\s+(.+)\.?\s*\n?Valid/i.exec(joined) ||
@@ -370,6 +370,7 @@ export function parsePagasaBulletinText(text) {
   return {
     eventId,
     name,
+    internationalName: intlName,
     bulletinNumber,
     source: "PAGASA",
     category: categoryName,

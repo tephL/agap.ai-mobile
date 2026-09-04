@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import HAZARD_COLORS from "@/constants/hazardColors";
 import { HAZARD_LAYERS, type HazardLayerConfig } from "@/lib/pmtiles/downloadLayer";
-import { MAP_LAYERS } from "@/components/hazards/layerRegistry";
+import { MAP_LAYERS } from "@/components/hazards/common/layerRegistry";
 import { useOfflinePMTilesLayer } from "@/hooks/useOfflinePMTilesLayer";
 
 /**

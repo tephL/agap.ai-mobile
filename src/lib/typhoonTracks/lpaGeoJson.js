@@ -1,11 +1,10 @@
 // Builds the GeoJSON for the LPA map overlay: for every LPA, a solid-outline
-// hollow circle plus a center crosshair, following the shared visual language
-// used for typhoon markers. Distance is in nautical-mile-ish degrees so the
-// circle stays a stable on-screen size.
+// hollow circle marking the low's location. Rendered in yellow to match the
+// PAGASA LPA convention and the app's amber uncertainty-cone language.
+// Distance is in degrees so the circle stays a stable on-screen size.
 
 const CIRCLE_RADIUS_DEG = 1.5; // approx. radius of the hollow circle
 const CIRCLE_POINTS = 48;
-const CROSS_ARM = 0.9; // half-length of each crosshair arm, in degrees
 
 function circleLineString(cx, cy, radius, points) {
   const coords = [];
@@ -20,22 +19,10 @@ function circleLineString(cx, cy, radius, points) {
   };
 }
 
-function plusLineString(cx, cy, arm) {
-  return {
-    type: "LineString",
-    coordinates: [
-      [cx - arm, cy],
-      [cx + arm, cy],
-      [cx, cy - arm],
-      [cx, cy + arm],
-    ],
-  };
-}
-
 /**
- * Build the GeoJSON FeatureCollection for all LPAs. Each LPA produces two
- * features: `kind: 'lpaCircle'` (solid outline) and `kind: 'lpaPlus'` (the
- * center crosshair). Properties carry `id`, `name` and the center `lon/lat`.
+ * Build the GeoJSON FeatureCollection for all LPAs. Each LPA produces one
+ * hollow-circle feature (`kind: 'lpaCircle'`). Properties carry `id`, `name`
+ * and the center `lon/lat`.
  */
 export function buildLpaGeojson(lpas) {
   const features = [];
@@ -50,11 +37,6 @@ export function buildLpaGeojson(lpas) {
       type: "Feature",
       properties: { ...props, kind: "lpaCircle" },
       geometry: circleLineString(lpa.lon, lpa.lat, CIRCLE_RADIUS_DEG, CIRCLE_POINTS),
-    });
-    features.push({
-      type: "Feature",
-      properties: { ...props, kind: "lpaPlus" },
-      geometry: plusLineString(lpa.lon, lpa.lat, CROSS_ARM),
     });
   }
   return { type: "FeatureCollection", features };

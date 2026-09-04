@@ -12,13 +12,13 @@
 // Severity (dam readings) still drives colors/urgency — it no longer gates
 // inclusion. Tier 2 basin polygons would slot into getInfluencingDams().
 
-import { haversineMeters } from "../../utils/haversine";
+import { haversineMeters } from "../../../utils/haversine";
 import {
   CORRIDORS,
   CREST_ELEVATIONS,
   MINOR_DAMS,
   classifyImpact,
-} from "../../data/hydrology";
+} from "../../../data/hydrology";
 
 export const MAX_INFLUENCING_DAMS = 4;
 

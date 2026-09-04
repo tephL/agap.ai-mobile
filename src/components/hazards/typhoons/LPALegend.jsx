@@ -3,10 +3,10 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 /**
- * Bottom-left legend explaining the Low Pressure Area overlay symbol: a
- * solid-outline hollow circle plus center crosshair marking the low's center.
- * Collapses to a compact chip. The `wrapper` is intentionally NOT absolute so
- * it can stack inside LegendStack.
+ * Bottom-left legend explaining the Low Pressure Area overlay symbol: a yellow
+ * solid-outline hollow circle marking the low's center, plus the dashed blue
+ * Philippine Area of Responsibility boundary. Collapses to a compact chip. The
+ * `wrapper` is intentionally NOT absolute so it can stack inside LegendStack.
  */
 export default function LPALegend({ hidden = false, onToggle }) {
   if (hidden) {
@@ -43,12 +43,14 @@ export default function LPALegend({ hidden = false, onToggle }) {
         <View style={styles.row}>
           <View style={styles.symbol}>
             <View style={styles.circle} />
-            <View style={[styles.arm, styles.armH]} />
-            <View style={[styles.arm, styles.armV]} />
           </View>
           <Text style={styles.rowText}>
-            Low pressure area center (solid hollow circle)
+            Low pressure area center (hollow circle)
           </Text>
+        </View>
+        <View style={styles.row}>
+          <View style={styles.parLine} />
+          <Text style={styles.rowText}>Philippine Area of Responsibility (PAR)</Text>
         </View>
       </View>
     </View>
@@ -139,22 +141,19 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    borderWidth: 2.5,
-    borderColor: "#0EA5E9",
+    borderWidth: 3,
+    borderColor: "#FACC15",
     backgroundColor: "transparent",
   },
-  arm: {
-    position: "absolute",
-    backgroundColor: "#0EA5E9",
-    borderRadius: 2,
-  },
-  armH: {
-    width: 12,
-    height: 2.5,
-  },
-  armV: {
-    width: 2.5,
-    height: 12,
+  parLine: {
+    width: 22,
+    height: 0,
+    borderTopWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#0EA5E9",
+    marginRight: 10,
+    marginLeft: 3,
+    flexShrink: 0,
   },
   rowText: {
     flexShrink: 1,
