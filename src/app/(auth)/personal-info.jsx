@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,12 +12,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
+import * as Location from "expo-location";
 import colors from "../../constants/colors";
 import Logo from "../../components/ui/Logo";
 import FormInput from "../../components/ui/FormInput";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import { MaterialIcons } from "@expo/vector-icons";
 import { createPerson } from "../../services/personService";
+import { reverseGeocodeFull } from "../../services/geocodingService";
 
 const GENDER_OPTIONS = [
   { label: "Male", value: "male" },
@@ -63,6 +66,8 @@ export default function PersonalInfoScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
   const router = useRouter();
 
   const updateField = (key, value) => {
@@ -73,6 +78,46 @@ export default function PersonalInfoScreen() {
       delete next[key];
       return next;
     });
+  };
+
+  const handleDetectLocation = async () => {
+    if (locationLoading) return;
+    setLocationLoading(true);
+    setLocationError("");
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setLocationError("Location permission is required to auto-detect your address.");
+        setLocationLoading(false);
+        return;
+      }
+      const pos =
+        (await Location.getLastKnownPositionAsync()) ||
+        (await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise((resolve) => setTimeout(() => resolve(null), 20000)),
+        ]));
+      if (!pos?.coords) {
+        setLocationError("Could not get your location. Try again or enter manually.");
+        setLocationLoading(false);
+        return;
+      }
+      const result = await reverseGeocodeFull(pos.coords.latitude, pos.coords.longitude);
+      console.log("[detectLocation] coords:", pos.coords.latitude, pos.coords.longitude, "geocode:", result);
+      if (!result) {
+        setLocationError("Could not determine your address. Please enter it manually.");
+        setLocationLoading(false);
+        return;
+      }
+      updateField("city", result.city || "");
+      updateField("barangay", result.barangay || "");
+      updateField("street", result.street || "");
+      updateField("address", result.address || "");
+    } catch {
+      setLocationError("Failed to detect location. Please enter your address manually.");
+    } finally {
+      setLocationLoading(false);
+    }
   };
 
   const toggleDisability = (value) => {
@@ -429,6 +474,26 @@ export default function PersonalInfoScreen() {
 
             <Text style={styles.sectionHeader}>Location / Address</Text>
 
+            <TouchableOpacity
+              style={[styles.detectButton, locationLoading && styles.detectButtonLoading]}
+              activeOpacity={0.8}
+              onPress={handleDetectLocation}
+              disabled={locationLoading}
+            >
+              {locationLoading ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <MaterialIcons name="my-location" color={colors.white} size={18} />
+              )}
+              <Text style={styles.detectButtonText}>
+                {locationLoading ? "Detecting..." : "Detect My Location"}
+              </Text>
+            </TouchableOpacity>
+
+            {locationError ? (
+              <Text style={styles.locationError}>{locationError}</Text>
+            ) : null}
+
             <FormInput
               label="City"
               icon={<MaterialIcons name="location-city" color={colors.placeholder} size={20} />}
@@ -589,6 +654,28 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     color: colors.muted,
     marginTop: 4,
+  },
+  detectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+  },
+  detectButtonLoading: {
+    opacity: 0.7,
+  },
+  detectButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  locationError: {
+    fontSize: 12,
+    color: colors.primary,
+    marginTop: -12,
   },
   selectorField: {
     gap: 6,
