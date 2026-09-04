@@ -56,7 +56,17 @@ export async function reverseGeocodeFull(lat, lng) {
     const city = addr.city || addr.town || addr.municipality || null;
     const barangay = parseBarangay(addr);
     const street = addr.road || null;
-    const address = data.display_name || null;
+
+    // Address = only details finer than street level (house number, block,
+    // building, etc.). Nominatim's road is the top of the street hierarchy,
+    // so everything before it in the display name is the site-level detail.
+    const streetIndex = street
+      ? data.display_name?.indexOf(street)
+      : -1;
+    const address =
+      streetIndex !== undefined && streetIndex > 0
+        ? data.display_name.slice(0, streetIndex).replace(/,\s*$/, "").trim()
+        : null;
 
     console.log("[reverseGeocodeFull] result:", { city, barangay, street, address });
 
