@@ -39,7 +39,7 @@ const HAZARD_COLORS: Record<HazardType, HazardColorSet> = {
   flood: {
     fill: "#3B82F6",
     stroke: "#1D4ED8",
-    opacity: 0.55,
+    opacity: 0.28,
     fillExpression: FLOOD_FILL_EXPRESSION,
   },
   landslide: { fill: "#F97316", stroke: "#C2410C", opacity: 0.45 },

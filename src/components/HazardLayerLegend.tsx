@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { HAZARD_LEGENDS } from "@/constants/hazardColors";
+import { HAZARD_LEGENDS, default as HAZARD_COLORS } from "@/constants/hazardColors";
 import { getHazardLayer } from "@/lib/pmtiles/downloadLayer";
 
 interface HazardLayerLegendProps {
@@ -61,14 +61,30 @@ export default function HazardLayerLegend({
           </TouchableOpacity>
         </View>
 
-        {items.map((item) => (
-          <View key={item.color + item.label} style={styles.row}>
-            <View style={[styles.swatch, { backgroundColor: item.color }]} />
-            <Text style={styles.rowText} numberOfLines={2}>
-              {item.label}
-            </Text>
-          </View>
-        ))}
+        {items.map((item) => {
+          const isFlood = config.hazardType === "flood";
+          const alpha = isFlood ? HAZARD_COLORS.flood.opacity : 1;
+          // Convert hex → rgba at the layer's opacity so the legend
+          // swatch matches the subtle look of what's actually rendered.
+          const swatchColor =
+            alpha < 1
+              ? `${item.color}${Math.round(alpha * 255).toString(16).padStart(2, "0")}`
+              : item.color;
+          return (
+            <View key={item.color + item.label} style={styles.row}>
+              {isFlood ? (
+                <View style={styles.swatchWrap}>
+                  <View style={[styles.swatch, { backgroundColor: swatchColor }]} />
+                </View>
+              ) : (
+                <View style={[styles.swatch, { backgroundColor: item.color }]} />
+              )}
+              <Text style={styles.rowText} numberOfLines={2}>
+                {item.label}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -144,10 +160,19 @@ const styles = StyleSheet.create({
     width: "100%",
     marginTop: 8,
   },
+  swatchWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 5,
+    marginRight: 12,
+    flexShrink: 0,
+    backgroundColor: "#e5e7eb",
+    overflow: "hidden",
+  },
   swatch: {
     width: 20,
     height: 20,
-    borderRadius: 5,
+    borderRadius: 3,
     marginRight: 12,
     flexShrink: 0,
   },
