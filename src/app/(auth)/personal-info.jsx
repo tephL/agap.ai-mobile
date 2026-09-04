@@ -103,6 +103,7 @@ export default function PersonalInfoScreen() {
         return;
       }
       const result = await reverseGeocodeFull(pos.coords.latitude, pos.coords.longitude);
+      console.log("[detectLocation] coords:", pos.coords.latitude, pos.coords.longitude, "geocode:", result);
       if (!result) {
         setLocationError("Could not determine your address. Please enter it manually.");
         setLocationLoading(false);

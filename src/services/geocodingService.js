@@ -40,9 +40,15 @@ export async function reverseGeocodeFull(lat, lng) {
   try {
     const url = `${NOMINATIM_URL}?format=json&lat=${lat}&lon=${lng}&addressdetails=1`;
     const res = await fetch(url, {
-      headers: { "Accept-Language": "en" },
+      headers: {
+        "Accept-Language": "en",
+        "User-Agent": "AGAP.ai Mobile Client",
+      },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.log("[reverseGeocodeFull] HTTP", res.status);
+      return null;
+    }
 
     const data = await res.json();
     const addr = data.address || {};
@@ -52,10 +58,13 @@ export async function reverseGeocodeFull(lat, lng) {
     const street = addr.road || null;
     const address = data.display_name || null;
 
+    console.log("[reverseGeocodeFull] result:", { city, barangay, street, address });
+
     const result = { city, barangay, street, address };
     cache.set(key, result);
     return result;
-  } catch {
+  } catch (err) {
+    console.log("[reverseGeocodeFull] error:", err?.message);
     return null;
   }
 }
