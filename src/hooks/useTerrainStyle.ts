@@ -38,7 +38,7 @@ export function useTerrainStyle(baseStyleUrl: string): StyleSpecification | null
           type: "raster-dem",
           url: `https://api.maptiler.com/tiles/terrain-rgb/tiles.json?key=${demKey}`,
           tileSize: 512,
-          maxzoom: 9,
+          maxzoom: 12,
         };
 
         // ── Terrain config — lifts everything over the DEM ──
