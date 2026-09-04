@@ -43,6 +43,7 @@ import { downloadLayer, getHazardLayer, isDownloaded } from '../../lib/pmtiles/d
 import { getLegendHidden, setLegendHidden } from '../../services/hazardPrefsDb';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
+import { useTerrainStyle } from '../../hooks/useTerrainStyle';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import HazardTabs from '@/components/hazards/HazardTabs';
 import DamMarker from '@/components/hazards/dams/DamMarker';
@@ -308,6 +309,9 @@ const RouteDashLayer = React.memo(function RouteDashLayer() {
 export default function Index() {
   const { selectedUserId, sosStatus, reportId: reportIdParam } = useLocalSearchParams();
   const router = useRouter();
+
+  // 3D terrain — fetches once and caches the augmented style
+  const terrainStyle = useTerrainStyle(MAP_STYLE_URL);
 
   // typhoon alert state (session-only dismissal)
   const [activeTyphoon, setActiveTyphoon] = useState(null);
@@ -1907,7 +1911,7 @@ export default function Index() {
       <Map
         ref={mapRef}
         style={styles.map}
-        mapStyle={MAP_STYLE_URL}
+        mapStyle={terrainStyle ?? MAP_STYLE_URL}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={true}
