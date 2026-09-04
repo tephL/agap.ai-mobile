@@ -91,10 +91,17 @@ export default function PersonalInfoScreen() {
         setLocationLoading(false);
         return;
       }
-      const pos = await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10000)),
-      ]);
+      const pos =
+        (await Location.getLastKnownPositionAsync()) ||
+        (await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise((resolve) => setTimeout(() => resolve(null), 20000)),
+        ]));
+      if (!pos?.coords) {
+        setLocationError("Could not get your location. Try again or enter manually.");
+        setLocationLoading(false);
+        return;
+      }
       const result = await reverseGeocodeFull(pos.coords.latitude, pos.coords.longitude);
       if (!result) {
         setLocationError("Could not determine your address. Please enter it manually.");
@@ -105,12 +112,8 @@ export default function PersonalInfoScreen() {
       updateField("barangay", result.barangay || "");
       updateField("street", result.street || "");
       updateField("address", result.address || "");
-    } catch (err) {
-      setLocationError(
-        err.message === "timeout"
-          ? "Location detection timed out. Try again or enter manually."
-          : "Failed to detect location. Please enter your address manually."
-      );
+    } catch {
+      setLocationError("Failed to detect location. Please enter your address manually.");
     } finally {
       setLocationLoading(false);
     }
