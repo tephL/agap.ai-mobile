@@ -14,6 +14,7 @@ import TeamDetailsWindow from '../../components/dispatcher/TeamDetailsWindow';
 import AssignTeamModal from '../../components/dispatcher/AssignTeamModal';
 import AssignSuccessModal from '../../components/dispatcher/AssignSuccessModal';
 import useLiveLocation from '../../hooks/useLiveLocation.js';
+import { useFlatMapStyle } from '../../hooks/useFlatMapStyle';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -173,6 +174,9 @@ export default function Index() {
   // flight to a pin must turn it off first or tracking yanks the camera
   // back to the user on the next GPS fix
   const [followsUser, setFollowsUser] = useState(true);
+
+  // flat basemap — no 3-D terrain; fetches the style once and strips it
+  const flatMapStyle = useFlatMapStyle(MAP_STYLE_URL);
 
   // cluster markers state
   const [clusters, setClusters] = useState([]);
@@ -769,7 +773,7 @@ export default function Index() {
     <View style={styles.container}>
       <Map
         style={styles.map}
-        mapStyle={MAP_STYLE_URL}
+        mapStyle={flatMapStyle ?? MAP_STYLE_URL}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={true}
