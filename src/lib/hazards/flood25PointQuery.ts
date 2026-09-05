@@ -112,22 +112,26 @@ async function isValidLocalArchive(): Promise<boolean> {
 }
 
 /**
- * Races a per-call promise against a hard deadline. On timeout the request is
- * aborted so a hung fetch can't stall the report flow; on normal settle the
- * leftover timer is cleared. Promise.race already observes every input promise,
- * so a late rejection from an aborted fetch is never an unhandled rejection.
+ * Races a per-call promise against a hard deadline so a hung fetch can't stall
+ * the report flow; on normal settle the leftover timer is cleared.
+ *
+ * We deliberately DON'T abort the underlying pmtiles read: RN 0.86 provides
+ * AbortController/AbortSignal via the abort-controller polyfill, whose signal
+ * LACKS `AbortSignal.throwIfAborted`. pmtiles calls `signal?.throwIfAborted()`
+ * on every getZxy (node_modules/pmtiles/src/index.ts:959) — passing a signal
+ * makes every tile read throw a TypeError on-device. The Promise.race timeout
+ * is our only guard; a laggard read's result is simply discarded.
  */
 function raceWithTimeout<T>(
   attempt: Promise<T>,
-  timeoutMs: number,
-  controller: AbortController
+  timeoutMs: number
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort();
-      reject(new Error("flood_25yr lookup timed out"));
-    }, timeoutMs);
+    timer = setTimeout(
+      () => reject(new Error("flood_25yr lookup timed out")),
+      timeoutMs
+    );
   });
   return Promise.race([attempt, timeout]).finally(() => {
     if (timer) clearTimeout(timer);
@@ -524,23 +528,19 @@ async function resolveFrom(
   latitude: number,
   longitude: number
 ): Promise<1 | 2 | 3 | null> {
-  const controller = new AbortController();
   try {
-    const header = await raceWithTimeout(
-      pmtiles.getHeader(),
-      REMOTE_TIMEOUT_MS,
-      controller
-    );
+    const header = await raceWithTimeout(pmtiles.getHeader(), REMOTE_TIMEOUT_MS);
 
     const zMax = header.maxZoom;
     const zMin = Math.max(header.minZoom, zMax - MAX_ZOOM_DESCENT);
 
     for (let z = zMax; z >= zMin; z -= 1) {
       const { x, y, px, py } = toTilePoint(longitude, latitude, z);
+      // NOTE: no AbortSignal passed — see raceWithTimeout (RN polyfill has no
+      // throwIfAborted, which pmtiles calls internally).
       const response = await raceWithTimeout(
-        pmtiles.getZxy(z, x, y, controller.signal),
-        REMOTE_TIMEOUT_MS,
-        controller
+        pmtiles.getZxy(z, x, y),
+        REMOTE_TIMEOUT_MS
       );
       if (!response || !response.data || response.data.byteLength === 0) {
         continue; // no data layer at this zoom for this tile — try coarser
@@ -553,8 +553,8 @@ async function resolveFrom(
         : null;
     }
     return null; // no data in any tried zoom → not a mapped zone
-  } finally {
-    controller.abort();
+  } catch {
+    throw new Error("flood_25yr source failed");
   }
 }
 
