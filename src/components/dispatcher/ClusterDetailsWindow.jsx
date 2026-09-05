@@ -13,6 +13,7 @@ import colors from "../../constants/colors";
 import PriorityChip from "../ui/PriorityChip";
 import DisasterTypeChip from "../ui/DisasterTypeChip";
 import StatusBadge from "../ui/StatusBadge";
+import FloodHazardChip from "../ui/FloodHazardChip";
 import { reverseGeocode } from "../../services/geocodingService";
 import { updateClusterStatus } from "../../services/teamService";
 
@@ -137,6 +138,7 @@ export default function ClusterDetailsWindow({
           <View style={styles.headerChips}>
             <PriorityChip priority={cluster.priority_level} />
             <DisasterTypeChip type={cluster.ai_disaster_type} />
+            <FloodHazardChip level={cluster.flood_hazard_25yr} />
             <Text style={styles.statusText}>{cluster.status}</Text>
           </View>
         </View>

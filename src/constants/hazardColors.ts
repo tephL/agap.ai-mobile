@@ -22,7 +22,7 @@ export interface HazardColorSet {
  * expression below and the map legend, so a recolor can never drift the
  * legend away from the rendered fill.
  */
-const FLOOD_LEGEND_ITEMS = [
+export const FLOOD_LEGEND_ITEMS = [
   { value: 1, color: "#93c5fd", label: "Mababa (0–0.5 m)" }, // light blue  — low
   { value: 2, color: "#3b82f6", label: "Katamtaman (0.5–1.5 m)" }, // medium blue — medium
   { value: 3, color: "#1d4ed8", label: "Mataas (>1.5 m)" }, // dark blue   — high

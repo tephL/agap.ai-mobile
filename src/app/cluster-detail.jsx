@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import PriorityChip from "@/components/ui/PriorityChip";
+import FloodHazardChip from "@/components/ui/FloodHazardChip";
 import { fetchClusterReports } from "@/services/dispatcher/clusterServ";
 import { updateClusterStatus } from "@/services/teamService";
 import { reverseGeocode } from "@/services/geocodingService";
@@ -230,6 +231,19 @@ export default function ClusterDetailScreen() {
             </View>
           </View>
 
+          {/* Flood hazard (25yr) — worst level across the cluster's reports */}
+          <View style={styles.card}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="water-outline" size={14} color={colors.muted} />
+              <Text style={styles.sectionTitle}>Flood Hazard (25yr)</Text>
+            </View>
+            {displayCluster.flood_hazard_25yr != null ? (
+              <FloodHazardChip level={displayCluster.flood_hazard_25yr} />
+            ) : (
+              <Text style={styles.emptyText}>Walang hazard data.</Text>
+            )}
+          </View>
+
           {/* AI Summary */}
           {displayCluster.ai_summary ? (
             <View style={styles.card}>
@@ -346,20 +360,23 @@ export default function ClusterDetailScreen() {
                       ) || "No description provided."}
                     </Text>
                     <View style={styles.reportFooter}>
-                      <View
-                        style={[
-                          styles.statusChip,
-                          { backgroundColor: statusStyle.bg },
-                        ]}
-                      >
-                        <Text
+                      <View style={styles.reportFooterLeft}>
+                        <View
                           style={[
-                            styles.statusChipText,
-                            { color: statusStyle.fg },
+                            styles.statusChip,
+                            { backgroundColor: statusStyle.bg },
                           ]}
                         >
-                          {report.status}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.statusChipText,
+                              { color: statusStyle.fg },
+                            ]}
+                          >
+                            {report.status}
+                          </Text>
+                        </View>
+                        <FloodHazardChip level={report.hazard_level_25yr} />
                       </View>
                       <Text style={styles.reportDate} numberOfLines={1}>
                         {formatDate(report.created_at)}
@@ -575,6 +592,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 2,
+  },
+  reportFooterLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   statusChip: {
     paddingHorizontal: 8,
