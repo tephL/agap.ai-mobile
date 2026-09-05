@@ -14,15 +14,15 @@ import { getRegisteredPMTiles } from "@/lib/pmtiles/protocol";
 //   *drawn* polygons — so it needs the flood_25yr layer toggled on. During a
 //   report the navigation detaches the map's native subtree while GPS is still
 //   resolving, so querySourceFeatures (the other native API) crashes with a
-//   JS-uncatchable null-handle NPE (see prompt.md). Instead we read the already
-//   downloaded .pmtiles archive from disk in pure JS — the pmtiles package
-//   returns the *decompressed* MVT bytes for a tile, and we do a classic
-//   point-in-polygon over the vector tile's rings ourselves.
+//   JS-uncatchable null-handle NPE (see prompt.md). Instead we read the archive
+//   in pure JS — the pmtiles package returns the *decompressed* MVT bytes for a
+//   tile, and we do a point-in-polygon over the vector tile's rings ourselves.
 //
-//   The archive is streamed over byte-range HTTPS as a fallback when it hasn't
-//   finished downloading yet (fresh installs) and fully absent only when the
-//   device is offline. Any failure degrades to `null` and must never block the
-//   report.
+// SOURCES, IN ORDER: the instance already registered by the map, then the
+// downloaded local file, then byte-range streaming from HuggingFace. A source
+// that throws is skipped and the next one is tried; only a *valid* "point not
+// in any zone" result (or total failure) produces `null`. Degrades gracefully
+// and must never block the report flow.
 
 const LAYER_ID = "flood_25yr";
 const SOURCE_LAYER_NAME = "flood_25yr";
@@ -33,20 +33,21 @@ const VAR_PROPERTY = "Var";
 // the dataset only covers at coarser zooms). Each miss is one cheap range read.
 const MAX_ZOOM_DESCENT = 4;
 
-// Applies to remote (byte-range over HTTP) lookups only; local disk reads are
-// effectively instant. Guards the report flow against a hang on a mutated
-// device. getZxy obeys this AbortSignal (ExpoFileSource and FetchSource both
-// respect it).
+// Hard cap on how long ANY single source may spend resolving. getZxy honours
+// the AbortSignal too (both ExpoFileSource and FetchSource check it), but the
+// initial header read cannot be aborted — hence the race-based timeout below.
 const REMOTE_TIMEOUT_MS = 10_000;
 
 // ---- result cache -----------------------------------------------------------
-// Repeated reports from the same ~1.1m cell short-circuit to the cached answer
-// instead of re-reading the archive. Bounded so it stays tiny.
+// Only *positive* results (1|2|3) are cached. A `null` may simply mean the
+// archive wasn't finished downloading / the source was unreachable yet, and the
+// next attempt could succeed — caching nulls blindly would poison the answer
+// for the rest of the session.
 const MAX_CACHE_ENTRIES = 64;
 // ~1.1m at the equator — far tighter than any flood zone polygon matters.
 const CACHE_ROUND_DIGITS = 5;
 
-const resultCache = new Map<string, 1 | 2 | 3 | null>();
+const resultCache = new Map<string, 1 | 2 | 3>();
 
 function cacheKey(latitude: number, longitude: number): string {
   return `${latitude.toFixed(CACHE_ROUND_DIGITS)},${longitude.toFixed(CACHE_ROUND_DIGITS)}`;
@@ -56,22 +57,81 @@ function cacheKey(latitude: number, longitude: number): string {
 let localInstance: PMTiles | null = null;
 let remoteInstance: PMTiles | null = null;
 
-async function getPMTiles(): Promise<PMTiles | null> {
-  // Already registered by the map (HazardLayerOverlay) — reuse it.
-  const registered = getRegisteredPMTiles(LAYER_ID);
-  if (registered) return registered;
+function sameInstance(a: PMTiles, b: PMTiles | null | undefined): boolean {
+  return !!b && (a === b || a.source.getKey() === b.source.getKey());
+}
 
-  // Local archive on disk (auto-downloaded on first map mount).
-  if (!localInstance && (await isDownloaded(LAYER_ID))) {
+/**
+ * Candidates in priority order. The registered map instance carries the map's
+ * already-warm caches; the local file is fastest when fully downloaded; the
+ * remote covers installs mid-download. Never returns an empty list.
+ */
+async function getPMTilesSources(): Promise<PMTiles[]> {
+  const sources: PMTiles[] = [];
+
+  const registered = getRegisteredPMTiles(LAYER_ID);
+  if (registered && !sameInstance(registered, sources[0])) {
+    sources.push(registered);
+  }
+
+  // Only trust the local file once it looks structurally valid (PMTiles magic
+  // + readable root header), so a partial mid-download file doesn't stall us.
+  if (
+    !localInstance &&
+    (await isDownloaded(LAYER_ID)) &&
+    (await isValidLocalArchive())
+  ) {
     localInstance = new PMTiles(new ExpoFileSource(getLocalUri(LAYER_ID)));
   }
-  if (localInstance) return localInstance;
+  if (localInstance && !sources.some((s) => sameInstance(s, localInstance))) {
+    sources.push(localInstance);
+  }
 
-  // Byte-range streaming from HuggingFace — covers installs mid-download.
   if (!remoteInstance) {
     remoteInstance = new PMTiles(getRemoteUrl(LAYER_ID));
   }
-  return remoteInstance;
+  if (!sources.some((s) => sameInstance(s, remoteInstance))) {
+    sources.push(remoteInstance);
+  }
+
+  return sources;
+}
+
+/**
+ * Cheap structural sanity check for the local archive: the PMTiles magic at
+ * byte 0 plus the root header block. Enough to reject a not-yet-finished
+ * download without reading tile data.
+ */
+async function isValidLocalArchive(): Promise<boolean> {
+  try {
+    const { verifyArchive } = await import("@/lib/pmtiles/downloadLayer");
+    return await verifyArchive(getLocalUri(LAYER_ID));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Races a per-call promise against a hard deadline. On timeout the request is
+ * aborted so a hung fetch can't stall the report flow; on normal settle the
+ * leftover timer is cleared. Promise.race already observes every input promise,
+ * so a late rejection from an aborted fetch is never an unhandled rejection.
+ */
+function raceWithTimeout<T>(
+  attempt: Promise<T>,
+  timeoutMs: number,
+  controller: AbortController
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error("flood_25yr lookup timed out"));
+    }, timeoutMs);
+  });
+  return Promise.race([attempt, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 // ---- point-in-polygon over MVT rings ----------------------------------------
@@ -453,38 +513,77 @@ function toTilePoint(lng: number, lat: number, z: number) {
   };
 }
 
-async function lookup(
+/**
+ * Resolve against ONE source. Returns `null` only when that source is
+ * structurally fine and the point genuinely sits outside every flood polygon —
+ * a *valid* answer. Any thrown error means the source is unusable (partial
+ * download, dead network, timeout) and the caller should try the next source.
+ */
+async function resolveFrom(
+  pmtiles: PMTiles,
   latitude: number,
   longitude: number
 ): Promise<1 | 2 | 3 | null> {
-  const pmtiles = await getPMTiles();
-  if (!pmtiles) return null;
-
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REMOTE_TIMEOUT_MS);
   try {
-    const header = await pmtiles.getHeader();
+    const header = await raceWithTimeout(
+      pmtiles.getHeader(),
+      REMOTE_TIMEOUT_MS,
+      controller
+    );
+
     const zMax = header.maxZoom;
     const zMin = Math.max(header.minZoom, zMax - MAX_ZOOM_DESCENT);
 
     for (let z = zMax; z >= zMin; z -= 1) {
       const { x, y, px, py } = toTilePoint(longitude, latitude, z);
-      const response = await pmtiles.getZxy(z, x, y, controller.signal);
+      const response = await raceWithTimeout(
+        pmtiles.getZxy(z, x, y, controller.signal),
+        REMOTE_TIMEOUT_MS,
+        controller
+      );
       if (!response || !response.data || response.data.byteLength === 0) {
         continue; // no data layer at this zoom for this tile — try coarser
       }
       const level = hazardLevelFromTile(response.data, px, py);
       // Tile has data but the point isn't inside any polygon at this zoom → the
       // point is genuinely outside the mapped flood zone; don't descend further.
-      return level != null && [1, 2, 3].includes(level) ? (level as 1 | 2 | 3) : null;
+      return level != null && [1, 2, 3].includes(level)
+        ? (level as 1 | 2 | 3)
+        : null;
     }
-    return null;
-  } catch (error) {
-    console.log("[flood_25yr] hazard lookup failed at", latitude, longitude, error);
-    return null;
+    return null; // no data in any tried zoom → not a mapped zone
   } finally {
-    clearTimeout(timer);
+    controller.abort();
   }
+}
+
+async function lookup(
+  latitude: number,
+  longitude: number
+): Promise<1 | 2 | 3 | null> {
+  const sources = await getPMTilesSources();
+
+  for (const source of sources) {
+    const sourceKey = source.source.getKey();
+    try {
+      const level = await resolveFrom(source, latitude, longitude);
+      // level === null here is a *valid* "not in a flood zone" for this source;
+      // all sources carry the same polygons, so it's the final answer.
+      console.log(
+        `[flood_25yr] source=${sourceKey} resolved=${level ?? "none"} at ${latitude},${longitude}`
+      );
+      return level;
+    } catch (error) {
+      console.log(
+        `[flood_25yr] source=${sourceKey} failed at ${latitude},${longitude}:`,
+        error
+      );
+      // partial / corrupt / unreachable — try the next source
+    }
+  }
+
+  return null;
 }
 
 export async function resolveFlood25VarAt({
@@ -511,10 +610,16 @@ export async function resolveFlood25VarAt({
 
   const level = await lookup(latitude, longitude);
 
-  if (resultCache.size >= MAX_CACHE_ENTRIES) {
-    const oldest = resultCache.keys().next().value;
-    if (oldest !== undefined) resultCache.delete(oldest);
+  if (level != null) {
+    if (resultCache.size >= MAX_CACHE_ENTRIES) {
+      const oldest = resultCache.keys().next().value;
+      if (oldest !== undefined) resultCache.delete(oldest);
+    }
+    resultCache.set(key, level);
+  } else {
+    console.log(
+      `[flood_25yr] no level resolved for ${latitude},${longitude} — report will store null`
+    );
   }
-  resultCache.set(key, level);
   return level;
 }
