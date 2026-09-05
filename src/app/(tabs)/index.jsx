@@ -1,7 +1,7 @@
 import { View, StyleSheet, Text, Dimensions, TouchableOpacity, ActivityIndicator, Linking, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images } from '@maplibre/maplibre-react-native';
+import { Map, Camera, NativeUserLocation, UserLocation, GeoJSONSource, OfflineManager, Layer, Images, VectorSource } from '@maplibre/maplibre-react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 
@@ -43,6 +43,7 @@ import { downloadLayer, getHazardLayer, isDownloaded } from '../../lib/pmtiles/d
 import { getLegendHidden, setLegendHidden } from '../../services/hazardPrefsDb';
 
 import useLiveLocation from '../../hooks/useLiveLocation.js';
+import { useFlatMapStyle } from '../../hooks/useFlatMapStyle';
 import HazardSheet from '@/components/hazards/HazardSheet';
 import HazardTabs from '@/components/hazards/HazardTabs';
 import DamMarker from '@/components/hazards/dams/DamMarker';
@@ -308,6 +309,9 @@ const RouteDashLayer = React.memo(function RouteDashLayer() {
 export default function Index() {
   const { selectedUserId, sosStatus, reportId: reportIdParam } = useLocalSearchParams();
   const router = useRouter();
+
+  // flat basemap — fetches the style once and strips all 3-D terrain components
+  const flatMapStyle = useFlatMapStyle(MAP_STYLE_URL);
 
   // typhoon alert state (session-only dismissal)
   const [activeTyphoon, setActiveTyphoon] = useState(null);
@@ -1907,7 +1911,7 @@ export default function Index() {
       <Map
         ref={mapRef}
         style={styles.map}
-        mapStyle={MAP_STYLE_URL}
+        mapStyle={flatMapStyle ?? MAP_STYLE_URL}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={true}
@@ -2578,6 +2582,49 @@ export default function Index() {
           <NativeUserLocation
             androidRenderMode="gps"
           />
+        )}
+
+        {/* 3D buildings — extruded building footprints from the basemap's
+            own OpenMapTiles source. Only renders at zoom ≥ 14 so the
+            extrusions don't appear as noise at city-level views.
+            When the user tilts the map, buildings rise up with their real
+            (or fallback) height, giving the map a tangible 3-D feel. */}
+        {mapReady && (
+          <VectorSource
+            id="maptilerBuildings"
+            url={`https://api.maptiler.com/tiles/v3/tiles.json?key=${MAPTILER_API_KEY}`}
+            minzoom={14}
+            maxzoom={18}
+          >
+            <Layer
+              id="buildings3d"
+              type="fill-extrusion"
+              source-layer="building"
+              minzoom={14}
+              maxzoom={18}
+              layout={{
+                "fill-extrusion-height": [
+                  "coalesce",
+                  ["get", "render_height"],
+                  ["get", "height"],
+                  10,
+                ],
+                "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+              }}
+              paint={{
+                "fill-extrusion-color": [
+                  "interpolate",
+                  ["linear"],
+                  ["coalesce", ["get", "render_height"], ["get", "height"], 10],
+                  0,   "#e0e7ee",
+                  20,  "#c8d6e0",
+                  60,  "#a0b4c4",
+                  120, "#7a98b0",
+                ],
+                "fill-extrusion-opacity": 0.85,
+              }}
+            />
+          </VectorSource>
         )}
 
         {/* hazard overlay — exactly one at a time (picked in the layers

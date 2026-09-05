@@ -21,6 +21,7 @@ import {
 import colors from "@/constants/colors";
 import { relocateTeam } from "@/services/teamService";
 import useLiveLocation from "@/hooks/useLiveLocation";
+import { useFlatMapStyle } from "@/hooks/useFlatMapStyle";
 
 const MAPTILER_API_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const PH_BOUNDS = [116.9, 4.5, 126.6, 21.2];
@@ -43,6 +44,9 @@ export default function RelocateTeamScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
   const cameraRef = useRef(null);
+
+  // flat basemap — no 3-D terrain
+  const flatMapStyle = useFlatMapStyle(MAP_STYLE_URL);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +145,7 @@ export default function RelocateTeamScreen() {
           <View style={styles.mapWrap}>
             <MapLibreMap
               style={StyleSheet.absoluteFill}
-              mapStyle={MAP_STYLE_URL}
+              mapStyle={flatMapStyle ?? MAP_STYLE_URL}
               logoEnabled={false}
               attributionEnabled={false}
               compassEnabled={true}

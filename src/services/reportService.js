@@ -3,6 +3,7 @@ import * as Location from "expo-location";
 import * as SMS from "expo-sms";
 import { api } from "./api";
 import { cameraStore } from "../store/cameraStore";
+import { resolveFlood25VarAt } from "../lib/hazards/flood25PointQuery";
 
 // Recipient for the offline fallback report SMS.
 // TODO: move to an env var / config if this ever needs to differ per build.
@@ -141,9 +142,25 @@ export async function requestReportLocation() {
       });
     }
 
+    // Look up the flood_25yr hazard level at the report's exact spot BEFORE
+    // creating the report row, so the backend can store it on the record it
+    // is about to insert. Resolved headlessly from the downloaded archive (no
+    // hazard-layer toggle needed). Always degrade to null — a failed lookup
+    // must never block a distress report.
+    let hazardLevel25yr = null;
+    try {
+      hazardLevel25yr = await resolveFlood25VarAt({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+    } catch (e) {
+      console.log("Failed to resolve flood_25yr hazard for report", e);
+    }
+
     const response = await api.post("/api/reports/location", {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
+      hazard_level_25yr: hazardLevel25yr,
     });
 
     cameraStore.setReportId(response.data?.report_id ?? null);

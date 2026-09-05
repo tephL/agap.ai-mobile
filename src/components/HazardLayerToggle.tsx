@@ -9,6 +9,19 @@ import { HAZARD_LAYERS, getRemoteSourceUrl } from "@/lib/pmtiles/downloadLayer";
 import { useOfflinePMTilesLayer } from "@/hooks/useOfflinePMTilesLayer";
 
 /**
+ * Building-footprint lid source, layered ABOVE a flood overlay so extruded
+ * buildings physically occlude the flood cells underneath — the flood then
+ * reads as flowing AROUND buildings rather than straight through them.
+ *
+ * MapLibre has no cross-source punch-out, so this 3D "lid" is the standard,
+ * cheap way to get that look. Only mounted while a flood layer is active.
+ */
+const BUILDING_TILES_URL =
+  "https://api.maptiler.com/tiles/v3/tiles.json?key=" +
+  process.env.EXPO_PUBLIC_MAPTILER_KEY;
+const BUILDING_SOURCE_LAYER = "building";
+
+/**
  * Renders ONE hazard layer on an existing MapView (this component does NOT
  * own a MapView):
  *
@@ -72,18 +85,19 @@ function HazardLayerOverlayInner({
     [config?.hazardType, colors]
   );
 
-  // Hazard source data is gridded model output, so heavy outlines turn every
-  // cell into a visible box. The paint below instead: fades the fill in with
-  // zoom, then draws a soft blurred halo under a thin rounded edge line, so
-  // coverage reads as one smooth mass instead of a mosaic of squares.
+  // Widen the fade-in window so flood cells ease in gently over four
+  // zoom levels instead of snapping to full opacity. This avoids the
+  // "mosaic boxes appear all at once" effect.
   const fadeStart = minZoom;
-  const fadeEnd = minZoom + 2;
+  const fadeEnd = minZoom + 4;
 
   const fillPaint = useMemo(
     () => ({
-      "fill-color": palette.fillExpression ?? palette.fill,
+      "fill-color": (palette.fillExpression ?? palette.fill) as any,
       "fill-antialias": true,
       "fill-opacity": zoomRamp(0, palette.opacity, fadeStart, fadeEnd),
+      "fill-outline-color": "rgba(0,0,0,0)",
+      "fill-translate": [0, 1] as [number, number],
     }),
     [palette.fillExpression, palette.fill, palette.opacity, fadeStart, fadeEnd]
   );
@@ -94,9 +108,9 @@ function HazardLayerOverlayInner({
       "line-color": palette.stroke,
       "line-join": "round",
       "line-cap": "round",
-      "line-blur": zoomRamp(2, 5, fadeStart, 14),
-      "line-width": zoomRamp(4, 10, fadeStart, 16),
-      "line-opacity": zoomRamp(0, 0.3, fadeStart, fadeEnd),
+      "line-blur": zoomRamp(4, 9, fadeStart, 14),
+      "line-width": zoomRamp(6, 14, fadeStart, 16),
+      "line-opacity": zoomRamp(0, 0.18, fadeStart, fadeEnd),
     }),
     [palette.stroke, fadeStart, fadeEnd]
   );
@@ -114,14 +128,16 @@ function HazardLayerOverlayInner({
         fadeStart,
         0.5,
         12,
-        1.2,
+        1,
         16,
-        2,
+        1.6,
       ] as ExpressionSpecification,
-      "line-opacity": zoomRamp(0, 0.55, fadeStart, fadeEnd),
+      "line-opacity": zoomRamp(0, 0.3, fadeStart, fadeEnd),
     }),
     [palette.stroke, fadeStart, fadeEnd]
   );
+
+  const showBuildings = config?.hazardType === "flood";
 
   if (!config) return null;
 
@@ -132,37 +148,66 @@ function HazardLayerOverlayInner({
   const sourceId = `hazard-source-${config.id}`;
 
   return (
-    // Zoom bounds live on BOTH the source (skips fetching/decoding tiles
-    // outside the range) and the layers (guarantees nothing draws outside
-    // it even if tiles were already cached at lower zooms).
-    <VectorSource id={sourceId} url={url} minzoom={minZoom} maxzoom={maxZoom}>
-      {/* v11 API: one Layer component, props follow the MapLibre style spec.
-          Nested layers inherit `source` from the enclosing VectorSource. */}
-      <Layer
-        id={`${sourceId}-fill`}
-        type="fill"
-        source-layer={config.sourceLayerId}
-        minzoom={minZoom}
-        maxzoom={maxZoom}
-        paint={fillPaint}
-      />
-      <Layer
-        id={`${sourceId}-halo`}
-        type="line"
-        source-layer={config.sourceLayerId}
-        minzoom={minZoom}
-        maxzoom={maxZoom}
-        paint={haloPaint}
-      />
-      <Layer
-        id={`${sourceId}-outline`}
-        type="line"
-        source-layer={config.sourceLayerId}
-        minzoom={minZoom}
-        maxzoom={maxZoom}
-        paint={outlinePaint}
-      />
-    </VectorSource>
+    <>
+      {/* ── Hazard source ── */}
+      <VectorSource id={sourceId} url={url} minzoom={minZoom} maxzoom={maxZoom}>
+        <Layer
+          id={`${sourceId}-fill`}
+          type="fill"
+          source-layer={config.sourceLayerId}
+          minzoom={minZoom}
+          maxzoom={maxZoom}
+          paint={fillPaint}
+        />
+        <Layer
+          id={`${sourceId}-halo`}
+          type="line"
+          source-layer={config.sourceLayerId}
+          minzoom={minZoom}
+          maxzoom={maxZoom}
+          paint={haloPaint}
+        />
+        <Layer
+          id={`${sourceId}-outline`}
+          type="line"
+          source-layer={config.sourceLayerId}
+          minzoom={minZoom}
+          maxzoom={maxZoom}
+          paint={outlinePaint}
+        />
+      </VectorSource>
+
+      {/* ── Building extrusion lid (flood only) ── */}
+      {showBuildings && (
+        <VectorSource
+          id="floodBuildingLidSource"
+          url={BUILDING_TILES_URL}
+          minzoom={12}
+          maxzoom={18}
+        >
+          <Layer
+            id="floodBuildingLid"
+            type="fill-extrusion"
+            source-layer={BUILDING_SOURCE_LAYER}
+            minzoom={12}
+            maxzoom={18}
+            layout={{
+              "fill-extrusion-height": [
+                "coalesce",
+                ["get", "render_height"],
+                ["get", "height"],
+                12,
+              ],
+              "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+            } as any}
+            paint={{
+              "fill-extrusion-color": "#d1d5db",
+              "fill-extrusion-opacity": 0.92,
+            } as any}
+          />
+        </VectorSource>
+      )}
+    </>
   );
 }
 
